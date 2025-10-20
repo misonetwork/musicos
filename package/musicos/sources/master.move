@@ -15,13 +15,20 @@ public struct MasterAdminCap has key, store {
     master_id: ID,
 }
 
+//=== Constants ===
+
+const MAX_DISCS: u64 = 10;
+
 //=== Errors ===
 
 const EInvalidMasterAdminCap: u64 = 0;
+const EMaxDiscsExceeded: u64 = 1;
 
 //=== Public Functions ===
 
 public fun new(discs: vector<Disc>, ctx: &mut TxContext): (Master, MasterAdminCap) {
+    assert!(discs.length() <= MAX_DISCS, EMaxDiscsExceeded);
+
     let mut duration: u64 = 0;
     discs.do_ref!(|disc| duration = duration + disc.duration());
 

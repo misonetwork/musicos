@@ -9,9 +9,19 @@ public struct Disc has drop, store {
     duration: u64,
 }
 
+//=== Constants ===
+
+const MAX_TRACKS: u64 = 50;
+
+//=== Errors ===
+
+const EMaxTracksExceeded: u64 = 0;
+
 //=== Public Functions ===
 
 public fun new(tracks: vector<Track>): Disc {
+    assert!(tracks.length() <= MAX_TRACKS, EMaxTracksExceeded);
+
     let mut duration: u64 = 0;
     tracks.do_ref!(|track| duration = duration + track.duration());
 
