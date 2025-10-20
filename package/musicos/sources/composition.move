@@ -3,11 +3,12 @@ module musicos::composition;
 use musicos::artifact::Artifact;
 use musicos::composition_artifact_variant::CompositionArtifactVariant;
 use musicos::composition_contributor_role::CompositionContributorRole;
+use musicos::contributor_identifier::ContributorIdentifier;
 use std::string::String;
 use sui::clock::Clock;
 use sui::event::emit;
-use sui::linked_table::{Self, LinkedTable};
 use sui::vec_map::{Self, VecMap};
+use sui::vec_set::{Self, VecSet};
 
 //=== Structs ===
 
@@ -22,13 +23,11 @@ public struct Composition has key, store {
     // Optional Walrus quilt ID that acts as a folder for the composition's Walrus-based assets.
     quilt_id: Option<String>,
     // Map of addresses to composition contributor roles.
-    contributors: VecMap<address, vector<CompositionContributorRole>>,
+    contributors: VecMap<ContributorIdentifier, VecSet<CompositionContributorRole>>,
     // Optional map of language codes to Walrus Blob IDs of LRC files.
     lyrics: Option<String>,
     // List of composition artifacts.
     artifacts: vector<Artifact<CompositionArtifactVariant>>,
-    // Recordings derived from the composition. Maps Recording IDs to timestamp.
-    recording_ids: LinkedTable<ID, u64>,
 }
 
 public enum CompositionSource has copy, drop, store {
@@ -61,13 +60,13 @@ const MAX_CONTRIBUTORS: u64 = 100;
 
 const EInvalidCompositionAdminCap: u64 = 0;
 const EMaxArtifactsExceeded: u64 = 1;
+const EMaxContributorsExceeded: u64 = 2;
 
 //=== Public Functions ===
 
 public fun new(
     source: CompositionSource,
     title: String,
-    title_lang_code: String,
     ctx: &mut TxContext,
 ): (Composition, CompositionAdminCap) {
     let composition = Composition {
@@ -80,7 +79,6 @@ public fun new(
         contributors: vec_map::empty(),
         lyrics: option::none(),
         artifacts: vector[],
-        recording_ids: linked_table::new(ctx),
     };
 
     let composition_id = object::id(&composition);
@@ -98,9 +96,8 @@ public fun new(
 }
 
 public fun destroy(self: Composition, cap: CompositionAdminCap) {
-    let Composition { id, recording_ids, .. } = self;
+    let Composition { id, .. } = self;
     id.delete();
-    recording_ids.destroy_empty();
     let CompositionAdminCap { id, .. } = cap;
     id.delete();
 }
@@ -127,40 +124,40 @@ public fun set_quilt_id(self: &mut Composition, cap: &CompositionAdminCap, quilt
 public fun add_contributor(
     self: &mut Composition,
     cap: &CompositionAdminCap,
-    contributor_addr: address,
-    roles: vector<CompositionContributorRole>,
+    contributor_identifier: ContributorIdentifier,
 ) {
     self.authorize(cap);
-    self.contributors.insert(contributor_addr, roles);
+    assert!(self.contributors.length() < MAX_CONTRIBUTORS, EMaxContributorsExceeded);
+    self.contributors.insert(contributor_identifier, vec_set::empty());
 }
 
 public fun remove_contributor(
     self: &mut Composition,
     cap: &CompositionAdminCap,
-    contributor_addr: address,
+    contributor_identifier: ContributorIdentifier,
 ) {
     self.authorize(cap);
-    self.contributors.remove(&contributor_addr);
+    self.contributors.remove(&contributor_identifier);
 }
 
-public fun add_role_to_contributor(
+public fun add_contributor_role(
     self: &mut Composition,
     cap: &CompositionAdminCap,
-    contributor_addr: address,
+    contributor_identifier: ContributorIdentifier,
     role: CompositionContributorRole,
 ) {
     self.authorize(cap);
-    self.contributors.get_mut(&contributor_addr).push_back(role);
+    self.contributors.get_mut(&contributor_identifier).insert(role);
 }
 
-public fun remove_role_from_contributor(
+public fun remove_contributor_role(
     self: &mut Composition,
     cap: &CompositionAdminCap,
-    contributor_addr: address,
-    role_idx: u64,
-): CompositionContributorRole {
+    contributor_identifier: ContributorIdentifier,
+    role: CompositionContributorRole,
+) {
     self.authorize(cap);
-    self.contributors.get_mut(&contributor_addr).remove(role_idx)
+    self.contributors.get_mut(&contributor_identifier).remove(&role);
 }
 
 public fun add_artifact(
@@ -184,6 +181,10 @@ public fun remove_artifact(
 
 //=== Public View Functions ===
 
+public fun id(self: &Composition): ID {
+    self.id.to_inner()
+}
+
 public fun new_original_source(): CompositionSource {
     CompositionSource::Original
 }
@@ -198,8 +199,8 @@ public fun authorize(self: &Composition, cap: &CompositionAdminCap) {
 
 //=== Package Functions ===
 
-public(package) fun add_recording_id(self: &mut Composition, recording_id: ID, clock: &Clock) {
-    self.recording_ids.push_back(recording_id, clock.timestamp_ms());
+public(package) fun uid(self: &Composition): &UID {
+    &self.id
 }
 
 public(package) fun uid_mut(self: &mut Composition): &mut UID {
