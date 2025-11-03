@@ -2,22 +2,18 @@ module musicos::track;
 
 use musicos::recording::{Recording, RecordingAdminCap};
 
-//=== Structs ===
-
-public struct Track has copy, drop, store {
+public struct Track has drop, store {
     composition_id: ID,
     recording_id: ID,
     duration: u64,
 }
 
-//=== Public Functions ===
-
-public fun new(recording: &Recording, cap: &RecordingAdminCap): Track {
+public fun new(cap: &RecordingAdminCap, recording: &Recording): Track {
     recording.authorize(cap);
     Track {
         composition_id: recording.composition_id(),
-        recording_id: object::id(recording),
         duration: recording.primary_mix().audio().duration(),
+        recording_id: recording.id(),
     }
 }
 

@@ -6,7 +6,9 @@ use musicos::contributor_identifier::ContributorIdentifier;
 use musicos::mix::Mix;
 use musicos::recording_artifact_variant::RecordingArtifactVariant;
 use musicos::recording_contributor_role::RecordingContributorRole;
+use musicos::recording_decryption_license::{Self, RecordingDecryptionLicense};
 use musicos::snapshot::Snapshot;
+use musicos::track::Track;
 use sui::derived_object::{claim, exists};
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
@@ -185,6 +187,15 @@ public fun remove_snapshot(
 ): Snapshot {
     self.authorize(cap);
     self.snapshots.remove(snapshot_idx)
+}
+
+public fun new_license(
+    self: &Recording,
+    cap: &RecordingAdminCap,
+    timestamp: u64,
+): RecordingDecryptionLicense {
+    self.authorize(cap);
+    recording_decryption_license::new(self.id(), timestamp)
 }
 
 //=== Public View Functions ===
