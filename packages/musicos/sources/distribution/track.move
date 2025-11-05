@@ -4,12 +4,16 @@ use musicos::bps::BPS;
 use musicos::recording::{Recording, RecordingAdminCap};
 use musicos::utils::calculate_duration;
 
+//=== Structs ===
+
 public struct Track has drop, store {
     composition_id: ID,
     composition_commission_rate: BPS,
     recording_id: ID,
     duration: u64,
 }
+
+//=== Public Functions ===
 
 public fun new<RecordingShare>(
     cap: &RecordingAdminCap,
@@ -26,6 +30,8 @@ public fun new<RecordingShare>(
         ),
     }
 }
+
+//=== Public View Functions ===
 
 public fun composition_id(self: &Track): ID {
     self.composition_id

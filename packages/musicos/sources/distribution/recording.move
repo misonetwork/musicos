@@ -37,7 +37,7 @@ public struct Recording<phantom RecordingShare> has key, store {
 }
 
 // (derivation_idx)
-public struct RecordingDerivationKey(u32) has copy, drop, store;
+public struct RecordingKey(u32) has copy, drop, store;
 
 public struct RecordingAdminCap has key, store {
     id: UID,
@@ -102,7 +102,7 @@ public fun new<CompositionShare, RecordingShare>(
     // Recordings are sequential in nature.
     if (derivation_idx > 0) {
         assert!(
-            exists(composition.uid(), RecordingDerivationKey(derivation_idx - 1)),
+            exists(composition.uid(), RecordingKey(derivation_idx - 1)),
             ENotSequentialDerivationIndex,
         );
     };
@@ -110,7 +110,7 @@ public fun new<CompositionShare, RecordingShare>(
     let composition_id = composition.id();
 
     let recording = Recording<RecordingShare> {
-        id: claim(composition.uid_mut(), RecordingDerivationKey(derivation_idx)),
+        id: claim(composition.uid_mut(), RecordingKey(derivation_idx)),
         state: RecordingState::Created,
         composition_id,
         composition_commission_rate: composition.commission_rate(),

@@ -1,19 +1,16 @@
-// TODO: Remove Coda branding from composition share coin.
 module musicos::composition;
 
 use musicos::artifact::Artifact;
 use musicos::composition_artifact_variant::CompositionArtifactVariant;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor_identifier::ContributorIdentifier;
-use musicos::revenue_pool::{Self, RevenuePool};
-use musicos::royalty_pool::{Self, RoyaltyPool};
+use musicos::revenue_pool;
+use musicos::royalty_pool;
 use musicos::constants::share_currency_supply;
 use std::string::String;
-use std::type_name::TypeName;
 use sui::clock::Clock;
-use sui::dynamic_field as df;
-use sui::coin::{TreasuryCap, Coin};
-use sui::coin_registry::{Currency, CurrencyInitializer, MetadataCap};
+use sui::coin::{TreasuryCap};
+use sui::coin_registry::{Currency, MetadataCap};
 use sui::event::emit;
 use sui::balance::Balance;
 use sui::vec_map::{Self, VecMap};
