@@ -11,7 +11,7 @@ const env = cleanEnv(process.env, {
   COMPOSITION_COMMISSION_RATE: num(),
   COMPOSITION_TITLE: str(),
   MUSICOS_PACKAGE_ID: str(),
-  SHARE_CURRENCY_PACKAGE_ID: str(),
+  SHARE_PACKAGE_ID: str(),
   SUI_MNEMONIC: str(),
   SUI_RPC_URL: str(),
 });
@@ -31,7 +31,7 @@ type CreateCompositionShareCurrencyResult = {
 async function createCompositionShareCurrency(): Promise<CreateCompositionShareCurrencyResult> {
   const tx = new Transaction();
   const [metadataCap, treasuryCap] = tx.moveCall({
-    target: `${env.SHARE_CURRENCY_PACKAGE_ID}::composition_share::initialize_currency`,
+    target: `${env.SHARE_PACKAGE_ID}::share::initialize_currency`,
     arguments: [tx.object(COIN_REGISTRY_OBJECT_ID)],
   });
   if (!metadataCap || !treasuryCap) {
@@ -58,19 +58,19 @@ async function createCompositionShareCurrency(): Promise<CreateCompositionShareC
     if (objChange.type === "created") {
       if (
         objChange.objectType ===
-        `0x2::coin_registry::Currency<${env.SHARE_CURRENCY_PACKAGE_ID}::composition_share::CompositionShare>`
+        `0x2::coin_registry::Currency<${env.SHARE_PACKAGE_ID}::share::Share>`
       ) {
         currencyId = objChange.objectId;
       }
       if (
         objChange.objectType ===
-        `0x2::coin_registry::MetadataCap<${env.SHARE_CURRENCY_PACKAGE_ID}::composition_share::CompositionShare>`
+        `0x2::coin_registry::MetadataCap<${env.SHARE_PACKAGE_ID}::share::Share>`
       ) {
         metadataCapId = objChange.objectId;
       }
       if (
         objChange.objectType ===
-        `0x2::coin::TreasuryCap<${env.SHARE_CURRENCY_PACKAGE_ID}::composition_share::CompositionShare>`
+        `0x2::coin::TreasuryCap<${env.SHARE_PACKAGE_ID}::share::Share>`
       ) {
         treasuryCapId = objChange.objectId;
       }
@@ -95,7 +95,7 @@ async function createCompositionShareCurrency(): Promise<CreateCompositionShareC
 async function createComposition(
   createCompositionShareCurrencyResult: CreateCompositionShareCurrencyResult
 ) {
-  const compositionShareType = `${env.SHARE_CURRENCY_PACKAGE_ID}::composition_share::CompositionShare`;
+  const compositionShareType = `${env.SHARE_PACKAGE_ID}::share::Share`;
   const tx = new Transaction();
   const commissionRateBps = tx.moveCall({
     target: `${env.MUSICOS_PACKAGE_ID}::bps::new`,
@@ -135,7 +135,6 @@ async function createComposition(
     transaction: tx,
     signer: keypair,
     options: {
-      showEffects: true,
       showObjectChanges: true,
     },
   });

@@ -1,3 +1,5 @@
+*.flac
 packages/*/build/*
 .trace
 .coverage*
+.DS_Store

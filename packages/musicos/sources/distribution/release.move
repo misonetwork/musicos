@@ -43,6 +43,15 @@ public struct ReleaseCreatedEvent has copy, drop {
     release_id: ID,
 }
 
+public struct ReleaseRevenueForwardedEvent has copy, drop {
+    release_id: ID,
+    currency_type: TypeName,
+    composition_id: ID,
+    composition_royalty_value: u64,
+    recording_id: ID,
+    recording_royalty_value: u64,
+}
+
 const EInvalidTrackSplitSum: u64 = 0;
 
 //=== Public Functions ===
@@ -93,15 +102,6 @@ public fun initialize_revenue_pool<Currency>(self: &mut Release) {
     transfer::public_share_object(revenue_pool);
 }
 
-public struct RevenueForwardedEvent has copy, drop {
-    release_id: ID,
-    currency_type: TypeName,
-    composition_id: ID,
-    composition_royalty_value: u64,
-    recording_id: ID,
-    recording_royalty_value: u64,
-}
-
 entry fun forward_revenue<RevenueCurrency>(
     self: &Release,
     revenue_pool: &mut RevenuePool<RevenueCurrency>,
@@ -131,7 +131,7 @@ entry fun forward_revenue<RevenueCurrency>(
         let composition_royalty_value = track.composition_commission_rate().calc(track_value);
         let comp_royalty_balance = track_balance.split(composition_royalty_value);
 
-        emit(RevenueForwardedEvent {
+        emit(ReleaseRevenueForwardedEvent {
             release_id: self.id(),
             currency_type: with_defining_ids<RevenueCurrency>(),
             composition_id: comp_id,

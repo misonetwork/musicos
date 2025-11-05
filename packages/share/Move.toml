@@ -7,4 +7,5 @@ authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (
 [dependencies]
 
 [addresses]
-share_currency_template = "0x0"
+share = "0x0"
+initializer = "0x634a3508e2c419dac9ec53eab917fb3f3886ff111c18cf13aabe48b48c2a9ccd"

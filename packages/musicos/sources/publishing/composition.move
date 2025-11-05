@@ -4,9 +4,10 @@ use musicos::artifact::Artifact;
 use musicos::composition_artifact_variant::CompositionArtifactVariant;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor_identifier::ContributorIdentifier;
+use musicos::share;
 use musicos::revenue_pool;
 use musicos::royalty_pool;
-use musicos::constants::share_currency_supply;
+use musicos::constants::{share_currency_supply, share_icon_url, share_currency_decimals};
 use std::string::String;
 use sui::clock::Clock;
 use sui::coin::{TreasuryCap};
@@ -95,14 +96,6 @@ public fun new<CompositionShare>(
     mut treasury_cap: TreasuryCap<CompositionShare>,
     ctx: &mut TxContext,
 ): (Composition<CompositionShare>, CompositionAdminCap, Balance<CompositionShare>) {
-    assert!(currency.decimals() == WORK_SHARE_DECIMALS, EInvalidDecimals);
-    assert!(currency.symbol() == b"COMPOSITION_SHARE".to_string(), EInvalidSymbol);
-
-    // Mint the composition share balance.
-    let balance = treasury_cap.mint_balance(share_currency_supply!());
-    currency.make_supply_fixed(treasury_cap);
-    assert!(currency.total_supply().borrow() == share_currency_supply!(), EExceedsMaxSupply);
-
     let composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Created,
@@ -116,15 +109,30 @@ public fun new<CompositionShare>(
         metadata_cap,
     };
 
-    let composition_id = object::id(&composition);
-
     let composition_admin_cap = CompositionAdminCap {
         id: object::new(ctx),
-        composition_id,
+        composition_id: composition.id(),
     };
 
+    let mut description = b"MusicOS Composition Shares for ".to_string();
+    description.append(composition.id().to_address().to_string());
+    description.append(b".".to_string());
+
+    let balance = share::new<CompositionShare>(
+        b"MusicOS Composition Share".to_string(),
+        description,
+        share_icon_url!(),
+        currency,
+        &composition.metadata_cap,
+        treasury_cap,
+    );
+
+    //let mut description = b"Shares for MusicOS Composition:".to_string();
+    //description.append(composition_id.to_address().to_string());
+    //description.append(b".".to_string());
+
     emit(CompositionCreatedEvent {
-        composition_id,
+        composition_id: composition.id(),
     });
 
     (composition, composition_admin_cap, balance)

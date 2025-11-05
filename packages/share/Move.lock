@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "8E6CF9B4BEA9EFB1E9912C72B77DE6D93F85A0AC67E4B34376DC2BC192FE6C13"
+manifest_digest = "CB07E6FD4063D5B84127A7D45728CD8FA824D8A7982022CC178C65BA48DD0F23"
 deps_digest = "F9B494B64F0615AED0E98FC12A85B85ECD2BC5185C22D30E7F67786BB52E507C"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
@@ -51,6 +51,6 @@ flavor = "sui"
 
 [env.mirainet]
 chain-id = "beb099eb"
-original-published-id = "0x4b024bf5ef51a6ab2b3ac84915c900de9fd414725508cb2e1823adc1a2040f92"
-latest-published-id = "0x4b024bf5ef51a6ab2b3ac84915c900de9fd414725508cb2e1823adc1a2040f92"
+original-published-id = "0xe823b25945288ba8551bfe5f8eee9a5d61701170b5f890d25c0364a3a78c57f6"
+latest-published-id = "0xe823b25945288ba8551bfe5f8eee9a5d61701170b5f890d25c0364a3a78c57f6"
 published-version = "1"
