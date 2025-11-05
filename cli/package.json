@@ -1,0 +1,19 @@
+{
+  "name": "cli",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@mysten/seal": "^0.9.3",
+    "@mysten/sui": "^1.44.0",
+    "@mysten/walrus": "^0.8.3",
+    "envalid": "^8.1.1",
+    "zod": "^4.1.12"
+  }
+}
