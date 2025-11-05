@@ -11,7 +11,10 @@ public struct Track has drop, store {
     duration: u64,
 }
 
-public fun new(cap: &RecordingAdminCap, recording: &Recording): Track {
+public fun new<RecordingShare>(
+    cap: &RecordingAdminCap,
+    recording: &Recording<RecordingShare>,
+): Track {
     recording.authorize(cap);
     Track {
         composition_id: recording.composition_id(),
