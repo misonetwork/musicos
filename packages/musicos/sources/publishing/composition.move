@@ -9,6 +9,7 @@ use musicos::revenue_pool;
 use musicos::royalty_pool;
 use musicos::constants::{share_currency_supply, share_icon_url, share_currency_decimals};
 use std::string::String;
+use sui::derived_object::claim;
 use sui::clock::Clock;
 use sui::coin::{TreasuryCap};
 use sui::coin_registry::{Currency, MetadataCap};
@@ -52,6 +53,8 @@ public struct CompositionAdminCap has key, store {
     composition_id: ID,
 }
 
+public struct CompositionAdminCapKey() has copy, drop, store;
+
 //=== Events ===
 
 public struct CompositionCreatedEvent has copy, drop, store {
@@ -76,27 +79,15 @@ const EInvalidSymbol: u64 = 5;
 
 //=== Public Functions ===
 
-#[allow(lint(share_owned))]
-public fun initialize_revenue_pool<CompositionShare, RevenueCurrency>(self: &mut Composition<CompositionShare>) {
-    let revenue_pool = revenue_pool::new<RevenueCurrency>(&mut self.id);
-    transfer::public_share_object(revenue_pool);
-}
-
-#[allow(lint(share_owned))]
-public fun initialize_royalty_pool<CompositionShare, RevenueCurrency>(self: &mut Composition<CompositionShare>) {
-    let royalty_pool = royalty_pool::new<CompositionShare, RevenueCurrency>(&mut self.id);
-    transfer::public_share_object(royalty_pool);
-}
-
 public fun new<CompositionShare>(
     commission_rate: BPS,
     title: String,
     currency: &mut Currency<CompositionShare>,
     metadata_cap: MetadataCap<CompositionShare>,
-    mut treasury_cap: TreasuryCap<CompositionShare>,
+    treasury_cap: TreasuryCap<CompositionShare>,
     ctx: &mut TxContext,
 ): (Composition<CompositionShare>, CompositionAdminCap, Balance<CompositionShare>) {
-    let composition = Composition<CompositionShare> {
+    let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Created,
         commission_rate,
@@ -110,7 +101,7 @@ public fun new<CompositionShare>(
     };
 
     let composition_admin_cap = CompositionAdminCap {
-        id: object::new(ctx),
+        id: claim(&mut composition.id, CompositionAdminCapKey()),
         composition_id: composition.id(),
     };
 
@@ -126,10 +117,6 @@ public fun new<CompositionShare>(
         &composition.metadata_cap,
         treasury_cap,
     );
-
-    //let mut description = b"Shares for MusicOS Composition:".to_string();
-    //description.append(composition_id.to_address().to_string());
-    //description.append(b".".to_string());
 
     emit(CompositionCreatedEvent {
         composition_id: composition.id(),
@@ -222,6 +209,18 @@ public fun remove_artifact<CompositionShare>(
 ): Artifact<CompositionArtifactVariant> {
     self.authorize(cap);
     self.artifacts.remove(artifact_idx)
+}
+
+#[allow(lint(share_owned))]
+public fun initialize_revenue_pool<CompositionShare, RevenueCurrency>(self: &mut Composition<CompositionShare>) {
+    let revenue_pool = revenue_pool::new<RevenueCurrency>(&mut self.id);
+    transfer::public_share_object(revenue_pool);
+}
+
+#[allow(lint(share_owned))]
+public fun initialize_royalty_pool<CompositionShare, RevenueCurrency>(self: &mut Composition<CompositionShare>) {
+    let royalty_pool = royalty_pool::new<CompositionShare, RevenueCurrency>(&mut self.id);
+    transfer::public_share_object(royalty_pool);
 }
 
 // Derive the address of the Composition's RevenuePool and transfer

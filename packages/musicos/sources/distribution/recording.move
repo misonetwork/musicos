@@ -3,13 +3,14 @@ module musicos::recording;
 use musicos::artifact::Artifact;
 use musicos::bps::BPS;
 use musicos::composition::Composition;
-use musicos::constants::{share_currency_decimals, share_currency_supply};
+use musicos::constants::share_icon_url;
 use musicos::contributor_identifier::ContributorIdentifier;
 use musicos::genre::Genre;
 use musicos::mix::Mix;
 use musicos::recording_artifact_variant::RecordingArtifactVariant;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::recording_decryption_license::{Self, RecordingDecryptionLicense};
+use musicos::share;
 use musicos::snapshot::Snapshot;
 use std::string::String;
 use sui::balance::Balance;
@@ -43,6 +44,8 @@ public struct RecordingAdminCap has key, store {
     id: UID,
     recording_id: ID,
 }
+
+public struct RecordingAdminCapKey() has copy, drop, store;
 
 //=== Enums ===
 
@@ -86,17 +89,8 @@ public fun new<CompositionShare, RecordingShare>(
     genre: &Genre,
     currency: &mut Currency<RecordingShare>,
     metadata_cap: MetadataCap<RecordingShare>,
-    mut treasury_cap: TreasuryCap<RecordingShare>,
-    ctx: &mut TxContext,
+    treasury_cap: TreasuryCap<RecordingShare>,
 ): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>) {
-    assert!(currency.decimals() == share_currency_decimals!(), EInvalidDecimals);
-    assert!(currency.symbol() == b"RECORDING_SHARE".to_string(), EInvalidSymbol);
-
-    // Mint the composition share balance.
-    let balance = treasury_cap.mint_balance(share_currency_supply!());
-    currency.make_supply_fixed(treasury_cap);
-    assert!(currency.total_supply().borrow() == share_currency_supply!(), EExceedsMaxSupply);
-
     // If the derivation index is not 0, assert the UID associated with the previous
     // derivation index has been claimed and exists. This ensures UIDs generated for
     // Recordings are sequential in nature.
@@ -109,7 +103,7 @@ public fun new<CompositionShare, RecordingShare>(
 
     let composition_id = composition.id();
 
-    let recording = Recording<RecordingShare> {
+    let mut recording = Recording<RecordingShare> {
         id: claim(composition.uid_mut(), RecordingKey(derivation_idx)),
         state: RecordingState::Created,
         composition_id,
@@ -123,14 +117,29 @@ public fun new<CompositionShare, RecordingShare>(
         metadata_cap,
     };
 
+    let recording_id = recording.id.to_inner();
+
     let recording_admin_cap = RecordingAdminCap {
-        id: object::new(ctx),
-        recording_id: recording.id.to_inner(),
+        id: claim(&mut recording.id, RecordingAdminCapKey()),
+        recording_id,
     };
+
+    let mut description = b"MusicOS Recording Shares for ".to_string();
+    description.append(recording_id.to_address().to_string());
+    description.append(b".".to_string());
+
+    let balance = share::new<RecordingShare>(
+        b"MusicOS Recording Share".to_string(),
+        description,
+        share_icon_url!(),
+        currency,
+        &recording.metadata_cap,
+        treasury_cap,
+    );
 
     emit(RecordingCreatedEvent {
         composition_id,
-        recording_id: recording.id.to_inner(),
+        recording_id,
     });
 
     (recording, recording_admin_cap, balance)
