@@ -82,7 +82,7 @@ public struct RecordingCreatedEvent has copy, drop {
 
 //=== Public Functions ===
 
-public fun new<CompositionShare, RecordingShare>(
+public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     mix: Mix,
     derivation_idx: u32,

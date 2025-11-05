@@ -2,10 +2,8 @@ module musicos::release;
 
 use musicos::bps::{Self, BPS};
 use musicos::disc::Disc;
-use musicos::recording::{Recording, RecordingAdminCap};
 use musicos::revenue_pool::{Self, RevenuePool};
 use musicos::royalty_pool;
-use musicos::track::Track;
 use musicos::track_identifier::{Self, TrackIdentifier};
 use musicos::track_sequence::{Self, TrackSequence};
 use std::string::String;
@@ -97,8 +95,8 @@ public fun new(
 }
 
 // Initialize a RevenuePool for the Release.
-public fun initialize_revenue_pool<Currency>(self: &mut Release) {
-    let revenue_pool = revenue_pool::new<Currency>(&mut self.id);
+public fun initialize_revenue_pool<RevenueCurrency>(self: &mut Release) {
+    let revenue_pool = revenue_pool::new<RevenueCurrency>(&mut self.id);
     transfer::public_share_object(revenue_pool);
 }
 
@@ -151,19 +149,19 @@ entry fun forward_revenue<RevenueCurrency>(
 
 // Derive the address of the Release's RevenuePool and transfer
 // funds to the RevenuePool's balance accumulator.
-public fun deposit_revenue<Currency>(
+public fun deposit_revenue<RevenueCurrency>(
     self: &Release,
-    balance: Balance<Currency>,
+    balance: Balance<RevenueCurrency>,
     ctx: &mut TxContext,
 ) {
     // Assert the RevenuePool for the provided Release exists.
-    revenue_pool::assert_exists<Currency>(&self.id);
+    revenue_pool::assert_exists<RevenueCurrency>(&self.id);
     // Transfer the funds to the RevenuePool's balance accumulator.
-    // balance.send_funds(revenue_pool::derive_address<Currency>(self.id()));
+    // balance.send_funds(revenue_pool::derive_address<RevenueCurrency>(self.id()));
     // TODO: Migrate to accumulators when possible.
     transfer::public_transfer(
         balance.into_coin(ctx),
-        revenue_pool::derive_address<Currency>(self.id()),
+        revenue_pool::derive_address<RevenueCurrency>(self.id()),
     );
 }
 
