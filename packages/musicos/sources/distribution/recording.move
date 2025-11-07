@@ -28,7 +28,8 @@ public struct Recording<phantom RecordingShare> has key, store {
     state: RecordingState,
     composition_id: ID,
     composition_commission_rate: BPS,
-    genre: String,
+    primary_genre: String,
+    secondary_genres: VecSet<String>,
     contributors: VecMap<ContributorIdentifier, VecSet<RecordingContributorRole>>,
     primary_mix: Mix,
     alternate_mixes: vector<Mix>,
@@ -61,6 +62,7 @@ const MAX_ARTIFACTS: u64 = 30;
 const MAX_CONTRIBUTORS: u64 = 200;
 const MAX_ROLES_PER_CONTRIBUTOR: u64 = 10;
 const MAX_SNAPSHOTS: u64 = 50;
+const MAX_SECONDARY_GENRES: u64 = 5;
 
 //=== Errors ===
 
@@ -86,7 +88,7 @@ public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     mix: Mix,
     derivation_idx: u32,
-    genre: &Genre,
+    primary_genre: &Genre,
     currency: &mut Currency<RecordingShare>,
     metadata_cap: MetadataCap<RecordingShare>,
     treasury_cap: TreasuryCap<RecordingShare>,
@@ -108,7 +110,8 @@ public fun new<RecordingShare, CompositionShare>(
         state: RecordingState::Created,
         composition_id,
         composition_commission_rate: composition.commission_rate(),
-        genre: genre.name(),
+        primary_genre: primary_genre.name(),
+        secondary_genres: vec_set::empty(),
         contributors: vec_map::empty(),
         primary_mix: mix,
         alternate_mixes: vector[],

@@ -11,6 +11,11 @@ public struct Audio has copy, drop, store {
     codec: Codec,
 }
 
+public enum AudioEncryptionState has copy, drop, store {
+    Unencrypted,
+    Encrypted(vector<u8>),
+}
+
 //=== Public Functions ===
 
 public fun new(pcm: Pcm, codec: Codec): Audio {

@@ -11,6 +11,7 @@ public struct GENRE() has drop;
 public struct Genre has key {
     id: UID,
     name: String,
+    is_primary: bool,
 }
 
 public struct GenreKey(String) has copy, drop, store;

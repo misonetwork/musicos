@@ -1,15 +1,13 @@
 module musicos::pcm;
 
-use musicos::data::Data;
-
 //=== Structs ===
 
 public struct Pcm has copy, drop, store {
     channels: u8,
+    digest: vector<u8>,
     sample_rate: u32,
     bit_depth: u8,
     samples: u64,
-    data: Data,
 }
 
 //=== Constants ===
@@ -28,17 +26,23 @@ const EInvalidSamples: u64 = 0;
 
 //=== Public Functions ===
 
-public fun new(channels: u8, sample_rate: u32, bit_depth: u8, samples: u64, data: Data): Pcm {
+public fun new(
+    channels: u8,
+    digest: vector<u8>,
+    sample_rate: u32,
+    bit_depth: u8,
+    samples: u64,
+): Pcm {
     assert!(samples > 0, EInvalidSamples);
     assert!(SUPPORTED_BIT_DEPTHS.contains(&bit_depth), EUnsupportedBitDepth);
     assert!(SUPPORTED_SAMPLE_RATES.contains(&sample_rate), EUnsupportedSampleRate);
 
     Pcm {
         channels,
+        digest,
         sample_rate,
         bit_depth,
         samples,
-        data,
     }
 }
 
@@ -46,6 +50,10 @@ public fun new(channels: u8, sample_rate: u32, bit_depth: u8, samples: u64, data
 
 public fun channels(self: &Pcm): u8 {
     self.channels
+}
+
+public fun digest(self: &Pcm): &vector<u8> {
+    &self.digest
 }
 
 public fun sample_rate(self: &Pcm): u32 {
@@ -58,8 +66,4 @@ public fun bit_depth(self: &Pcm): u8 {
 
 public fun samples(self: &Pcm): u64 {
     self.samples
-}
-
-public fun data(self: &Pcm): &Data {
-    &self.data
 }
