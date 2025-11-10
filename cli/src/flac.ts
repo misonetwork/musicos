@@ -9,6 +9,7 @@ import { suiClient } from "./clients";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { Transaction } from "@mysten/sui/transactions";
 import { SUI_CLOCK_OBJECT_ID } from "@mysten/sui/utils";
+import { hash } from "./utils";
 
 const env = cleanEnv(process.env, {
   ACL_PACKAGE_ID: str(),
@@ -60,9 +61,9 @@ async function chunkFlacBytes(flacBytes: Uint8Array, packets: FlacPacket[], maxC
   if (!packets || packets.length === 0) throw new Error("No packets provided");
 
   const chunks: Chunk[] = [];
-  let chunkStartPos = 0; // Start at beginning to include FLAC header
+  let chunkStartPos = 0;
   let chunkStartPts = packets[0]!.pts;
-  let accumulatedSize = packets[0]!.pos; // Account for header size
+  let accumulatedSize = packets[0]!.pos;
   let lastPacket = packets[0]!;
   let chunkIndex = 0;
 
@@ -100,13 +101,10 @@ async function chunkFlacBytes(flacBytes: Uint8Array, packets: FlacPacket[], maxC
 
   const chunkEndPos = lastPacket.pos + lastPacket.size;
   const chunkBytes = new Uint8Array(flacBytes.buffer.slice(chunkStartPos, chunkEndPos));
-  const hasher = new Bun.CryptoHasher("blake2b256");
-  hasher.update(chunkBytes);
-  const digest = hasher.digest().toString("hex");
 
   chunks.push({
     bytes: chunkBytes,
-    digest,
+    digest: hash(chunkBytes),
     index: chunkIndex,
     start_pos: chunkStartPos,
     end_pos: chunkEndPos,
@@ -234,12 +232,6 @@ async function reassembleDecryptedBytes(decryptedChunks: DecryptedChunk[]): Prom
     offset += chunk.bytes.length;
   }
   return assembled;
-}
-
-function hash(bytes: Uint8Array): string {
-  const hasher = new Bun.CryptoHasher("blake2b256");
-  hasher.update(bytes);
-  return hasher.digest().toString("hex");
 }
 
 async function encodeWalrusQuilt(encryptedChunks: EncryptedChunk[]) {

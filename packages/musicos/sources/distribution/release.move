@@ -2,6 +2,11 @@ module musicos::release;
 
 use musicos::bps::{Self, BPS};
 use musicos::disc::Disc;
+use musicos::release_distribution_license::{
+    Self,
+    ReleaseDistributionLicense,
+    ReleaseDistributionKind
+};
 use musicos::revenue_pool::{Self, RevenuePool};
 use musicos::royalty_pool;
 use musicos::track_identifier::{Self, TrackIdentifier};
@@ -11,6 +16,7 @@ use std::type_name::{TypeName, with_defining_ids};
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::derived_object::claim;
+use sui::dynamic_field as df;
 use sui::event::emit;
 use sui::random::Random;
 use sui::vec_map::{Self, VecMap};
@@ -51,6 +57,7 @@ public struct ReleaseRevenueForwardedEvent has copy, drop {
 }
 
 const EInvalidTrackSplitSum: u64 = 0;
+const EUnauthorized: u64 = 1;
 
 //=== Public Functions ===
 
@@ -165,6 +172,22 @@ public fun deposit_revenue<RevenueCurrency>(
     );
 }
 
+public fun new_distribution_license<Distributor, Format>(
+    cap: &ReleaseAdminCap,
+    kind: ReleaseDistributionKind,
+): ReleaseDistributionLicense<Distributor, Format> {
+    release_distribution_license::new<Distributor, Format>(cap.release_id, kind)
+}
+
+public fun add_distribution_license_unit_price_for_currency<Distributor, Format, Currency>(
+    cap: &ReleaseAdminCap,
+    license: &mut ReleaseDistributionLicense<Distributor, Format>,
+    unit_price: u64,
+) {
+    authorize_with_cap(cap, license.release_id<Distributor, Format>());
+    license.add_unit_price_for_currency<Distributor, Format, Currency>(unit_price);
+}
+
 //=== Public View Functions ===
 
 public fun id(self: &Release): ID {
@@ -172,6 +195,14 @@ public fun id(self: &Release): ID {
 }
 
 //=== Private Functions ===
+
+fun authorize(self: &Release, cap: &ReleaseAdminCap) {
+    assert!(cap.release_id == self.id(), EUnauthorized);
+}
+
+fun authorize_with_cap(cap: &ReleaseAdminCap, release_id: ID) {
+    assert!(cap.release_id == release_id, EUnauthorized);
+}
 
 fun build_track_identifiers(discs: &vector<Disc>): vector<TrackIdentifier> {
     let mut track_identifiers: vector<TrackIdentifier> = vector[];
