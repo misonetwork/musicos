@@ -1,8 +1,8 @@
 module musicos::treasury;
 
 use music::music::MUSIC;
-use music::protocol::Protocol;
 use musicos::admin::AdminCap;
+use musicos::protocol::Protocol;
 use std::type_name::{TypeName, with_defining_ids};
 use sui::balance::Balance;
 use sui::coin::TreasuryCap;

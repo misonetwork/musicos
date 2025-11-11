@@ -1,6 +1,6 @@
 module musicos::track;
 
-use musicos::bps::BPS;
+use interest_bps::bps::BPS;
 use musicos::recording::{Recording, RecordingAdminCap};
 use musicos::utils::calculate_duration;
 

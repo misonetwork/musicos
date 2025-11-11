@@ -1,5 +1,6 @@
 module musicos::genre;
 
+use musicos::admin::AdminCap;
 use std::string::String;
 use sui::derived_object::claim;
 
@@ -13,10 +14,6 @@ public struct Genre has key {
 }
 
 public struct GenreKey(String) has copy, drop, store;
-
-public struct CreateGenreCap has key, store {
-    id: UID,
-}
 
 public struct GenreRegistry has key {
     id: UID,
@@ -44,17 +41,12 @@ fun init(_otw: GENRE, ctx: &mut TxContext) {
         transfer::share_object(genre);
     });
 
-    let create_genre_cap = CreateGenreCap {
-        id: object::new(ctx),
-    };
-    transfer::public_transfer(create_genre_cap, ctx.sender());
-
     transfer::share_object(registry);
 }
 
 //=== Public Functions ===
 
-public fun new(_: &CreateGenreCap, name: String, registry: &mut GenreRegistry) {
+public fun new(_: &AdminCap, name: String, registry: &mut GenreRegistry) {
     let genre = new_impl(name, registry);
     transfer::share_object(genre);
 }

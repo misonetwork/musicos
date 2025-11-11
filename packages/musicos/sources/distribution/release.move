@@ -1,6 +1,6 @@
 module musicos::release;
 
-use musicos::bps::{Self, BPS};
+use interest_bps::bps::{Self, BPS};
 use musicos::disc::Disc;
 use musicos::release_distribution_license::{
     Self,
@@ -71,7 +71,7 @@ public fun new(
     // Assert the sum of the track splits adds up to 100%.
     let mut track_splits_sum = 0;
     track_splits.do_ref!(|split| {
-        track_splits_sum = track_splits_sum + split.value();
+        track_splits_sum = track_splits_sum + (*split).value();
     });
     assert!(track_splits_sum == bps::max_value!(), EInvalidTrackSplitSum);
 

@@ -17,7 +17,7 @@ use sui::event::emit;
 use sui::balance::Balance;
 use sui::vec_map::{Self, VecMap};
 use sui::vec_set::{Self, VecSet};
-use musicos::bps::BPS;
+use interest_bps::bps::BPS;
 
 //=== Structs ===
 

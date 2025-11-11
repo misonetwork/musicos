@@ -36,3 +36,15 @@ public fun new<Authority: drop>(
         duration,
     }
 }
+
+public fun composition_id(self: &Play): ID {
+    self.composition_id
+}
+
+public fun recording_id(self: &Play): ID {
+    self.recording_id
+}
+
+public fun duration(self: &Play): u64 {
+    self.duration
+}

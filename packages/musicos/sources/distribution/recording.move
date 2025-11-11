@@ -1,7 +1,7 @@
 module musicos::recording;
 
+use interest_bps::bps::BPS;
 use musicos::artifact::Artifact;
-use musicos::bps::BPS;
 use musicos::composition::Composition;
 use musicos::constants::share_icon_url;
 use musicos::contributor_identifier::ContributorIdentifier;
