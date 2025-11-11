@@ -46,6 +46,10 @@ public fun artwork(self: &Disc): Option<String> {
     self.artwork
 }
 
+public fun track(self: &Disc, track_idx: u8): &Track {
+    &self.tracks[track_idx as u64]
+}
+
 public fun tracks(self: &Disc): &vector<Track> {
     &self.tracks
 }

@@ -194,6 +194,14 @@ public fun id(self: &Release): ID {
     self.id.to_inner()
 }
 
+public fun disc(self: &Release, disc_idx: u8): &Disc {
+    &self.discs[disc_idx as u64]
+}
+
+public fun discs(self: &Release): &vector<Disc> {
+    &self.discs
+}
+
 //=== Private Functions ===
 
 fun authorize(self: &Release, cap: &ReleaseAdminCap) {

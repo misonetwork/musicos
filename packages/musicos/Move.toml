@@ -5,6 +5,7 @@ license = "Apache 2.0"
 authors = ["Sona Labs, Pte Ltd (os@sonamusic.com)"]
 
 [dependencies]
+music = { local = "../music" } # MUSIC token
 
 [addresses]
 musicos = "0x0"
