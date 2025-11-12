@@ -277,6 +277,10 @@ public fun composition_commission_rate<RecordingShare>(self: &Recording<Recordin
     self.composition_commission_rate
 }
 
+public fun primary_genre<RecordingShare>(self: &Recording<RecordingShare>): String {
+    self.primary_genre
+}
+
 public fun primary_mix<RecordingShare>(self: &Recording<RecordingShare>): &Mix {
     &self.primary_mix
 }

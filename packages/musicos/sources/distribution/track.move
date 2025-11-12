@@ -3,6 +3,7 @@ module musicos::track;
 use interest_bps::bps::BPS;
 use musicos::recording::{Recording, RecordingAdminCap};
 use musicos::utils::calculate_duration;
+use std::string::String;
 
 //=== Structs ===
 
@@ -11,6 +12,7 @@ public struct Track has drop, store {
     composition_commission_rate: BPS,
     recording_id: ID,
     duration: u64,
+    genre: String,
 }
 
 //=== Public Functions ===
@@ -28,6 +30,7 @@ public fun new<RecordingShare>(
             recording.primary_mix().audio().pcm().samples(),
             recording.primary_mix().audio().pcm().sample_rate(),
         ),
+        genre: recording.primary_genre(),
     }
 }
 
@@ -47,4 +50,8 @@ public fun recording_id(self: &Track): ID {
 
 public fun duration(self: &Track): u64 {
     self.duration
+}
+
+public fun genre(self: &Track): String {
+    self.genre
 }
