@@ -172,12 +172,12 @@ public fun deposit_revenue<RevenueCurrency>(
     );
 }
 
-public fun new_distribution_license<Distributor, Format, Packager, Currency>(
+public fun new_distribution_license<Distributor: drop, Packager: key, Format: key, Currency>(
     cap: &ReleaseAdminCap,
     kind: ReleaseDistributionKind,
     unit_price: u64,
 ): ReleaseDistributionLicense<Distributor, Format, Packager, Currency> {
-    release_distribution_license::new<Distributor, Format, Packager, Currency>(
+    release_distribution_license::new<Distributor, Packager, Format, Currency>(
         cap.release_id,
         kind,
         unit_price,

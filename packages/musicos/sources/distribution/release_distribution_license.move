@@ -1,7 +1,6 @@
 module musicos::release_distribution_license;
 
-use std::type_name::{TypeName, with_defining_ids};
-use sui::dynamic_field as df;
+use sui::bcs::{Self, to_bytes};
 
 // A license that defines the distribution terms for a Release.
 //
@@ -11,22 +10,36 @@ use sui::dynamic_field as df;
 //    - Packager: The type of the release format packager (e.g. sonaos::pressing::Pressing).
 //    - Currency: The currency type for settlement (e.g. sonaos::currency::Currency).
 public struct ReleaseDistributionLicense<
-    phantom Distributor,
-    phantom Format,
-    phantom Packager,
+    phantom Distributor: drop,
+    phantom Format: key,
+    phantom Packager: key,
     phantom Currency,
 > has store {
     release_id: ID,
     kind: ReleaseDistributionKind,
+    state: ReleaseDistributionLicenseState,
     unit_price: u64,
 }
 
-// (release_id)
-public struct ReleaseUidClaim<phantom Distributor>(ID)
+public struct ReleaseDistributionLicenseGrant(ID) has drop, store;
+
+//=== Enums ===
+
+public enum ReleaseDistributionLicenseState has copy, drop, store {
+    Issued,
+    Activated,
+}
+
+public fun activate<Distributor: drop, Format: key, Packager: key, Currency>(
+    self: &mut ReleaseDistributionLicense<Distributor, Format, Packager, Currency>,
+) {
+    match (self.state) {
+        ReleaseDistributionLicenseState::Issued => {},
+        _ => abort 0,
+    }
+}
 
 public struct ReleaseDistributionLicenseKey() has copy, drop, store;
-// (release_id, number)
-public struct ReleaseDistributionLicenseGrant(ID) has drop, store;
 
 public enum ReleaseDistributionKind has copy, drop, store {
     Digital(u64), // (quantity)
@@ -50,34 +63,29 @@ public fun new_streaming_kind(): ReleaseDistributionKind {
 
 //=== Package Functions ===
 
-public(package) fun new<Distributor, Packager, Format, Currency>(
+public(package) fun new<Distributor: drop, Format: key, Packager: key, Currency>(
     release_id: ID,
     kind: ReleaseDistributionKind,
     unit_price: u64,
 ): ReleaseDistributionLicense<Distributor, Packager, Format, Currency> {
+
     ReleaseDistributionLicense {
         release_id: release_id,
         kind: kind,
+        state: ReleaseDistributionLicenseState::Issued,
         unit_price,
     }
 }
 
-public(package) fun attach_license<Distributor, Packager, Format, Currency>(
-    parent: &mut UID,
-    release_id: ID,
-) {
-    df::add(parent, ReleaseDistributionLicenseKey(), ReleaseDistributionLicenseGrant(release_id))
-}
-
 //=== Public View Functions ===
 
-public fun release_id<Distributor, Packager, Format, Currency>(
+public fun release_id<Distributor: drop, Format: key, Packager: key, Currency>(
     self: &ReleaseDistributionLicense<Distributor, Packager, Format, Currency>,
 ): ID {
     self.release_id
 }
 
-public fun quantity<Distributor, Packager, Format, Currency>(
+public fun quantity<Distributor: drop, Format: key, Packager: key, Currency>(
     self: &ReleaseDistributionLicense<Distributor, Packager, Format, Currency>,
 ): u64 {
     match (self.kind) {
@@ -87,7 +95,7 @@ public fun quantity<Distributor, Packager, Format, Currency>(
     }
 }
 
-public fun unit_price<Distributor, Packager, Format, Currency>(
+public fun unit_price<Distributor: drop, Format: key, Packager: key, Currency>(
     self: &ReleaseDistributionLicense<Distributor, Packager, Format, Currency>,
 ): u64 {
     self.unit_price
