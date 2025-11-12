@@ -172,20 +172,24 @@ public fun deposit_revenue<RevenueCurrency>(
     );
 }
 
-public fun new_distribution_license<Distributor, Format>(
+public fun new_distribution_license<Distributor, Format, Packager, Currency>(
     cap: &ReleaseAdminCap,
     kind: ReleaseDistributionKind,
-): ReleaseDistributionLicense<Distributor, Format> {
-    release_distribution_license::new<Distributor, Format>(cap.release_id, kind)
+    unit_price: u64,
+): ReleaseDistributionLicense<Distributor, Format, Packager, Currency> {
+    release_distribution_license::new<Distributor, Format, Packager, Currency>(
+        cap.release_id,
+        kind,
+        unit_price,
+    )
 }
 
-public fun add_distribution_license_unit_price_for_currency<Distributor, Format, Currency>(
-    cap: &ReleaseAdminCap,
-    license: &mut ReleaseDistributionLicense<Distributor, Format>,
-    unit_price: u64,
-) {
-    authorize_with_cap(cap, license.release_id<Distributor, Format>());
-    license.add_unit_price_for_currency<Distributor, Format, Currency>(unit_price);
+public struct Otp(ID)
+
+public fun uid_mut<T>(self: &mut Release, otp: Otp): &mut UID {
+    let Otp(id) = otp;
+    assert!(id == self.id(), 0);
+    &mut self.id
 }
 
 //=== Public View Functions ===

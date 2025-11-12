@@ -1,19 +1,28 @@
 module musicos::release_distribution_license;
 
 use std::type_name::{TypeName, with_defining_ids};
-use sui::clock::Clock;
 use sui::dynamic_field as df;
-use sui::vec_map::{Self, VecMap};
 
 // A license that defines the distribution terms for a Release.
-// Requires two types: Distributor and Format.
-//    - Distributor: OTW object that identifies the distributoe (e.g. sonaos::distribution::Distributor).
-//    - Format: The format of the Release (e.g. sonaos::record::Record).
-public struct ReleaseDistributionLicense<phantom Distributor, phantom Format> has store {
+//
+// Requires four types: Distributor and Format.
+//    - Distributor: OTW type that identifies the distributor (e.g. sonaos::witness::Witness).
+//    - Format: The type of the release format (e.g. sonaos::record::Record).
+//    - Packager: The type of the release format packager (e.g. sonaos::pressing::Pressing).
+//    - Currency: The currency type for settlement (e.g. sonaos::currency::Currency).
+public struct ReleaseDistributionLicense<
+    phantom Distributor,
+    phantom Format,
+    phantom Packager,
+    phantom Currency,
+> has store {
     release_id: ID,
     kind: ReleaseDistributionKind,
-    unit_prices_by_currency: VecMap<TypeName, u64>,
+    unit_price: u64,
 }
+
+// (release_id)
+public struct ReleaseUidClaim<phantom Distributor>(ID)
 
 public struct ReleaseDistributionLicenseKey() has copy, drop, store;
 // (release_id, number)
@@ -41,44 +50,35 @@ public fun new_streaming_kind(): ReleaseDistributionKind {
 
 //=== Package Functions ===
 
-public(package) fun new<Distributor, Format>(
+public(package) fun new<Distributor, Packager, Format, Currency>(
     release_id: ID,
     kind: ReleaseDistributionKind,
-): ReleaseDistributionLicense<Distributor, Format> {
+    unit_price: u64,
+): ReleaseDistributionLicense<Distributor, Packager, Format, Currency> {
     ReleaseDistributionLicense {
         release_id: release_id,
         kind: kind,
-        unit_prices_by_currency: vec_map::empty(),
+        unit_price,
     }
 }
 
-public(package) fun add_unit_price_for_currency<Distributor, Format, Currency>(
-    self: &mut ReleaseDistributionLicense<Distributor, Format>,
-    unit_price: u64,
+public(package) fun attach_license<Distributor, Packager, Format, Currency>(
+    parent: &mut UID,
+    release_id: ID,
 ) {
-    self.unit_prices_by_currency.insert(with_defining_ids<Currency>(), unit_price);
-}
-
-public(package) fun remove_unit_price_for_currency<Distributor, Format, Currency>(
-    self: &mut ReleaseDistributionLicense<Distributor, Format>,
-) {
-    self.unit_prices_by_currency.remove(&with_defining_ids<Currency>());
-}
-
-public(package) fun attach_license<Distributor, Format>(parent: &mut UID, release_id: ID) {
     df::add(parent, ReleaseDistributionLicenseKey(), ReleaseDistributionLicenseGrant(release_id))
 }
 
 //=== Public View Functions ===
 
-public fun release_id<Distributor, Format>(
-    self: &ReleaseDistributionLicense<Distributor, Format>,
+public fun release_id<Distributor, Packager, Format, Currency>(
+    self: &ReleaseDistributionLicense<Distributor, Packager, Format, Currency>,
 ): ID {
     self.release_id
 }
 
-public fun quantity<Distributor, Format>(
-    self: &ReleaseDistributionLicense<Distributor, Format>,
+public fun quantity<Distributor, Packager, Format, Currency>(
+    self: &ReleaseDistributionLicense<Distributor, Packager, Format, Currency>,
 ): u64 {
     match (self.kind) {
         ReleaseDistributionKind::Digital(quantity) => quantity,
@@ -87,10 +87,8 @@ public fun quantity<Distributor, Format>(
     }
 }
 
-public fun unit_price<Distributor, Format, Currency>(
-    self: &ReleaseDistributionLicense<Distributor, Format>,
+public fun unit_price<Distributor, Packager, Format, Currency>(
+    self: &ReleaseDistributionLicense<Distributor, Packager, Format, Currency>,
 ): u64 {
-    let currency_type = &with_defining_ids<Currency>();
-    assert!(self.unit_prices_by_currency.contains(currency_type));
-    *self.unit_prices_by_currency.get(currency_type)
+    self.unit_price
 }
