@@ -6,6 +6,7 @@ authors = ["Sona Labs, Pte Ltd (os@sonamusic.com)"]
 
 [dependencies]
 interest_bps = { r.mvr = "@interest/bps" }
+interest_math = { r.mvr = "@interest/math" }
 music = { local = "../music" } # MUSIC token
 
 [addresses]

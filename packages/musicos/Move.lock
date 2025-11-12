@@ -2,11 +2,12 @@
 
 [move]
 version = 3
-manifest_digest = "6658CEBCD4CB18203DEC3E9A71B4F2E890DC2308034861612545F78A6437226F"
-deps_digest = "52B406A7A21811BEF51751CF88DA0E76DAEFFEAC888D4F4060B1A72BBE7D8D35"
+manifest_digest = "A31E13888A90751D6059A33C7ABCC499DAE323C77F87AE44722476338C2AC712"
+deps_digest = "CAFAD8A7CF51067FB4358215BECB86BD100DD64E57C2AC8A7AE7D74B688F5965"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "InterestBPS", name = "InterestBPS" },
+  { id = "InterestMath", name = "InterestMath" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
@@ -35,6 +36,18 @@ dependencies = [
 [[move.package]]
 id = "InterestBPS"
 source = { git = "https://github.com/interest-protocol/interest-mvr", rev = "deploy/bps", subdir = "bps" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "DeepBook", name = "DeepBook" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[[move.package]]
+id = "InterestMath"
+source = { git = "https://github.com/interest-protocol/interest-mvr", rev = "d84dec3174acda3e34f0d672930041828d7eba42", subdir = "math" }
 
 dependencies = [
   { id = "Bridge", name = "Bridge" },

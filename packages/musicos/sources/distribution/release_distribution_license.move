@@ -68,7 +68,6 @@ public(package) fun new<Distributor: drop, Format: key, Packager: key, Currency>
     kind: ReleaseDistributionKind,
     unit_price: u64,
 ): ReleaseDistributionLicense<Distributor, Packager, Format, Currency> {
-
     ReleaseDistributionLicense {
         release_id: release_id,
         kind: kind,

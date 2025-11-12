@@ -1,8 +1,8 @@
 module musicos::play;
 
 use musicos::protocol::Protocol;
-use sui::event::emit;
 use std::string::String;
+use sui::event::emit;
 
 public struct Play {
     composition_id: ID,
