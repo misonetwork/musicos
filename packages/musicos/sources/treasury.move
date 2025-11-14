@@ -43,3 +43,11 @@ public fun mint<Authority: drop>(self: &mut Treasury, _: Authority, value: u64):
 public fun burn(self: &mut Treasury, balance: Balance<MUSIC>) {
     self.treasury_cap.supply_mut().decrease_supply(balance);
 }
+
+public fun deposit(self: &Treasury, balance: Balance<MUSIC>) {
+    balance.send_funds(self.id().to_address());
+}
+
+public fun id(self: &Treasury): ID {
+    self.id.to_inner()
+}

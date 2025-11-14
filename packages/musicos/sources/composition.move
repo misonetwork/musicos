@@ -10,6 +10,7 @@ use musicos::royalty_pool;
 use musicos::constants::{share_currency_supply, share_icon_url, share_currency_decimals};
 use std::string::String;
 use sui::derived_object::claim;
+use musicos::artist::Artist;
 use sui::clock::Clock;
 use sui::coin::{TreasuryCap};
 use sui::coin_registry::{Currency, MetadataCap};

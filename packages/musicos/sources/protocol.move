@@ -8,6 +8,7 @@ use sui::vec_set::VecSet;
 public struct Protocol has key {
     id: UID,
     state: ProtocolState,
+    artist_verification_authority: TypeName,
     play_authorities: VecSet<TypeName>,
     settlement_currencies: VecSet<TypeName>,
 }
@@ -26,6 +27,7 @@ public enum ProtocolState has copy, drop, store {
 
 const EInvalidSettlementCurrency: u64 = 0;
 const EInvalidPlayAuthority: u64 = 1;
+const EInvalidArtistVerificationAuthority: u64 = 2;
 
 public(package) fun assert_is_settlement_currency<Currency>(self: &Protocol) {
     assert!(
@@ -36,4 +38,11 @@ public(package) fun assert_is_settlement_currency<Currency>(self: &Protocol) {
 
 public(package) fun assert_is_play_authority<Authority>(self: &Protocol) {
     assert!(self.play_authorities.contains(&with_defining_ids<Authority>()), EInvalidPlayAuthority)
+}
+
+public(package) fun assert_is_artist_verification_authority<Authority>(self: &Protocol) {
+    assert!(
+        self.artist_verification_authority == with_defining_ids<Authority>(),
+        EInvalidArtistVerificationAuthority,
+    )
 }
