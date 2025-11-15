@@ -4,7 +4,8 @@ use interest_bps::bps::BPS;
 use musicos::artifact::Artifact;
 use musicos::composition::Composition;
 use musicos::constants::share_icon_url;
-use musicos::contributor_identifier::ContributorIdentifier;
+use musicos::contributor::Contributor;
+use musicos::contributor_id::ContributorID;
 use musicos::genre::Genre;
 use musicos::mix::Mix;
 use musicos::recording_artifact_variant::RecordingArtifactVariant;
@@ -30,7 +31,8 @@ public struct Recording<phantom RecordingShare> has key, store {
     composition_commission_rate: BPS,
     primary_genre: String,
     secondary_genres: VecSet<String>,
-    contributors: VecMap<ContributorIdentifier, VecSet<RecordingContributorRole>>,
+    artists: VecMap<ContributorID, RecordingArtistRole>,
+    contributors: VecMap<ContributorID, VecSet<RecordingContributorRole>>,
     primary_mix: Mix,
     alternate_mixes: vector<Mix>,
     artifacts: vector<Artifact<RecordingArtifactVariant>>,
@@ -49,6 +51,11 @@ public struct RecordingAdminCap has key, store {
 public struct RecordingAdminCapKey() has copy, drop, store;
 
 //=== Enums ===
+
+public enum RecordingArtistRole has copy, drop, store {
+    Primary,
+    Featured,
+}
 
 public enum RecordingState has copy, drop, store {
     Created,
@@ -112,6 +119,7 @@ public fun new<RecordingShare, CompositionShare>(
         composition_commission_rate: composition.commission_rate(),
         primary_genre: primary_genre.name(),
         secondary_genres: vec_set::empty(),
+        artists: vec_map::empty(),
         contributors: vec_map::empty(),
         primary_mix: mix,
         alternate_mixes: vector[],
@@ -181,39 +189,39 @@ public fun remove_alternate_mix<RecordingShare>(
 public fun add_contributor<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
-    contributor_identifier: ContributorIdentifier,
+    contributor_id: ContributorID,
 ) {
     self.authorize(cap);
-    self.contributors.insert(contributor_identifier, vec_set::empty());
+    self.contributors.insert(contributor_id, vec_set::empty());
 }
 
 public fun remove_contributor<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
-    contributor_identifier: ContributorIdentifier,
-): (ContributorIdentifier, VecSet<RecordingContributorRole>) {
+    contributor_id: ContributorID,
+): (ContributorID, VecSet<RecordingContributorRole>) {
     self.authorize(cap);
-    self.contributors.remove(&contributor_identifier)
+    self.contributors.remove(&contributor_id)
 }
 
 public fun add_contributor_role<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
-    contributor_identifier: ContributorIdentifier,
+    contributor_id: ContributorID,
     role: RecordingContributorRole,
 ) {
     self.authorize(cap);
-    self.contributors.get_mut(&contributor_identifier).insert(role);
+    self.contributors.get_mut(&contributor_id).insert(role);
 }
 
 public fun remove_contributor_role<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
-    contributor_identifier: ContributorIdentifier,
+    contributor_id: ContributorID,
     role: RecordingContributorRole,
 ) {
     self.authorize(cap);
-    self.contributors.get_mut(&contributor_identifier).remove(&role);
+    self.contributors.get_mut(&contributor_id).remove(&role);
 }
 
 public fun add_artifact<RecordingShare>(

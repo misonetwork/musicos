@@ -5,6 +5,7 @@ use musicos::protocol::Protocol;
 use musicos::treasury::Treasury;
 use std::string::String;
 use sui::coin::Coin;
+use sui::vec_set::VecSet;
 
 //=== Structs ===
 
@@ -12,6 +13,7 @@ public struct Artist has key {
     id: UID,
     name: ArtistName,
     website: Option<String>,
+    contributors: VecSet<String>,
 }
 
 public struct ArtistKey(String, u16) has copy, drop, store;

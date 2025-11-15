@@ -1,19 +1,21 @@
 module musicos::composition;
 
 use musicos::artifact::Artifact;
+use musicos::artist::Artist;
 use musicos::composition_artifact_variant::CompositionArtifactVariant;
 use musicos::composition_contributor_role::CompositionContributorRole;
-use musicos::contributor_identifier::ContributorIdentifier;
-use musicos::share;
+use musicos::contributor::Contributor;
+use musicos::contributor_id::{Self, ContributorID};
 use musicos::revenue_pool;
 use musicos::royalty_pool;
+use musicos::share;
 use musicos::constants::{share_currency_supply, share_icon_url, share_currency_decimals};
 use std::string::String;
 use sui::derived_object::claim;
-use musicos::artist::Artist;
 use sui::clock::Clock;
 use sui::coin::{TreasuryCap};
 use sui::coin_registry::{Currency, MetadataCap};
+
 use sui::event::emit;
 use sui::balance::Balance;
 use sui::vec_map::{Self, VecMap};
@@ -35,7 +37,7 @@ public struct Composition<phantom CompositionShare> has key, store {
     // Optional Walrus quilt ID that acts as a folder for the composition's Walrus-based assets.
     quilt_id: Option<String>,
     // Map of addresses to composition contributor roles.
-    contributors: VecMap<ContributorIdentifier, VecSet<CompositionContributorRole>>,
+    contributors: VecMap<ContributorID, VecSet<CompositionContributorRole>>,
     // Optional map of language codes to Walrus Blob IDs of LRC files.
     lyrics: Option<String>,
     // List of composition artifacts.
@@ -157,40 +159,40 @@ public fun set_quilt_id<CompositionShare>(self: &mut Composition<CompositionShar
 public fun add_contributor<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    contributor_identifier: ContributorIdentifier,
+    contributor_id: ContributorID
 ) {
     self.authorize(cap);
     assert!(self.contributors.length() < MAX_CONTRIBUTORS, EMaxContributorsExceeded);
-    self.contributors.insert(contributor_identifier, vec_set::empty());
+    self.contributors.insert(contributor_id, vec_set::empty());
 }
 
 public fun remove_contributor<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    contributor_identifier: ContributorIdentifier,
+    contributor_id: &ContributorID,
 ) {
     self.authorize(cap);
-    self.contributors.remove(&contributor_identifier);
+    self.contributors.remove(contributor_id);
 }
 
 public fun add_contributor_role<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    contributor_identifier: ContributorIdentifier,
+    contributor_id: &ContributorID,
     role: CompositionContributorRole,
 ) {
     self.authorize(cap);
-    self.contributors.get_mut(&contributor_identifier).insert(role);
+    self.contributors.get_mut(contributor_id).insert(role);
 }
 
 public fun remove_contributor_role<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    contributor_identifier: ContributorIdentifier,
+    contributor_id: &ContributorID,
     role: CompositionContributorRole,
 ) {
     self.authorize(cap);
-    self.contributors.get_mut(&contributor_identifier).remove(&role);
+    self.contributors.get_mut(contributor_id).remove(&role);
 }
 
 public fun add_artifact<CompositionShare>(
