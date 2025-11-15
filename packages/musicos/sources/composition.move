@@ -1,11 +1,9 @@
 module musicos::composition;
 
 use musicos::artifact::Artifact;
-use musicos::artist::Artist;
 use musicos::composition_artifact_variant::CompositionArtifactVariant;
 use musicos::composition_contributor_role::CompositionContributorRole;
-use musicos::contributor::Contributor;
-use musicos::contributor_id::{Self, ContributorID};
+use musicos::contributor::{Contributor, ContributorID};
 use musicos::revenue_pool;
 use musicos::royalty_pool;
 use musicos::share;

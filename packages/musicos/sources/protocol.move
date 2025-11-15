@@ -9,6 +9,7 @@ public struct Protocol has key {
     id: UID,
     state: ProtocolState,
     artist_verification_authority: TypeName,
+    contributor_verification_authority: TypeName,
     play_authorities: VecSet<TypeName>,
     settlement_currencies: VecSet<TypeName>,
 }
