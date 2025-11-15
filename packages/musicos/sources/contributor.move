@@ -59,10 +59,10 @@ const ENotVerifiedState: u64 = 3;
 
 //=== Public Functions ===
 
-public fun new(name: String, kind: ContributorKind) {
+public fun new(name: String, kind: ContributorKind, ctx: &mut TxContext) {
     let mut contributor = Contributor {
         id: object::new(ctx),
-        name,
+        name: ContributorName::Unverified(name),
         kind,
         website: option::none(),
     };
@@ -77,11 +77,11 @@ public fun new(name: String, kind: ContributorKind) {
 }
 
 public fun new_individual_kind(name: String): ContributorKind {
-    ContributorKind::Individual()
+    ContributorKind::Individual
 }
 
 public fun new_group_kind(name: String): ContributorKind {
-    ContributorKind::Group()
+    ContributorKind::Group
 }
 
 public fun request_verification(
@@ -142,7 +142,7 @@ public fun contributor_id(self: &Contributor): ContributorID {
     }
 }
 
-public fun receive<T>(self: &mut Contributor, obj_to_receive: Receiving<T>): T {
+public fun receive<T: key + store>(self: &mut Contributor, obj_to_receive: Receiving<T>): T {
     transfer::public_receive(&mut self.id, obj_to_receive)
 }
 

@@ -1,17 +1,17 @@
-module musicos::play;
+module musicos::play_receipt;
 
 use musicos::protocol::Protocol;
 use std::string::String;
 use sui::event::emit;
 
-public struct Play {
+public struct PlayReceipt {
     composition_id: ID,
     recording_id: ID,
     duration: u64,
     genre: String,
 }
 
-public struct PlayCreatedEvent has copy, drop {
+public struct PlayReceiptCreatedEvent has copy, drop {
     composition_id: ID,
     recording_id: ID,
     duration: u64,
@@ -24,16 +24,16 @@ public fun new<Authority: drop>(
     duration: u64,
     genre: String,
     protocol: &Protocol,
-): Play {
+): PlayReceipt {
     protocol.assert_is_play_authority<Authority>();
 
-    emit(PlayCreatedEvent {
+    emit(PlayReceiptCreatedEvent {
         composition_id,
         recording_id,
         duration,
     });
 
-    Play {
+    PlayReceipt {
         composition_id,
         recording_id,
         duration,
@@ -41,18 +41,18 @@ public fun new<Authority: drop>(
     }
 }
 
-public fun composition_id(self: &Play): ID {
+public fun composition_id(self: &PlayReceipt): ID {
     self.composition_id
 }
 
-public fun recording_id(self: &Play): ID {
+public fun recording_id(self: &PlayReceipt): ID {
     self.recording_id
 }
 
-public fun duration(self: &Play): u64 {
+public fun duration(self: &PlayReceipt): u64 {
     self.duration
 }
 
-public fun genre(self: &Play): String {
+public fun genre(self: &PlayReceipt): String {
     self.genre
 }

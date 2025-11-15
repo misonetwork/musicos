@@ -42,6 +42,8 @@ public struct Composition<phantom CompositionShare> has key, store {
     artifacts: vector<Artifact<CompositionArtifactVariant>>,
     // MetadataCap for the composition's share currency.
     metadata_cap: MetadataCap<CompositionShare>,
+    // Number of times the composition has been played.
+    play_count: u64,
 }
 
 public enum CompositionState has copy, drop, store {
@@ -99,6 +101,7 @@ public fun new<CompositionShare>(
         lyrics: option::none(),
         artifacts: vector[],
         metadata_cap,
+        play_count: 0,
     };
 
     let composition_admin_cap = CompositionAdminCap {

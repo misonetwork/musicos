@@ -8,7 +8,6 @@ use sui::vec_set::VecSet;
 public struct Protocol has key {
     id: UID,
     state: ProtocolState,
-    artist_verification_authority: TypeName,
     contributor_verification_authority: TypeName,
     play_authorities: VecSet<TypeName>,
     settlement_currencies: VecSet<TypeName>,
@@ -41,9 +40,9 @@ public(package) fun assert_is_play_authority<Authority>(self: &Protocol) {
     assert!(self.play_authorities.contains(&with_defining_ids<Authority>()), EInvalidPlayAuthority)
 }
 
-public(package) fun assert_is_artist_verification_authority<Authority>(self: &Protocol) {
+public(package) fun assert_is_contributor_verification_authority<Authority>(self: &Protocol) {
     assert!(
-        self.artist_verification_authority == with_defining_ids<Authority>(),
+        self.contributor_verification_authority == with_defining_ids<Authority>(),
         EInvalidArtistVerificationAuthority,
     )
 }
