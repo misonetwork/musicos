@@ -13,7 +13,6 @@ use sui::derived_object::claim;
 use sui::clock::Clock;
 use sui::coin::{TreasuryCap};
 use sui::coin_registry::{Currency, MetadataCap};
-
 use sui::event::emit;
 use sui::balance::Balance;
 use sui::vec_map::{Self, VecMap};

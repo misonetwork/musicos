@@ -7,22 +7,22 @@ use sui::event::emit;
 public struct PlayReceipt {
     composition_id: ID,
     recording_id: ID,
-    duration: u64,
-    genre: String,
+    playtime: u64,
+    genre_id: ID,
 }
 
 public struct PlayReceiptCreatedEvent has copy, drop {
     composition_id: ID,
     recording_id: ID,
-    duration: u64,
+    playtime: u64,
 }
 
 public fun new<Authority: drop>(
     _: Authority,
     composition_id: ID,
     recording_id: ID,
-    duration: u64,
-    genre: String,
+    playtime: u64,
+    genre_id: ID,
     protocol: &Protocol,
 ): PlayReceipt {
     protocol.assert_is_play_authority<Authority>();
@@ -30,14 +30,14 @@ public fun new<Authority: drop>(
     emit(PlayReceiptCreatedEvent {
         composition_id,
         recording_id,
-        duration,
+        playtime,
     });
 
     PlayReceipt {
         composition_id,
         recording_id,
-        duration,
-        genre,
+        playtime,
+        genre_id,
     }
 }
 
@@ -49,10 +49,10 @@ public fun recording_id(self: &PlayReceipt): ID {
     self.recording_id
 }
 
-public fun duration(self: &PlayReceipt): u64 {
-    self.duration
+public fun playtime(self: &PlayReceipt): u64 {
+    self.playtime
 }
 
-public fun genre(self: &PlayReceipt): String {
-    self.genre
+public fun genre_id(self: &PlayReceipt): ID {
+    self.genre_id
 }

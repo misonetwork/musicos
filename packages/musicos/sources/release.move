@@ -2,6 +2,7 @@ module musicos::release;
 
 use interest_bps::bps::{Self, BPS};
 use musicos::disc::Disc;
+use musicos::obligation::Obligation;
 use musicos::release_distribution_license::{
     Self,
     ReleaseDistributionLicense,
@@ -32,6 +33,7 @@ public struct Release has key, store {
     discs: vector<Disc>,
     track_sequence: TrackSequence,
     track_splits: VecMap<TrackIdentifier, BPS>,
+    obligations: vector<Obligation>,
 }
 
 public struct ReleaseAdminCap has key, store {
@@ -87,6 +89,7 @@ public fun new(
         discs,
         track_sequence: track_sequence::new(track_identifiers),
         track_splits: vec_map::from_keys_values(track_identifiers, track_splits),
+        obligations: vector[],
     };
 
     let release_admin_cap = ReleaseAdminCap {
@@ -147,10 +150,6 @@ entry fun forward_revenue<RevenueCurrency>(
 
         transfer::public_transfer(comp_royalty_balance.into_coin(ctx), comp_royalty_pool);
         transfer::public_transfer(track_balance.into_coin(ctx), recording_royalty_pool);
-
-        // TODO: Migrate to accumulators when possible.balance_mut
-        //comp_royalty_balance.send_funds(comp_royalty_pool);
-        //track_balance.send_funds(recording_royalty_pool);
     });
 }
 

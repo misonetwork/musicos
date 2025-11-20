@@ -2,7 +2,7 @@ module musicos::genre;
 
 use musicos::admin::AdminCap;
 use std::string::String;
-use sui::derived_object::claim;
+use sui::derived_object::{claim, derive_address as derive_address_impl};
 
 //=== Structs ===
 
@@ -49,6 +49,10 @@ fun init(_otw: GENRE, ctx: &mut TxContext) {
 public fun new(_: &AdminCap, name: String, registry: &mut GenreRegistry) {
     let genre = new_impl(name, registry);
     transfer::share_object(genre);
+}
+
+public fun derive_address(name: String, registry: &GenreRegistry): address {
+    derive_address_impl(registry.id.to_inner(), GenreKey(name))
 }
 
 //=== Public View Functions ===

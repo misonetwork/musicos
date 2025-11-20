@@ -28,7 +28,7 @@ public struct Recording<phantom RecordingShare> has key, store {
     state: RecordingState,
     composition_id: ID,
     composition_commission_rate: BPS,
-    primary_genre: String,
+    genre_id: ID,
     secondary_genres: VecSet<String>,
     artists: VecMap<ContributorID, RecordingArtistRole>,
     contributors: VecMap<ContributorID, VecSet<RecordingContributorRole>>,
@@ -94,7 +94,7 @@ public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     mix: Mix,
     derivation_idx: u32,
-    primary_genre: &Genre,
+    genre: &Genre,
     currency: &mut Currency<RecordingShare>,
     metadata_cap: MetadataCap<RecordingShare>,
     treasury_cap: TreasuryCap<RecordingShare>,
@@ -116,7 +116,7 @@ public fun new<RecordingShare, CompositionShare>(
         state: RecordingState::Created,
         composition_id,
         composition_commission_rate: composition.commission_rate(),
-        primary_genre: primary_genre.name(),
+        genre_id: genre.id(),
         secondary_genres: vec_set::empty(),
         artists: vec_map::empty(),
         contributors: vec_map::empty(),
@@ -284,8 +284,8 @@ public fun composition_commission_rate<RecordingShare>(self: &Recording<Recordin
     self.composition_commission_rate
 }
 
-public fun primary_genre<RecordingShare>(self: &Recording<RecordingShare>): String {
-    self.primary_genre
+public fun genre_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
+    self.genre_id
 }
 
 public fun primary_mix<RecordingShare>(self: &Recording<RecordingShare>): &Mix {

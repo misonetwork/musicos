@@ -12,7 +12,7 @@ public struct Track has drop, store {
     composition_commission_rate: BPS,
     recording_id: ID,
     duration: u64,
-    genre: String,
+    genre_id: ID,
 }
 
 //=== Public Functions ===
@@ -30,7 +30,7 @@ public fun new<RecordingShare>(
             recording.primary_mix().audio().pcm().samples(),
             recording.primary_mix().audio().pcm().sample_rate(),
         ),
-        genre: recording.primary_genre(),
+        genre_id: recording.genre_id(),
     }
 }
 
@@ -52,6 +52,6 @@ public fun duration(self: &Track): u64 {
     self.duration
 }
 
-public fun genre(self: &Track): String {
-    self.genre
+public fun genre_id(self: &Track): ID {
+    self.genre_id
 }
