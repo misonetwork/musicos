@@ -43,7 +43,7 @@ public struct ReleaseAdminCap has key, store {
 
 public struct ReleaseAdminCapKey() has copy, drop, store;
 
-public struct ReleaseObligationsSettledReceipt<phantom Currency> {
+public struct ReleaseObligationsPaidReceipt<phantom Currency> {
     release_id: ID,
     balance: Balance<Currency>,
 }
@@ -62,11 +62,15 @@ public struct ReleaseCreatedEvent has copy, drop {
     timestamp: u64,
 }
 
-public struct ReleaseObligationSettledEvent has copy, drop {
+public struct ReleaseObligationPaidEvent has copy, drop {
     release_id: ID,
     value: u64,
     recipient: address,
-    is_complete: bool,
+}
+
+public struct ReleaseObligationSettledEvent has copy, drop {
+    release_id: ID,
+    address: address,
 }
 
 public struct ReleasePublishedEvent has copy, drop {
@@ -81,6 +85,12 @@ public struct ReleaseRevenueForwardedEvent has copy, drop {
     composition_royalty_value: u64,
     recording_id: ID,
     recording_royalty_value: u64,
+}
+
+public struct ReleaseRevenuePoolInitializedEvent has copy, drop {
+    release_id: ID,
+    revenue_pool_id: ID,
+    currency_type: TypeName,
 }
 
 const EInvalidTrackSplitSum: u64 = 0;
@@ -156,15 +166,23 @@ public fun publish(self: &mut Release, cap: &ReleaseAdminCap, clock: &Clock, ctx
     }
 }
 
-// Initialize a RevenuePool for the Release.
-public fun initialize_revenue_pool<RevenueCurrency>(self: &mut Release) {
-    let revenue_pool = revenue_pool::new<RevenueCurrency>(&mut self.id);
+// Initialize a revenue pool for the Release.
+entry fun initialize_revenue_pool<Currency>(self: &mut Release) {
+    let revenue_pool = revenue_pool::new<Currency>(&mut self.id);
+
+    emit(ReleaseRevenuePoolInitializedEvent {
+        release_id: self.id(),
+        revenue_pool_id: revenue_pool.id(),
+        currency_type: with_defining_ids<Currency>(),
+    });
+
     transfer::public_share_object(revenue_pool);
 }
 
-entry fun forward_revenue<RevenueCurrency>(
+// Forward revenue from a Release's revenue pool to the track's composition and recording royalty pools.
+entry fun forward_revenue<Currency>(
     self: &Release,
-    revenue_pool: &mut RevenuePool<RevenueCurrency>,
+    revenue_pool: &mut RevenuePool<Currency>,
     random: &Random,
     ctx: &mut TxContext,
 ) {
@@ -182,9 +200,9 @@ entry fun forward_revenue<RevenueCurrency>(
         let track_split = *self.track_splits.get(track_identifier);
 
         let comp_id = track.composition_id();
-        let comp_royalty_pool = royalty_pool::derive_address<RevenueCurrency>(comp_id);
+        let comp_royalty_pool = royalty_pool::derive_address<Currency>(comp_id);
         let recording_id = track.recording_id();
-        let recording_royalty_pool = royalty_pool::derive_address<RevenueCurrency>(recording_id);
+        let recording_royalty_pool = royalty_pool::derive_address<Currency>(recording_id);
 
         let track_value = track_split.calc(principal_value);
         let mut track_balance = total_revenue.split(track_value);
@@ -193,7 +211,7 @@ entry fun forward_revenue<RevenueCurrency>(
 
         emit(ReleaseRevenueForwardedEvent {
             release_id: self.id(),
-            currency_type: with_defining_ids<RevenueCurrency>(),
+            currency_type: with_defining_ids<Currency>(),
             composition_id: comp_id,
             composition_royalty_value: comp_royalty_balance.value(),
             recording_id: recording_id,
@@ -209,18 +227,17 @@ entry fun forward_revenue<RevenueCurrency>(
 
 // Derive the address of the Release's RevenuePool and transfer
 // funds to the RevenuePool's balance accumulator.
-public fun deposit_revenue<RevenueCurrency>(
+public fun deposit_revenue<Currency>(
     self: &Release,
-    receipt: ReleaseObligationsSettledReceipt<RevenueCurrency>,
-    ctx: &mut TxContext,
+    receipt: ReleaseObligationsPaidReceipt<Currency>,
 ) {
     self.authorize_id(receipt.release_id);
     // Assert the RevenuePool for the provided Release exists.
-    revenue_pool::assert_exists<RevenueCurrency>(&self.id);
+    revenue_pool::assert_exists<Currency>(&self.id);
     // Transfer the funds to the RevenuePool's balance accumulator.
-    // TODO: Migrate to accumulators when possible.
-    let ReleaseObligationsSettledReceipt { balance, .. } = receipt;
-    balance.send_funds(revenue_pool::derive_address<RevenueCurrency>(self.id()));
+    let ReleaseObligationsPaidReceipt { balance, .. } = receipt;
+    // Transfer revenue to the Release's revenue pool.
+    balance.send_funds(revenue_pool::derive_address<Currency>(self.id()));
 }
 
 public fun new_distribution_license<Distributor: drop, Packager: key, Format: key, Currency>(
@@ -261,27 +278,41 @@ public fun remove_obligation(self: &mut Release, obligation_idx: u64) {
     };
 }
 
-public fun settle_obligations<Currency>(
+public fun pay_obligations<Currency>(
     self: &mut Release,
     mut balance: Balance<Currency>,
     clock: &Clock,
-): ReleaseObligationsSettledReceipt<Currency> {
+): ReleaseObligationsPaidReceipt<Currency> {
     // Settle obligations if they exist.
     // If there are no obligations to process, the receipt is returned immediately.
     if (!self.obligations.is_empty()) {
+        let release_id = self.id();
+
         let principal_value = balance.value();
         let mut is_refresh_obligations = false;
 
         self.obligations.do_mut!(|obligation| {
             if (obligation.is_active()) {
                 // Settle the obligation (returns the amount settled and whether the settlement is complete).
-                let (_, is_settled) = obligation.settle(
+                let (paid_value, is_settled) = obligation.settle(
                     principal_value,
                     &mut balance,
                     clock,
                 );
+
+                emit(ReleaseObligationPaidEvent {
+                    release_id,
+                    value: paid_value,
+                    recipient: obligation.recipient(),
+                });
+
                 // If the settlement is complete, set the flag to refresh the obligations.
                 if (is_settled) {
+                    emit(ReleaseObligationSettledEvent {
+                        release_id,
+                        address: obligation.recipient(),
+                    });
+
                     is_refresh_obligations = true;
                 };
             };
@@ -293,7 +324,7 @@ public fun settle_obligations<Currency>(
         };
     };
 
-    ReleaseObligationsSettledReceipt {
+    ReleaseObligationsPaidReceipt {
         release_id: self.id(),
         balance,
     }

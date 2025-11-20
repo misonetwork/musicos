@@ -47,6 +47,12 @@ public(package) fun withdraw_all<Currency>(self: &mut RevenuePool<Currency>): Ba
     self.balance.withdraw_all()
 }
 
+//=== Public View Functions ===
+
+public fun id<Currency>(self: &RevenuePool<Currency>): ID {
+    self.id.to_inner()
+}
+
 //=== Assert Functions ===
 
 public fun assert_exists<Currency>(parent: &UID) {
