@@ -3,6 +3,7 @@ module musicos::obligation;
 use interest_bps::bps::BPS;
 use std::u64::min;
 use sui::clock::Clock;
+use sui::balance::Balance;
 
 //=== Structs ===
 
@@ -17,7 +18,7 @@ public struct Obligation has copy, drop, store {
 public enum ObligationKind has copy, drop, store {
     Percentage { rate: BPS },
     TimeBound { start_ts: u64, end_ts: u64, rate: BPS },
-    ValueBound { balance: u64, rate: BPS },
+    ValueBound { balance_value: u64, rate: BPS },
 }
 
 public enum ObligationState has copy, drop, store {
@@ -32,34 +33,55 @@ const ENotSettledState: u64 = 1;
 
 //=== Package Functions ===
 
-public(package) fun calculate(self: &mut Obligation, principal: u64, clock: &Clock): u64 {
-    // Initialize obligation value to 0.
-    let mut value = 0;
-    // Calculate obligation value based on state and kind, and overwrite if needed.
-    match (self.state) {
-        ObligationState::Active => {
-            match (&mut self.kind) {
-                ObligationKind::Percentage { rate } => (*rate).calc(principal),
-                ObligationKind::TimeBound { start_ts, end_ts, rate } => {
-                    let now = clock.timestamp_ms();
-                    if (now >= *start_ts && now <= *end_ts) { value = (*rate).calc(principal) };
-                    if (now > *end_ts) {
-                        self.state = ObligationState::Settled(clock.timestamp_ms())
-                    };
-                },
-                ObligationKind::ValueBound { balance, rate } => {
-                    value = min(value, *balance);
-                    *balance = *balance - value;
-                    if (*balance == 0) {
-                        self.state = ObligationState::Settled(clock.timestamp_ms())
-                    };
-                },
-            }
+// Returns a boolean that indicates whether settlement is complete.
+public(package) fun settle<Currency>(self: &mut Obligation, principal_value: u64, balance: &mut Balance<Currency>, clock: &Clock) {
+    let mut obligation_value = 0;
+    let mut is_settled = false;
+
+    match (&mut self.kind) {
+        ObligationKind::Percentage { rate } => {
+            obligation_value = (*rate).calc(principal_value);
         },
-        ObligationState::Settled => { 0 },
+        ObligationKind::TimeBound { start_ts, end_ts, rate } => {
+            let now = clock.timestamp_ms();
+            // Only calculate the value if the obligation is within its time bounds.
+            if (now >= *start_ts && now <= *end_ts) {
+                obligation_value = (*rate).calc(principal_value);
+            };
+            // If the obligation is past its time bounds, mark it as settled.
+            if (now > *end_ts) {
+                is_settled = true;
+            };
+        },
+        ObligationKind::ValueBound { balance_value, rate } => {
+            // Calculate the obligation value as the minumum of the obligation value and the balance value.
+            obligation_value = min((*rate).calc(principal_value), *balance_value);
+            // Subtract the value from the balance value.
+            *balance_value = *balance_value - obligation_value;
+            // If the balance value is 0, mark it as settled.
+            if (*balance_value == 0) {
+                is_settled = true;
+            };
+        },
     };
 
-    value
+    // Transfer the obligation value to the recipient if it's greater than 0.
+    if (obligation_value > 0) {
+        balance.split(obligation_value).send_funds(self.recipient);
+    };
+
+    // Mark the obligation as settled if it's complete.
+    if (is_settled) {
+        self.state = ObligationState::Settled(clock.timestamp_ms());
+    };
+}
+
+public(package) fun calculate(self: &mut Obligation, principal: u64, clock: &Clock): u64 {
+    0
+}
+
+public(package) fun destroy(self: Obligation) {
+    let Obligation { ... } = self;
 }
 
 //=== Package View Functions ===

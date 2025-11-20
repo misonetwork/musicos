@@ -43,6 +43,11 @@ public struct ReleaseAdminCap has key, store {
 
 public struct ReleaseAdminCapKey() has copy, drop, store;
 
+public struct ReleaseObligationsSettledReceipt<phantom Currency> {
+    release_id: ID,
+    balance: Balance<Currency>,
+}
+
 //=== Enums ===
 
 public enum ReleaseState has copy, drop, store {
@@ -64,7 +69,6 @@ public struct ReleaseObligationPaidEvent has copy, drop {
 
 public struct ReleaseRevenueForwardedEvent has copy, drop {
     release_id: ID,
-    timestamp: u64,
     currency_type: TypeName,
     composition_id: ID,
     composition_royalty_value: u64,
@@ -78,6 +82,7 @@ const EMaxObligationsReached: u64 = 2;
 const ENotCreatedState: u64 = 3;
 const ENoObligations: u64 = 4;
 const ENotPublishedState: u64 = 5;
+const EInvalidReleaseId: u64 = 6;
 
 //=== Constants ===
 
@@ -135,7 +140,6 @@ public fun initialize_revenue_pool<RevenueCurrency>(self: &mut Release) {
 entry fun forward_revenue<RevenueCurrency>(
     self: &Release,
     revenue_pool: &mut RevenuePool<RevenueCurrency>,
-    clock: &Clock,
     random: &Random,
     ctx: &mut TxContext,
 ) {
@@ -164,7 +168,6 @@ entry fun forward_revenue<RevenueCurrency>(
 
         emit(ReleaseRevenueForwardedEvent {
             release_id: self.id(),
-            timestamp: clock.timestamp_ms(),
             currency_type: with_defining_ids<RevenueCurrency>(),
             composition_id: comp_id,
             composition_royalty_value: comp_royalty_balance.value(),
@@ -179,23 +182,41 @@ entry fun forward_revenue<RevenueCurrency>(
     });
 }
 
-// TODO: Handle obligation settlement in this function.
+// TODO: Fix logic.
+public fun settle_obligations<Currency>(
+    self: &mut Release,
+    mut balance: Balance<Currency>,
+    clock: &Clock,
+): ReleaseObligationsSettledReceipt<Currency> {
+    self.obligations.do_mut!(|obligation| {
+        if (obligation.is_active()) {
+            let obligation_value = obligation.calculate(balance.value(), clock);
+            balance.split(obligation_value).send_funds(obligation.recipient());
+        };
+    });
+
+    self.obligations = self.obligations.filter!(|o| o.is_active());
+
+    ReleaseObligationsSettledReceipt {
+        release_id: self.id(),
+        balance,
+    }
+}
+
 // Derive the address of the Release's RevenuePool and transfer
 // funds to the RevenuePool's balance accumulator.
 public fun deposit_revenue<RevenueCurrency>(
     self: &Release,
-    balance: Balance<RevenueCurrency>,
+    receipt: ReleaseObligationsSettledReceipt<RevenueCurrency>,
     ctx: &mut TxContext,
 ) {
+    self.authorize_id(receipt.release_id);
     // Assert the RevenuePool for the provided Release exists.
     revenue_pool::assert_exists<RevenueCurrency>(&self.id);
     // Transfer the funds to the RevenuePool's balance accumulator.
-    // balance.send_funds(revenue_pool::derive_address<RevenueCurrency>(self.id()));
     // TODO: Migrate to accumulators when possible.
-    transfer::public_transfer(
-        balance.into_coin(ctx),
-        revenue_pool::derive_address<RevenueCurrency>(self.id()),
-    );
+    let ReleaseObligationsSettledReceipt { balance, .. } = receipt;
+    balance.send_funds(revenue_pool::derive_address<RevenueCurrency>(self.id()));
 }
 
 public fun new_distribution_license<Distributor: drop, Packager: key, Format: key, Currency>(
@@ -253,6 +274,10 @@ public fun discs(self: &Release): &vector<Disc> {
 
 fun authorize(self: &Release, cap: &ReleaseAdminCap) {
     assert!(cap.release_id == self.id(), EUnauthorized);
+}
+
+fun authorize_id(self: &Release, release_id: ID) {
+    assert!(self.id() == release_id, EUnauthorized);
 }
 
 fun authorize_with_cap(cap: &ReleaseAdminCap, release_id: ID) {
