@@ -6,14 +6,12 @@ module musicos::recording;
 use interest_bps::bps::BPS;
 use musicos::artifact::Artifact;
 use musicos::composition::Composition;
-use musicos::constants::share_icon_url;
 use musicos::contributor::{Contributor, ContributorID};
 use musicos::genre::Genre;
 use musicos::mix::Mix;
 use musicos::recording_artifact_variant::RecordingArtifactVariant;
 use musicos::recording_contributor_role::RecordingContributorRole;
-use musicos::recording_decryption_license::{Self, RecordingDecryptionLicense};
-use musicos::share;
+use musicos::share::{Self, share_icon_url};
 use musicos::snapshot::Snapshot;
 use std::string::String;
 use sui::balance::Balance;
@@ -262,15 +260,6 @@ public fun remove_snapshot<RecordingShare>(
 ): Snapshot {
     self.authorize(cap);
     self.snapshots.remove(snapshot_idx)
-}
-
-public fun new_license<RecordingShare>(
-    self: &Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    timestamp: u64,
-): RecordingDecryptionLicense {
-    self.authorize(cap);
-    recording_decryption_license::new(self.id(), timestamp)
 }
 
 //=== Public View Functions ===

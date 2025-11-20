@@ -26,6 +26,7 @@ public struct ContributorAdminCap has key, store {
     contributor_id: ID,
 }
 
+// Identity struct that stores a contributor's address and name.
 public struct ContributorID has copy, drop, store {
     addr: address,
     name: String,

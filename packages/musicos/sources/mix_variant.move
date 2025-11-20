@@ -15,7 +15,7 @@ public enum MixVariant has copy, drop, store {
     Demo,
     Acoustic,
     Live,
-    Other,
+    Other(String),
 }
 
 public fun new_original(): MixVariant {
@@ -60,7 +60,7 @@ public fun new_other(name: String): MixVariant {
 
 public fun is_original(self: &MixVariant): bool {
     match (self) {
-        MixVariant::Original(_) => true,
+        MixVariant::Original => true,
         _ => false,
     }
 }
@@ -68,15 +68,15 @@ public fun is_original(self: &MixVariant): bool {
 
 public fun name(self: &MixVariant): String {
     match (self) {
-        MixVariant::Original => "Original",
-        MixVariant::Instrumental => "Instrumental",
-        MixVariant::Acapella => "Acapella",
-        MixVariant::RadioEdit => "RadioEdit",
-        MixVariant::Extended => "Extended",
-        MixVariant::Remix => "Remix",
-        MixVariant::Demo => "Demo",
-        MixVariant::Acoustic => "Acoustic",
-        MixVariant::Live => "Live",
-        MixVariant::Other(name) => name,
+        MixVariant::Original => b"Original".to_string(),
+        MixVariant::Instrumental => b"Instrumental".to_string(),
+        MixVariant::Acapella => b"Acapella".to_string(),
+        MixVariant::RadioEdit => b"RadioEdit".to_string(),
+        MixVariant::Extended => b"Extended".to_string(),
+        MixVariant::Remix => b"Remix".to_string(),
+        MixVariant::Demo => b"Demo".to_string(),
+        MixVariant::Acoustic => b"Acoustic".to_string(),
+        MixVariant::Live => b"Live".to_string(),
+        MixVariant::Other(name) => *name,
     }
 }

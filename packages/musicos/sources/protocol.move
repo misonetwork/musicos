@@ -13,6 +13,7 @@ public struct Protocol has key {
     state: ProtocolState,
     contributor_verification_authority: TypeName,
     play_authorities: VecSet<TypeName>,
+    // Settlement currencies that can be used for commerce on MusicOS.
     settlement_currencies: VecSet<TypeName>,
 }
 
