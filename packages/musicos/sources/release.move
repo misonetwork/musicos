@@ -182,20 +182,33 @@ entry fun forward_revenue<RevenueCurrency>(
     });
 }
 
-// TODO: Fix logic.
 public fun settle_obligations<Currency>(
     self: &mut Release,
     mut balance: Balance<Currency>,
     clock: &Clock,
 ): ReleaseObligationsSettledReceipt<Currency> {
+    let mut is_refresh_obligations = false;
+    let principal_value = balance.value();
+
     self.obligations.do_mut!(|obligation| {
         if (obligation.is_active()) {
-            let obligation_value = obligation.calculate(balance.value(), clock);
-            balance.split(obligation_value).send_funds(obligation.recipient());
+            // Settle the obligation (returns the amount settled and whether the settlement is complete).
+            let (_, is_settled) = obligation.settle(
+                principal_value,
+                &mut balance,
+                clock,
+            );
+            // If the settlement is complete, set the flag to refresh the obligations.
+            if (is_settled) {
+                is_refresh_obligations = true;
+            };
         };
     });
 
-    self.obligations = self.obligations.filter!(|o| o.is_active());
+    // If the obligations were refreshed, filter out the settled obligations.
+    if (is_refresh_obligations) {
+        self.obligations = self.obligations.filter!(|o| o.is_active());
+    };
 
     ReleaseObligationsSettledReceipt {
         release_id: self.id(),

@@ -34,7 +34,7 @@ const ENotSettledState: u64 = 1;
 //=== Package Functions ===
 
 // Returns a boolean that indicates whether settlement is complete.
-public(package) fun settle<Currency>(self: &mut Obligation, principal_value: u64, balance: &mut Balance<Currency>, clock: &Clock) {
+public(package) fun settle<Currency>(self: &mut Obligation, principal_value: u64, balance: &mut Balance<Currency>, clock: &Clock): (u64, bool) {
     let mut obligation_value = 0;
     let mut is_settled = false;
 
@@ -74,10 +74,16 @@ public(package) fun settle<Currency>(self: &mut Obligation, principal_value: u64
     if (is_settled) {
         self.state = ObligationState::Settled(clock.timestamp_ms());
     };
+
+    (obligation_value, is_settled)
 }
 
-public(package) fun calculate(self: &mut Obligation, principal: u64, clock: &Clock): u64 {
-    0
+public(package) fun calculate(self: &Obligation, principal: u64): u64 {
+    match (self.kind) {
+        ObligationKind::Percentage { rate } => { rate.calc(principal) },
+        ObligationKind::TimeBound { rate, .. } => { rate.calc(principal) },
+        ObligationKind::ValueBound { rate, balance_value } => { min(rate.calc(principal), balance_value) },
+    };
 }
 
 public(package) fun destroy(self: Obligation) {
