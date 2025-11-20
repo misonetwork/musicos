@@ -26,9 +26,9 @@ use sui::vec_map::{Self, VecMap};
 
 public struct Release has key, store {
     id: UID,
+    state: ReleaseState,
     title: String,
     subtitle: Option<String>,
-    created_at: u64,
     duration: u64,
     discs: vector<Disc>,
     track_sequence: TrackSequence,
@@ -43,14 +43,28 @@ public struct ReleaseAdminCap has key, store {
 
 public struct ReleaseAdminCapKey() has copy, drop, store;
 
+//=== Enums ===
+
+public enum ReleaseState has copy, drop, store {
+    Created(u64),
+    Published(u64),
+}
+
 //=== Events ===
 
 public struct ReleaseCreatedEvent has copy, drop {
     release_id: ID,
 }
 
+public struct ReleaseObligationPaidEvent has copy, drop {
+    release_id: ID,
+    value: u64,
+    recipient: address,
+}
+
 public struct ReleaseRevenueForwardedEvent has copy, drop {
     release_id: ID,
+    timestamp: u64,
     currency_type: TypeName,
     composition_id: ID,
     composition_royalty_value: u64,
@@ -60,6 +74,14 @@ public struct ReleaseRevenueForwardedEvent has copy, drop {
 
 const EInvalidTrackSplitSum: u64 = 0;
 const EUnauthorized: u64 = 1;
+const EMaxObligationsReached: u64 = 2;
+const ENotCreatedState: u64 = 3;
+const ENoObligations: u64 = 4;
+const ENotPublishedState: u64 = 5;
+
+//=== Constants ===
+
+const MAX_OBLIGATIONS: u64 = 10;
 
 //=== Public Functions ===
 
@@ -82,9 +104,9 @@ public fun new(
 
     let mut release = Release {
         id: object::new(ctx),
+        state: ReleaseState::Created(clock.timestamp_ms()),
         title,
         subtitle: option::none(),
-        created_at: clock.timestamp_ms(),
         duration: 0,
         discs,
         track_sequence: track_sequence::new(track_identifiers),
@@ -113,6 +135,7 @@ public fun initialize_revenue_pool<RevenueCurrency>(self: &mut Release) {
 entry fun forward_revenue<RevenueCurrency>(
     self: &Release,
     revenue_pool: &mut RevenuePool<RevenueCurrency>,
+    clock: &Clock,
     random: &Random,
     ctx: &mut TxContext,
 ) {
@@ -141,6 +164,7 @@ entry fun forward_revenue<RevenueCurrency>(
 
         emit(ReleaseRevenueForwardedEvent {
             release_id: self.id(),
+            timestamp: clock.timestamp_ms(),
             currency_type: with_defining_ids<RevenueCurrency>(),
             composition_id: comp_id,
             composition_royalty_value: comp_royalty_balance.value(),
@@ -148,11 +172,14 @@ entry fun forward_revenue<RevenueCurrency>(
             recording_royalty_value: track_balance.value(),
         });
 
-        transfer::public_transfer(comp_royalty_balance.into_coin(ctx), comp_royalty_pool);
-        transfer::public_transfer(track_balance.into_coin(ctx), recording_royalty_pool);
+        // Send the composition's royalty balance to its royalty pool.
+        comp_royalty_balance.send_funds(comp_royalty_pool);
+        // Send the track's remaining balance to the recording's royalty pool.
+        track_balance.send_funds(recording_royalty_pool);
     });
 }
 
+// TODO: Handle obligation settlement in this function.
 // Derive the address of the Release's RevenuePool and transfer
 // funds to the RevenuePool's balance accumulator.
 public fun deposit_revenue<RevenueCurrency>(
@@ -172,23 +199,40 @@ public fun deposit_revenue<RevenueCurrency>(
 }
 
 public fun new_distribution_license<Distributor: drop, Packager: key, Format: key, Currency>(
+    self: &Release,
     cap: &ReleaseAdminCap,
     kind: ReleaseDistributionKind,
     unit_price: u64,
 ): ReleaseDistributionLicense<Distributor, Format, Packager, Currency> {
-    release_distribution_license::new<Distributor, Packager, Format, Currency>(
-        cap.release_id,
-        kind,
-        unit_price,
-    )
+    match (self.state) {
+        ReleaseState::Published(_) => {
+            release_distribution_license::new<Distributor, Packager, Format, Currency>(
+                cap.release_id,
+                kind,
+                unit_price,
+            )
+        },
+        _ => abort ENotPublishedState,
+    }
 }
 
-public struct Otp(ID)
+public fun add_obligation(self: &mut Release, obligation: Obligation) {
+    match (self.state) {
+        ReleaseState::Created(_) => {
+            assert!(self.obligations.length() < MAX_OBLIGATIONS, EMaxObligationsReached);
+            self.obligations.push_back(obligation);
+        },
+        _ => abort ENotCreatedState,
+    };
+}
 
-public fun uid_mut<T>(self: &mut Release, otp: Otp): &mut UID {
-    let Otp(id) = otp;
-    assert!(id == self.id(), 0);
-    &mut self.id
+public fun remove_obligation(self: &mut Release, obligation_idx: u64) {
+    match (self.state) {
+        ReleaseState::Created(_) => {
+            self.obligations.remove(obligation_idx);
+        },
+        _ => abort ENotCreatedState,
+    };
 }
 
 //=== Public View Functions ===
