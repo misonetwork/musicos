@@ -1,3 +1,6 @@
+// Copyright (c) Sona Labs, Pte Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
 module musicos::recording_contributor_role;
 
 use std::string::String;
@@ -5,21 +8,21 @@ use std::string::String;
 //=== Enums ===
 
 public enum RecordingContributorRole has copy, drop, store {
-    Arranger(String, Option<RecordingContributorLevel>),
-    ArtistsAndRepertoire(String),
-    Contractor(String, Option<RecordingContributorLevel>),
-    Copyist(String),
-    Instrumentalist(String, String, Option<RecordingContributorLevel>),
-    MasteringEngineer(String, Option<RecordingContributorLevel>),
-    MixingEngineer(String, Option<RecordingContributorLevel>),
-    MusicDirector(String, Option<RecordingContributorLevel>),
-    MusicSupervisor(String, Option<RecordingContributorLevel>),
-    Orchestrator(String, Option<RecordingContributorLevel>),
-    Performer(String, Option<RecordingContributorLevel>),
-    Producer(String, Option<RecordingContributorLevel>),
-    RecordingEngineer(String, Option<RecordingContributorLevel>),
-    SoundDesigner(String, Option<RecordingContributorLevel>),
-    Vocalist(String, Option<RecordingContributorLevel>),
+    Arranger(Option<RecordingContributorLevel>),
+    ArtistsAndRepertoire,
+    Contractor(Option<RecordingContributorLevel>),
+    Copyist,
+    Instrumentalist(Option<RecordingContributorLevel>),
+    MasteringEngineer(Option<RecordingContributorLevel>),
+    MixingEngineer(Option<RecordingContributorLevel>),
+    MusicDirector(Option<RecordingContributorLevel>),
+    MusicSupervisor(Option<RecordingContributorLevel>),
+    Orchestrator(Option<RecordingContributorLevel>),
+    Performer(Option<RecordingContributorLevel>),
+    Producer(Option<RecordingContributorLevel>),
+    RecordingEngineer(Option<RecordingContributorLevel>),
+    SoundDesigner(Option<RecordingContributorLevel>),
+    Vocalist(Option<RecordingContributorLevel>),
 }
 
 public enum RecordingContributorLevel has copy, drop, store {
@@ -35,116 +38,116 @@ public enum RecordingContributorLevel has copy, drop, store {
 //=== Public Functions ===
 
 public fun new_role_arranger(level: Option<RecordingContributorLevel>): RecordingContributorRole {
-    RecordingContributorRole::Arranger(b"Arranger".to_string(), level)
+    RecordingContributorRole::Arranger(level)
 }
 
 public fun new_role_artists_and_repertoire(): RecordingContributorRole {
-    RecordingContributorRole::ArtistsAndRepertoire(b"Artists & Repertoire".to_string())
+    RecordingContributorRole::ArtistsAndRepertoire
 }
 
 public fun new_role_contractor(level: Option<RecordingContributorLevel>): RecordingContributorRole {
-    RecordingContributorRole::Contractor(b"Contractor".to_string(), level)
+    RecordingContributorRole::Contractor(level)
 }
 
 public fun new_role_copyist(): RecordingContributorRole {
-    RecordingContributorRole::Copyist(b"Copyist".to_string())
+    RecordingContributorRole::Copyist
 }
 
 public fun new_role_instrumentalist(
     instrument: String,
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
-    RecordingContributorRole::Instrumentalist(b"Instrumentalist".to_string(), instrument, level)
+    RecordingContributorRole::Instrumentalist(instrument, level)
 }
 
 public fun new_role_mastering_engineer(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
-    RecordingContributorRole::MasteringEngineer(b"Mastering Engineer".to_string(), level)
+    RecordingContributorRole::MasteringEngineer(level)
 }
 
 public fun new_role_mixing_engineer(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
-    RecordingContributorRole::MixingEngineer(b"Mixing Engineer".to_string(), level)
+    RecordingContributorRole::MixingEngineer(level)
 }
 
 public fun new_role_music_director(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
-    RecordingContributorRole::MusicDirector(b"Music Director".to_string(), level)
+    RecordingContributorRole::MusicDirector(level)
 }
 
 public fun new_role_music_supervisor(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
-    RecordingContributorRole::MusicSupervisor(b"Music Supervisor".to_string(), level)
+    RecordingContributorRole::MusicSupervisor(level)
 }
 
 public fun new_role_orchestrator(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
-    RecordingContributorRole::Orchestrator(b"Orchestrator".to_string(), level)
+    RecordingContributorRole::Orchestrator(level)
 }
 
 public fun new_role_producer(level: Option<RecordingContributorLevel>): RecordingContributorRole {
-    RecordingContributorRole::Producer(b"Producer".to_string(), level)
+    RecordingContributorRole::Producer(level)
 }
 
 public fun new_role_recording_engineer(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
-    RecordingContributorRole::RecordingEngineer(b"Recording Engineer".to_string(), level)
+    RecordingContributorRole::RecordingEngineer(level)
 }
 
 public fun new_role_sound_designer(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
-    RecordingContributorRole::SoundDesigner(b"Sound Designer".to_string(), level)
+    RecordingContributorRole::SoundDesigner(level)
 }
 
 public fun new_role_vocalist(level: Option<RecordingContributorLevel>): RecordingContributorRole {
-    RecordingContributorRole::Vocalist(b"Vocalist".to_string(), level)
+    RecordingContributorRole::Vocalist(level)
 }
 
 //=== Public View Functions ===
 
 public fun level(self: &RecordingContributorRole): Option<RecordingContributorLevel> {
     match (self) {
-        RecordingContributorRole::Arranger(_, level) => *level,
-        RecordingContributorRole::ArtistsAndRepertoire(_) => option::none(),
-        RecordingContributorRole::Contractor(_, level) => *level,
-        RecordingContributorRole::Copyist(_) => option::none(),
-        RecordingContributorRole::Instrumentalist(_, _, level) => *level,
-        RecordingContributorRole::MasteringEngineer(_, level) => *level,
-        RecordingContributorRole::MixingEngineer(_, level) => *level,
-        RecordingContributorRole::MusicDirector(_, level) => *level,
-        RecordingContributorRole::MusicSupervisor(_, level) => *level,
-        RecordingContributorRole::Orchestrator(_, level) => *level,
-        RecordingContributorRole::Performer(_, level) => *level,
-        RecordingContributorRole::Producer(_, level) => *level,
-        RecordingContributorRole::RecordingEngineer(_, level) => *level,
-        RecordingContributorRole::SoundDesigner(_, level) => *level,
-        RecordingContributorRole::Vocalist(_, level) => *level,
+        RecordingContributorRole::Arranger(level) => *level,
+        RecordingContributorRole::ArtistsAndRepertoire => option::none(),
+        RecordingContributorRole::Contractor(level) => *level,
+        RecordingContributorRole::Copyist => option::none(),
+        RecordingContributorRole::Instrumentalist(level) => *level,
+        RecordingContributorRole::MasteringEngineer(level) => *level,
+        RecordingContributorRole::MixingEngineer(level) => *level,
+        RecordingContributorRole::MusicDirector(level) => *level,
+        RecordingContributorRole::MusicSupervisor(level) => *level,
+        RecordingContributorRole::Orchestrator(level) => *level,
+        RecordingContributorRole::Performer(level) => *level,
+        RecordingContributorRole::Producer(level) => *level,
+        RecordingContributorRole::RecordingEngineer(level) => *level,
+        RecordingContributorRole::SoundDesigner(level) => *level,
+        RecordingContributorRole::Vocalist(level) => *level,
     }
 }
 
 public fun name(self: &RecordingContributorRole): String {
     match (self) {
-        RecordingContributorRole::Arranger(name, _) => *name,
-        RecordingContributorRole::ArtistsAndRepertoire(name) => *name,
-        RecordingContributorRole::Contractor(name, _) => *name,
-        RecordingContributorRole::Copyist(name) => *name,
-        RecordingContributorRole::Instrumentalist(name, _, _) => *name,
-        RecordingContributorRole::MasteringEngineer(name, _) => *name,
-        RecordingContributorRole::MixingEngineer(name, _) => *name,
-        RecordingContributorRole::MusicDirector(name, _) => *name,
-        RecordingContributorRole::MusicSupervisor(name, _) => *name,
-        RecordingContributorRole::Orchestrator(name, _) => *name,
-        RecordingContributorRole::Performer(name, _) => *name,
-        RecordingContributorRole::Producer(name, _) => *name,
-        RecordingContributorRole::RecordingEngineer(name, _) => *name,
-        RecordingContributorRole::SoundDesigner(name, _) => *name,
-        RecordingContributorRole::Vocalist(name, _) => *name,
+        RecordingContributorRole::Arranger(_) => b"Arranger".to_string(),
+        RecordingContributorRole::ArtistsAndRepertoire => b"Artists & Repertoire".to_string(),
+        RecordingContributorRole::Contractor(_) => b"Contractor".to_string(),
+        RecordingContributorRole::Copyist => b"Copyist".to_string(),
+        RecordingContributorRole::Instrumentalist(_) => b"Instrumentalist".to_string(),
+        RecordingContributorRole::MasteringEngineer(_) => b"Mastering Engineer".to_string(),
+        RecordingContributorRole::MixingEngineer(_) => b"Mixing Engineer".to_string(),
+        RecordingContributorRole::MusicDirector(_) => b"Music Director".to_string(),
+        RecordingContributorRole::MusicSupervisor(_) => b"Music Supervisor".to_string(),
+        RecordingContributorRole::Orchestrator(_) => b"Orchestrator".to_string(),
+        RecordingContributorRole::Performer(_) => b"Performer".to_string(),
+        RecordingContributorRole::Producer(_) => b"Producer".to_string(),
+        RecordingContributorRole::RecordingEngineer(_) => b"Recording Engineer".to_string(),
+        RecordingContributorRole::SoundDesigner(_) => b"Sound Designer".to_string(),
+        RecordingContributorRole::Vocalist(_) => b"Vocalist".to_string(),
     }
 }

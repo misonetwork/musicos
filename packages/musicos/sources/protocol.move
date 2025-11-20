@@ -1,3 +1,6 @@
+// Copyright (c) Sona Labs, Pte Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
 module musicos::protocol;
 
 use std::type_name::{TypeName, with_defining_ids};

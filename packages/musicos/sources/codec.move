@@ -1,3 +1,6 @@
+// Copyright (c) Sona Labs, Pte Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
 module musicos::codec;
 
 use musicos::bit_rate::BitRate;

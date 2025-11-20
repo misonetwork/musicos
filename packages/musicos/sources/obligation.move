@@ -1,3 +1,7 @@
+// Copyright (c) Sona Labs, Pte Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+/// This module implements an Obligation.
 module musicos::obligation;
 
 use interest_bps::bps::BPS;
@@ -8,6 +12,7 @@ use sui::clock::Clock;
 
 //=== Structs ===
 
+// TODO: Maybe refactor to remove copy?
 public struct Obligation has copy, drop, store {
     kind: ObligationKind,
     state: ObligationState,

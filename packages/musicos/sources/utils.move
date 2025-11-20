@@ -1,3 +1,6 @@
+// Copyright (c) Sona Labs, Pte Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
 module musicos::utils;
 
 public(package) fun calculate_duration(samples: u64, sample_rate: u32): u64 {

@@ -1,3 +1,6 @@
+// Copyright (c) Sona Labs, Pte Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
 module musicos::share;
 
 use musicos::constants::{share_currency_supply, share_currency_decimals};
