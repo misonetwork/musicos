@@ -2,8 +2,8 @@ module musicos::obligation;
 
 use interest_bps::bps::BPS;
 use std::u64::min;
-use sui::clock::Clock;
 use sui::balance::Balance;
+use sui::clock::Clock;
 
 //=== Structs ===
 
@@ -34,7 +34,12 @@ const ENotSettledState: u64 = 1;
 //=== Package Functions ===
 
 // Returns a boolean that indicates whether settlement is complete.
-public(package) fun settle<Currency>(self: &mut Obligation, principal_value: u64, balance: &mut Balance<Currency>, clock: &Clock): (u64, bool) {
+public(package) fun settle<Currency>(
+    self: &mut Obligation,
+    principal_value: u64,
+    balance: &mut Balance<Currency>,
+    clock: &Clock,
+): (u64, bool) {
     let mut obligation_value = 0;
     let mut is_settled = false;
 
@@ -82,18 +87,16 @@ public(package) fun calculate(self: &Obligation, principal: u64): u64 {
     match (self.kind) {
         ObligationKind::Percentage { rate } => { rate.calc(principal) },
         ObligationKind::TimeBound { rate, .. } => { rate.calc(principal) },
-        ObligationKind::ValueBound { rate, balance_value } => { min(rate.calc(principal), balance_value) },
-    };
-}
-
-public(package) fun destroy(self: Obligation) {
-    let Obligation { ... } = self;
+        ObligationKind::ValueBound { rate, balance_value } => {
+            min(rate.calc(principal), balance_value)
+        },
+    }
 }
 
 //=== Package View Functions ===
 
-public(package) fun rate(self: &Obligation): &BPS {
-    match (&self.kind) {
+public(package) fun rate(self: &Obligation): BPS {
+    match (self.kind) {
         ObligationKind::Percentage { rate } => rate,
         ObligationKind::TimeBound { rate, .. } => rate,
         ObligationKind::ValueBound { rate, .. } => rate,
@@ -113,7 +116,7 @@ public(package) fun is_active(self: &Obligation): bool {
 
 public(package) fun is_settled(self: &Obligation): bool {
     match (&self.state) {
-        ObligationState::Settled => true,
+        ObligationState::Settled(_) => true,
         _ => false,
     }
 }
