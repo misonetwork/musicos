@@ -1,3 +1,4 @@
+// TODO: Get rid of this module.
 module musicos::constants;
 
 use std::string::String;
