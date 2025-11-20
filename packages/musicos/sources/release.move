@@ -43,7 +43,7 @@ public struct ReleaseAdminCap has key, store {
 
 public struct ReleaseAdminCapKey() has copy, drop, store;
 
-public struct ReleaseObligationsPaidReceipt<phantom Currency> {
+public struct ReleaseNetSettlementInstruction<phantom Currency> {
     release_id: ID,
     balance: Balance<Currency>,
 }
@@ -229,15 +229,16 @@ entry fun forward_revenue<Currency>(
 // funds to the RevenuePool's balance accumulator.
 public fun deposit_revenue<Currency>(
     self: &Release,
-    receipt: ReleaseObligationsPaidReceipt<Currency>,
+    instruction: ReleaseNetSettlementInstruction<Currency>,
 ) {
-    self.authorize_id(receipt.release_id);
+    // Destructure the instruction.
+    let ReleaseNetSettlementInstruction { release_id, balance } = instruction;
+    // Authorize the Release.
+    self.authorize_id(release_id);
     // Assert the RevenuePool for the provided Release exists.
     revenue_pool::assert_exists<Currency>(&self.id);
-    // Transfer the funds to the RevenuePool's balance accumulator.
-    let ReleaseObligationsPaidReceipt { balance, .. } = receipt;
     // Transfer revenue to the Release's revenue pool.
-    balance.send_funds(revenue_pool::derive_address<Currency>(self.id()));
+    balance.send_funds(revenue_pool::derive_address<Currency>(release_id));
 }
 
 public fun new_distribution_license<Distributor: drop, Packager: key, Format: key, Currency>(
@@ -282,7 +283,7 @@ public fun pay_obligations<Currency>(
     self: &mut Release,
     mut balance: Balance<Currency>,
     clock: &Clock,
-): ReleaseObligationsPaidReceipt<Currency> {
+): ReleaseNetSettlementInstruction<Currency> {
     // Settle obligations if they exist.
     // If there are no obligations to process, the receipt is returned immediately.
     if (!self.obligations.is_empty()) {
@@ -324,7 +325,7 @@ public fun pay_obligations<Currency>(
         };
     };
 
-    ReleaseObligationsPaidReceipt {
+    ReleaseNetSettlementInstruction {
         release_id: self.id(),
         balance,
     }
