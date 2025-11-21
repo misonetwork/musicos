@@ -5,11 +5,12 @@ license = "Apache 2.0"
 authors = ["Sona Labs, Pte Ltd (os@sonamusic.com)"]
 
 [dependencies]
-interest_bps = { r.mvr = "@interest/bps" }
-interest_math = { r.mvr = "@interest/math" }
+InterestBPS = { local = "../../../miraicloud/mirainet/interest-mvr/bps" }
+InterestMath = { local = "../../../miraicloud/mirainet/interest-mvr/math" }
 music = { local = "../coins/music" } # MUSIC token
 play =  { local = "../coins/play" } # PLAY token
 playtime = { local = "../coins/playtime" } # PLAYTIME token
 
 [addresses]
 musicos = "0x0"
+admin = "0xf3a64ba48423dccce1b0e09f33984e88a8649a2aad0bfbd90ef5b3127f065d8d"
