@@ -3,9 +3,16 @@
 
 module musicos::royalty_entitlement;
 
-use sui::balance::Balance;
+use sui::balance::{Self, Balance};
 
-public struct RoyaltyEntitlement<phantom ShareCurrency> has key, store {
+public struct RoyaltyEntitlement<phantom RoyaltyShare> has key, store {
     id: UID,
-    balance: Balance<ShareCurrency>,
+    balance: Balance<RoyaltyShare>,
+}
+
+public fun new<RoyaltyShare>(ctx: &mut TxContext): RoyaltyEntitlement<RoyaltyShare> {
+    RoyaltyEntitlement {
+        id: object::new(ctx),
+        balance: balance::zero(),
+    }
 }

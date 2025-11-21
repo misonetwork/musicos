@@ -1,0 +1,14 @@
+[project]
+name = "audio-analyzer"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "librosa>=0.10.0",
+    "numpy>=2.3.5",
+    "pydantic>=2.12.4",
+    "rich>=14.2.0",
+    "soundfile>=0.13.1",
+    "typer>=0.20.0",
+]

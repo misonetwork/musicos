@@ -1,4 +1,4 @@
-*.flac
+test-data
 packages/*/build/*
 .trace
 .coverage*
