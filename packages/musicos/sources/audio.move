@@ -25,7 +25,6 @@ public struct AudioStatistics has drop, store {
 
 public struct AudioLoudnessStatistics has drop, store {
     // per-channel or global loudness features
-    // channel_energies may be redundant if you read from PcmChannel
     channel_energies: vector<BPS>,
     channel_mean_rms: vector<BPS>,
     mean_rms: BPS,
