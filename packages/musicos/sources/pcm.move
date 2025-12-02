@@ -3,19 +3,25 @@
 
 module musicos::pcm;
 
+use interest_bps::bps::BPS;
+
 //=== Structs ===
 
-public struct Pcm has copy, drop, store {
-    channels: u8,
+public struct Pcm has drop, store {
+    channels: vector<PcmChannel>,
     digest: vector<u8>,
     sample_rate: u32,
     bit_depth: u8,
     samples: u64,
 }
 
+public struct PcmChannel has drop, store {
+    energy: BPS,
+}
+
 //=== Constants ===
 
-const MAX_CHANNELS: u8 = 64;
+const MAX_CHANNELS: u8 = 2;
 const SUPPORTED_BIT_DEPTHS: vector<u8> = vector[16, 24, 32];
 const SUPPORTED_SAMPLE_RATES: vector<u32> = vector[
     44_100, 48_000, 96_000, 192_000, 384_000, 768_000,

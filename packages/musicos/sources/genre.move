@@ -3,7 +3,7 @@
 
 module musicos::genre;
 
-use musicos::admin::AdminCap;
+use musicos::governance::AdminCap;
 use std::string::String;
 use sui::derived_object::{claim, derive_address as derive_address_impl};
 

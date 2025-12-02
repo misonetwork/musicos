@@ -4,10 +4,12 @@
 module musicos::play_receipt;
 
 use musicos::protocol::Protocol;
-use std::string::String;
 use sui::event::emit;
 
 public struct PlayReceipt {
+    // Unique identifier for the play receipt.
+    // We use a fresh address instead of a UID because `PlayReceipt` is a hot potato.
+    id: ID,
     composition_id: ID,
     recording_id: ID,
     playtime: u64,
@@ -27,6 +29,7 @@ public fun new<Authority: drop>(
     playtime: u64,
     genre_id: ID,
     protocol: &Protocol,
+    ctx: &mut TxContext,
 ): PlayReceipt {
     protocol.assert_is_play_authority<Authority>();
 
@@ -37,11 +40,16 @@ public fun new<Authority: drop>(
     });
 
     PlayReceipt {
+        id: ctx.fresh_object_address().to_id(),
         composition_id,
         recording_id,
         playtime,
         genre_id,
     }
+}
+
+public fun id(self: &PlayReceipt): ID {
+    self.id
 }
 
 public fun composition_id(self: &PlayReceipt): ID {
