@@ -15,6 +15,7 @@ public struct Protocol has key {
     play_authorities: VecSet<TypeName>,
     // Settlement currencies that can be used for commerce transactions on MusicOS.
     settlement_currencies: VecSet<TypeName>,
+    min_royalty_distribution_threshold: u64,
 }
 
 //=== Enums ===
@@ -33,18 +34,26 @@ const EInvalidSettlementCurrency: u64 = 0;
 const EInvalidPlayAuthority: u64 = 1;
 const EInvalidArtistVerificationAuthority: u64 = 2;
 
-public(package) fun assert_is_settlement_currency<Currency>(self: &Protocol) {
+//=== Public View Functions ===
+
+public fun min_royalty_distribution_threshold(self: &Protocol): u64 {
+    self.min_royalty_distribution_threshold
+}
+
+//=== Assert Functions ===
+
+public fun assert_is_settlement_currency<Currency>(self: &Protocol) {
     assert!(
         self.settlement_currencies.contains(&with_defining_ids<Currency>()),
         EInvalidSettlementCurrency,
     )
 }
 
-public(package) fun assert_is_play_authority<Authority>(self: &Protocol) {
+public fun assert_is_play_authority<Authority>(self: &Protocol) {
     assert!(self.play_authorities.contains(&with_defining_ids<Authority>()), EInvalidPlayAuthority)
 }
 
-public(package) fun assert_is_contributor_verification_authority<Authority>(self: &Protocol) {
+public fun assert_is_contributor_verification_authority<Authority>(self: &Protocol) {
     assert!(
         self.contributor_verification_authority == with_defining_ids<Authority>(),
         EInvalidArtistVerificationAuthority,
