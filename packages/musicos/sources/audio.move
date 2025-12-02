@@ -141,3 +141,71 @@ public fun pcm(self: &Audio): &Pcm {
 public fun codec(self: &Audio): &Codec {
     &self.codec
 }
+
+public fun channel_energies(self: &Audio): &vector<BPS> {
+    &self.statistics.loudness.channel_energies
+}
+
+public fun channel_mean_rms(self: &Audio): &vector<BPS> {
+    &self.statistics.loudness.channel_mean_rms
+}
+
+public fun mean_rms(self: &Audio): BPS {
+    self.statistics.loudness.mean_rms
+}
+
+public fun peak_linear(self: &Audio): BPS {
+    self.statistics.loudness.peak_linear
+}
+
+public fun crest_factor(self: &Audio): BPS {
+    self.statistics.loudness.crest_factor
+}
+
+public fun dynamic_range(self: &Audio): BPS {
+    self.statistics.loudness.dynamic_range
+}
+
+public fun channel_imbalance(self: &Audio): BPS {
+    self.statistics.loudness.channel_imbalance
+}
+
+public fun chroma_vectors(self: &Audio): &vector<u16> {
+    &self.statistics.tonal.chroma_vectors
+}
+
+public fun fundamental_frequency_hz(self: &Audio): u16 {
+    self.statistics.tonal.fundamental_frequency_hz
+}
+
+public fun harmonic_ratio(self: &Audio): BPS {
+    self.statistics.tonal.harmonic_ratio
+}
+
+public fun spectral_centroid_hz(self: &Audio): u16 {
+    self.statistics.spectral.spectral_centroid_hz
+}
+
+public fun spectral_flatness(self: &Audio): BPS {
+    self.statistics.spectral.spectral_flatness
+}
+
+public fun spectral_rolloff_hz(self: &Audio): u16 {
+    self.statistics.spectral.spectral_rolloff_hz
+}
+
+public fun spectral_spread_hz(self: &Audio): u16 {
+    self.statistics.spectral.spectral_spread_hz
+}
+
+public fun mfccs(self: &Audio): &vector<I32> {
+    &self.statistics.timbre.mfccs
+}
+
+public fun tempo_bpm(self: &Audio): u16 {
+    self.statistics.rhythm.tempo_bpm
+}
+
+public fun zero_crossing_rate(self: &Audio): BPS {
+    self.statistics.rhythm.zero_crossing_rate
+}

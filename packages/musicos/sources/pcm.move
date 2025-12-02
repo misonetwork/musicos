@@ -9,14 +9,32 @@ use interest_bps::bps::BPS;
 
 public struct Pcm has drop, store {
     channels: vector<PcmChannel>,
-    digest: vector<u8>,
+    channel_layout: PcmChannelLayout,
+    samples: u64,
     sample_rate: u32,
     bit_depth: u8,
-    samples: u64,
+    digest: vector<u8>,
 }
 
 public struct PcmChannel has drop, store {
     energy: BPS,
+}
+
+public enum PcmChannelLayout has copy, drop, store {
+    Mono,
+    Stereo,
+    Surround(vector<PcmSurroundChannelRole>),
+}
+
+public enum PcmSurroundChannelRole has copy, drop, store {
+    L,
+    R,
+    C,
+    Lfe,
+    Ls,
+    Rs,
+    Lb,
+    Rb,
 }
 
 //=== Constants ===
@@ -32,11 +50,13 @@ const SUPPORTED_SAMPLE_RATES: vector<u32> = vector[
 const EUnsupportedBitDepth: u64 = 0;
 const EUnsupportedSampleRate: u64 = 0;
 const EInvalidSamples: u64 = 0;
+const EInvalidChannelCount: u64 = 0;
 
 //=== Public Functions ===
 
 public fun new(
-    channels: u8,
+    channels: vector<PcmChannel>,
+    channel_layout: PcmChannelLayout,
     digest: vector<u8>,
     sample_rate: u32,
     bit_depth: u8,
@@ -46,8 +66,18 @@ public fun new(
     assert!(SUPPORTED_BIT_DEPTHS.contains(&bit_depth), EUnsupportedBitDepth);
     assert!(SUPPORTED_SAMPLE_RATES.contains(&sample_rate), EUnsupportedSampleRate);
 
+    match (channel_layout) {
+        PcmChannelLayout::Mono => assert!(channels.length() == 1, EInvalidChannelCount),
+        PcmChannelLayout::Stereo => assert!(channels.length() == 2, EInvalidChannelCount),
+        // TODO: Add additional surround channel validation.
+        PcmChannelLayout::Surround(channel_roles) => {
+            assert!(channels.length() == channel_roles.length(), EInvalidChannelCount);
+        },
+    };
+
     Pcm {
         channels,
+        channel_layout,
         digest,
         sample_rate,
         bit_depth,
