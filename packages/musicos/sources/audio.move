@@ -16,44 +16,13 @@ public struct Audio has drop, store {
 }
 
 public struct AudioStatistics has drop, store {
-    loudness: AudioLoudnessStatistics,
-    tonal: AudioTonalStatistics,
-    spectral: AudioSpectralStatistics,
-    timbre: AudioTimbreStatistics,
-    rhythm: AudioRhythmStatistics,
-}
-
-public struct AudioLoudnessStatistics has drop, store {
-    // per-channel or global loudness features
     channel_energies: vector<BPS>,
-    channel_mean_rms: vector<BPS>,
-    mean_rms: BPS,
-    peak_linear: BPS,
-    crest_factor: BPS,
-    dynamic_range: BPS,
-    channel_imbalance: BPS,
-}
-
-public struct AudioTonalStatistics has drop, store {
-    chroma_vectors: vector<u16>,
-    fundamental_frequency_hz: u16,
-    harmonic_ratio: BPS,
-}
-
-public struct AudioSpectralStatistics has drop, store {
+    mean_rms_dbfs: I32,
+    peak_dbfs: I32,
+    dynamic_range_db: I32,
     spectral_centroid_hz: u16,
     spectral_flatness: BPS,
-    spectral_rolloff_hz: u16,
-    spectral_spread_hz: u16,
-}
-
-public struct AudioTimbreStatistics has drop, store {
-    mfccs: vector<I32>,
-}
-
-public struct AudioRhythmStatistics has drop, store {
     tempo_bpm: u16,
-    zero_crossing_rate: BPS,
 }
 
 //=== Errors ===
@@ -71,22 +40,12 @@ public fun new(
     pcm: Pcm,
     codec: Codec,
     channel_energies: vector<BPS>,
-    channel_mean_rms: vector<BPS>,
-    mean_rms: BPS,
-    peak_linear: BPS,
-    crest_factor: BPS,
-    dynamic_range: BPS,
-    channel_imbalance: BPS,
-    chroma_vectors: vector<u16>,
-    fundamental_frequency_hz: u16,
-    harmonic_ratio: BPS,
+    mean_rms_dbfs: I32,
+    peak_dbfs: I32,
+    dynamic_range_db: I32,
     spectral_centroid_hz: u16,
     spectral_flatness: BPS,
-    spectral_rolloff_hz: u16,
-    spectral_spread_hz: u16,
-    mfccs: vector<I32>,
     tempo_bpm: u16,
-    zero_crossing_rate: BPS,
 ): Audio {
     // Assert the number of channels doesn't exceed two channels (stereo).
     assert!(channel_energies.length() == MAX_CHANNELS, EInvalidChannelCount);
@@ -97,33 +56,13 @@ public fun new(
     );
 
     let statistics = AudioStatistics {
-        loudness: AudioLoudnessStatistics {
-            channel_energies,
-            channel_mean_rms,
-            mean_rms,
-            peak_linear,
-            crest_factor,
-            dynamic_range,
-            channel_imbalance,
-        },
-        tonal: AudioTonalStatistics {
-            chroma_vectors,
-            fundamental_frequency_hz,
-            harmonic_ratio,
-        },
-        spectral: AudioSpectralStatistics {
-            spectral_centroid_hz,
-            spectral_flatness,
-            spectral_rolloff_hz,
-            spectral_spread_hz,
-        },
-        timbre: AudioTimbreStatistics {
-            mfccs,
-        },
-        rhythm: AudioRhythmStatistics {
-            tempo_bpm,
-            zero_crossing_rate,
-        },
+        channel_energies,
+        mean_rms_dbfs,
+        peak_dbfs,
+        dynamic_range_db,
+        spectral_centroid_hz,
+        spectral_flatness,
+        tempo_bpm,
     };
 
     Audio {
@@ -142,69 +81,29 @@ public fun codec(self: &Audio): &Codec {
 }
 
 public fun channel_energies(self: &Audio): &vector<BPS> {
-    &self.statistics.loudness.channel_energies
+    &self.statistics.channel_energies
 }
 
-public fun channel_mean_rms(self: &Audio): &vector<BPS> {
-    &self.statistics.loudness.channel_mean_rms
+public fun mean_rms_dbfs(self: &Audio): I32 {
+    self.statistics.mean_rms_dbfs
 }
 
-public fun mean_rms(self: &Audio): BPS {
-    self.statistics.loudness.mean_rms
+public fun peak_dbfs(self: &Audio): I32 {
+    self.statistics.peak_dbfs
 }
 
-public fun peak_linear(self: &Audio): BPS {
-    self.statistics.loudness.peak_linear
-}
-
-public fun crest_factor(self: &Audio): BPS {
-    self.statistics.loudness.crest_factor
-}
-
-public fun dynamic_range(self: &Audio): BPS {
-    self.statistics.loudness.dynamic_range
-}
-
-public fun channel_imbalance(self: &Audio): BPS {
-    self.statistics.loudness.channel_imbalance
-}
-
-public fun chroma_vectors(self: &Audio): &vector<u16> {
-    &self.statistics.tonal.chroma_vectors
-}
-
-public fun fundamental_frequency_hz(self: &Audio): u16 {
-    self.statistics.tonal.fundamental_frequency_hz
-}
-
-public fun harmonic_ratio(self: &Audio): BPS {
-    self.statistics.tonal.harmonic_ratio
+public fun dynamic_range_db(self: &Audio): I32 {
+    self.statistics.dynamic_range_db
 }
 
 public fun spectral_centroid_hz(self: &Audio): u16 {
-    self.statistics.spectral.spectral_centroid_hz
+    self.statistics.spectral_centroid_hz
 }
 
 public fun spectral_flatness(self: &Audio): BPS {
-    self.statistics.spectral.spectral_flatness
-}
-
-public fun spectral_rolloff_hz(self: &Audio): u16 {
-    self.statistics.spectral.spectral_rolloff_hz
-}
-
-public fun spectral_spread_hz(self: &Audio): u16 {
-    self.statistics.spectral.spectral_spread_hz
-}
-
-public fun mfccs(self: &Audio): &vector<I32> {
-    &self.statistics.timbre.mfccs
+    self.statistics.spectral_flatness
 }
 
 public fun tempo_bpm(self: &Audio): u16 {
-    self.statistics.rhythm.tempo_bpm
-}
-
-public fun zero_crossing_rate(self: &Audio): BPS {
-    self.statistics.rhythm.zero_crossing_rate
+    self.statistics.tempo_bpm
 }
