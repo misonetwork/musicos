@@ -29,6 +29,7 @@ use sui::vec_map::{Self, VecMap};
 
 public struct Release has key {
     id: UID,
+    kind: ReleaseKind,
     state: ReleaseState,
     title: String,
     subtitle: Option<String>,
@@ -37,6 +38,12 @@ public struct Release has key {
     track_sequence: TrackSequence,
     track_splits: VecMap<TrackIdentifier, BPS>,
     obligations: vector<Obligation>,
+}
+
+public enum ReleaseKind has copy, drop, store {
+    Album,
+    EP,
+    Single,
 }
 
 public struct ReleaseAdminCap has key, store {
@@ -112,6 +119,7 @@ const MAX_OBLIGATIONS: u64 = 10;
 //=== Public Functions ===
 
 public fun new(
+    kind: ReleaseKind,
     title: String,
     discs: vector<Disc>,
     track_splits: vector<BPS>,
@@ -132,6 +140,7 @@ public fun new(
 
     let mut release = Release {
         id: object::new(ctx),
+        kind: kind,
         state: ReleaseState::Created(timestamp),
         title,
         subtitle: option::none(),

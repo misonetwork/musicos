@@ -10,15 +10,18 @@ use std::string::String;
 use sui::coin::Coin;
 use sui::derived_object::claim;
 use sui::transfer::Receiving;
-use sui::vec_set::VecSet;
 
 //=== Structs ===
 
+// TODO: Enforcer max member count for groups.
+/// A `Contributor` is an individual or a group that can be referenced in
+/// the MusicOS compositions and recordings, and higher-level applications.
 public struct Contributor has key {
     id: UID,
     name: ContributorName,
     kind: ContributorKind,
-    website: Option<String>,
+    description: Option<String>,
+    links: vector<String>,
 }
 
 public struct ContributorAdminCap has key, store {
@@ -46,7 +49,30 @@ public struct ContributorAdminCapKey() has copy, drop, store;
 
 public enum ContributorKind has copy, drop, store {
     Individual,
-    Group,
+    Group(vector<ContributorID>),
+}
+
+public enum ContributorLink has copy, drop, store {
+    AmazonMusic(String),
+    AppleMusic(String),
+    BandCamp(String),
+    Deezer(String),
+    Discord(String),
+    Email(String),
+    Facebook(String),
+    GitHub(String),
+    Instagram(String),
+    LinkedIn(String),
+    Medium(String),
+    Newsletter(String),
+    SoundCloud(String),
+    Spotify(String),
+    Tidal(String),
+    TikTok(String),
+    Website(String),
+    YouTube(String),
+    YouTubeMusic(String),
+    X(String),
 }
 
 public enum ContributorName has copy, drop, store {
@@ -55,6 +81,8 @@ public enum ContributorName has copy, drop, store {
     Verifying(String, u64),
     Verified(String),
 }
+
+//=== Errors ===
 
 const EUnauthorized: u64 = 0;
 const ENotUnverifiedState: u64 = 1;
@@ -67,8 +95,9 @@ public fun new(name: String, kind: ContributorKind, ctx: &mut TxContext) {
     let mut contributor = Contributor {
         id: object::new(ctx),
         name: ContributorName::Unverified(name),
+        description: option::none(),
         kind,
-        website: option::none(),
+        links: vector[],
     };
 
     let contributor_admin_cap = ContributorAdminCap {
@@ -80,12 +109,21 @@ public fun new(name: String, kind: ContributorKind, ctx: &mut TxContext) {
     transfer::share_object(contributor_admin_cap);
 }
 
-public fun new_individual_kind(name: String): ContributorKind {
+public fun new_individual_kind(): ContributorKind {
     ContributorKind::Individual
 }
 
-public fun new_group_kind(name: String): ContributorKind {
-    ContributorKind::Group
+public fun new_group_kind(): ContributorKind {
+    ContributorKind::Group(vector[])
+}
+
+public fun add_member(self: &mut Contributor, member: &Contributor) {
+    match (&mut self.kind) {
+        ContributorKind::Group(members) => {
+            members.push_back(member.contributor_id());
+        },
+        _ => abort 0,
+    }
 }
 
 public fun request_verification(
@@ -146,11 +184,17 @@ public fun contributor_id(self: &Contributor): ContributorID {
     }
 }
 
-public fun receive<T: key + store>(self: &mut Contributor, obj_to_receive: Receiving<T>): T {
+public fun receive<Object: key + store>(
+    self: &mut Contributor,
+    obj_to_receive: Receiving<Object>,
+): Object {
     transfer::public_receive(&mut self.id, obj_to_receive)
 }
 
-public fun receive_coin<T>(self: &mut Contributor, coin_to_receive: Receiving<Coin<T>>): Coin<T> {
+public fun receive_coin<Currency>(
+    self: &mut Contributor,
+    coin_to_receive: Receiving<Coin<Currency>>,
+): Coin<Currency> {
     transfer::public_receive(&mut self.id, coin_to_receive)
 }
 
@@ -172,22 +216,26 @@ public fun name(self: &Contributor): String {
 public fun is_individual_kind(self: &Contributor): bool {
     match (self.kind) {
         ContributorKind::Individual => true,
-        ContributorKind::Group => false,
+        ContributorKind::Group(..) => false,
     }
 }
 
 public fun is_group_kind(self: &Contributor): bool {
     match (self.kind) {
         ContributorKind::Individual => false,
-        ContributorKind::Group => true,
+        ContributorKind::Group(..) => true,
     }
 }
 
-public fun assert_is_verified(self: &Contributor) {
+public fun is_name_verified(self: &Contributor): bool {
     match (&self.name) {
-        ContributorName::Verified(_) => (),
-        _ => abort ENotVerifiedState,
+        ContributorName::Verified(_) => true,
+        _ => false,
     }
+}
+
+public fun assert_is_name_verified(self: &Contributor) {
+    assert!(self.is_name_verified(), ENotVerifiedState);
 }
 
 //=== Private Functions ===

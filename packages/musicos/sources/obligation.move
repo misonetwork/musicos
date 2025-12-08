@@ -7,8 +7,10 @@ module musicos::obligation;
 use interest_bps::bps::BPS;
 use std::u64::min;
 use std::string::String;
-use sui::balance::Balance;
+use sui::balance::{Self, Balance};
+use sui::coin::{Self, Coin};
 use sui::clock::Clock;
+use sui::balance::withdraw_funds_from_object;
 
 //=== Structs ===
 

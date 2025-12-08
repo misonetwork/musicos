@@ -27,6 +27,8 @@ const EDoesNotExist: u64 = 0;
 
 //=== Public Functions ===
 
+public fun receive_balance<Currency>(self: &mut RevenuePool<Currency>) {}
+
 public fun derive_address<Currency>(parent_id: ID): address {
     derive_address_impl(parent_id, RevenuePoolKey<Currency>())
 }
