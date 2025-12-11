@@ -1,1 +1,7 @@
-# MusicOS – A Decentralized Operating System for the Global Music Industry
+# MusicOS – A Decentralized Operating System for the Music Industry
+
+## Composition
+
+## Recording
+
+## Release
