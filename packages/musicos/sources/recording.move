@@ -9,12 +9,14 @@ use musicos::composition::Composition;
 use musicos::contributor::{Contributor, ContributorID};
 use musicos::genre::Genre;
 use musicos::mix::Mix;
+use musicos::music::MUSIC;
 use musicos::recording_artifact_variant::RecordingArtifactVariant;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share::{Self, share_icon_url};
 use musicos::snapshot::Snapshot;
 use std::string::String;
 use sui::balance::Balance;
+use sui::clock::Clock;
 use sui::coin::TreasuryCap;
 use sui::coin_registry::{Currency, MetadataCap};
 use sui::derived_object::{claim, exists};
@@ -33,8 +35,7 @@ public struct Recording<phantom RecordingShare> has key, store {
     secondary_genres: VecSet<String>,
     artists: VecMap<ContributorID, RecordingArtistRole>,
     contributors: VecMap<ContributorID, VecSet<RecordingContributorRole>>,
-    primary_mix: Mix,
-    alternate_mixes: vector<Mix>,
+    mixes: vector<Mix>,
     artifacts: vector<Artifact<RecordingArtifactVariant>>,
     snapshots: vector<Snapshot>,
     metadata_cap: MetadataCap<RecordingShare>,
@@ -48,7 +49,64 @@ public struct RecordingAdminCap has key, store {
     recording_id: ID,
 }
 
+public struct RecordingVerificationCap has key, store {
+    id: UID,
+}
+
 public struct RecordingAdminCapKey() has copy, drop, store;
+
+//=== Events ===
+
+public struct RecordingCreatedEvent has copy, drop {
+    composition_id: ID,
+    recording_id: ID,
+    timestamp: u64,
+}
+
+public struct RecordingDestroyedEvent has copy, drop {
+    composition_id: ID,
+    recording_id: ID,
+}
+
+public struct RecordingContributorAddedEvent has copy, drop {
+    recording_id: ID,
+    contributor_id: ContributorID,
+}
+
+public struct RecordingContributorRemovedEvent has copy, drop {
+    recording_id: ID,
+    contributor_id: ContributorID,
+}
+
+public struct RecordingMixAddedEvent has copy, drop {
+    recording_id: ID,
+}
+
+public struct RecordingMixRemovedEvent has copy, drop {
+    recording_id: ID,
+    mix_idx: u64,
+}
+
+public struct RecordingMixSwappedEvent has copy, drop {
+    recording_id: ID,
+    mix_a_idx: u64,
+    mix_b_idx: u64,
+}
+
+public struct RecordingVerificationRequestedEvent has copy, drop {
+    recording_id: ID,
+    timestamp: u64,
+}
+
+public struct RecordingPublishedEvent has copy, drop {
+    recording_id: ID,
+    timestamp: u64,
+}
+
+public struct RecordingVerifiedEvent has copy, drop {
+    recording_id: ID,
+    timestamp: u64,
+}
 
 //=== Enums ===
 
@@ -59,12 +117,14 @@ public enum RecordingArtistRole has copy, drop, store {
 
 public enum RecordingState has copy, drop, store {
     Created,
+    Verifying(u64),
+    Verified(u64),
     Published(u64),
 }
 
 //=== Constants ===
 
-const MAX_ALTERNATE_MIXES: u64 = 5;
+const MAX_MIXES: u64 = 5;
 const MAX_ARTIFACTS: u64 = 30;
 const MAX_CONTRIBUTORS: u64 = 200;
 const MAX_ROLES_PER_CONTRIBUTOR: u64 = 10;
@@ -81,13 +141,10 @@ const EMaxSnapshotsExceeded: u64 = 4;
 const EInvalidDecimals: u64 = 5;
 const EInvalidSymbol: u64 = 6;
 const EExceedsMaxSupply: u64 = 7;
-
-//=== Events ===
-
-public struct RecordingCreatedEvent has copy, drop {
-    composition_id: ID,
-    recording_id: ID,
-}
+const EAlreadyPublished: u64 = 8;
+const ENotVerifiedState: u64 = 9;
+const ENotCreatedState: u64 = 10;
+const ENotVerifyingState: u64 = 11;
 
 //=== Public Functions ===
 
@@ -99,6 +156,7 @@ public fun new<RecordingShare, CompositionShare>(
     currency: &mut Currency<RecordingShare>,
     metadata_cap: MetadataCap<RecordingShare>,
     treasury_cap: TreasuryCap<RecordingShare>,
+    clock: &Clock,
 ): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>) {
     // If the derivation index is not 0, assert the UID associated with the previous
     // derivation index has been claimed and exists. This ensures UIDs generated for
@@ -121,8 +179,7 @@ public fun new<RecordingShare, CompositionShare>(
         secondary_genres: vec_set::empty(),
         artists: vec_map::empty(),
         contributors: vec_map::empty(),
-        primary_mix: mix,
-        alternate_mixes: vector[],
+        mixes: vector::singleton(mix),
         artifacts: vector[],
         snapshots: vector[],
         metadata_cap,
@@ -151,11 +208,72 @@ public fun new<RecordingShare, CompositionShare>(
     emit(RecordingCreatedEvent {
         composition_id,
         recording_id,
+        timestamp: clock.timestamp_ms(),
     });
 
     (recording, recording_admin_cap, balance)
 }
 
+public fun request_verification<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap,
+    clock: &Clock,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        RecordingState::Created => {
+            let timestamp = clock.timestamp_ms();
+            self.state = RecordingState::Verifying(timestamp);
+
+            emit(RecordingVerificationRequestedEvent {
+                recording_id: self.id(),
+                timestamp,
+            });
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+public fun verify<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    _: &RecordingVerificationCap,
+    clock: &Clock,
+) {
+    match (self.state) {
+        RecordingState::Verifying(..) => {
+            self.state = RecordingState::Verified(clock.timestamp_ms());
+
+            emit(RecordingVerifiedEvent {
+                recording_id: self.id(),
+                timestamp: clock.timestamp_ms(),
+            });
+        },
+        _ => abort ENotVerifyingState,
+    }
+}
+
+public fun publish<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap,
+    clock: &Clock,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        RecordingState::Verified(..) => {
+            self.state = RecordingState::Published(clock.timestamp_ms());
+
+            emit(RecordingPublishedEvent {
+                recording_id: self.id(),
+                timestamp: clock.timestamp_ms(),
+            });
+        },
+        _ => abort ENotVerifiedState,
+    }
+}
+
+// TODO: Think about what states to allow destruction.
 public fun destroy<RecordingShare>(
     self: Recording<RecordingShare>,
     cap: RecordingAdminCap,
@@ -167,23 +285,67 @@ public fun destroy<RecordingShare>(
     metadata_cap
 }
 
-public fun add_alternate_mix<RecordingShare>(
+// Add a `Mix` to a `Recording`.
+// Requires the `Recording` to be in the `Created` state.
+public fun add_mix<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     mix: Mix,
 ) {
     self.authorize(cap);
-    assert!(self.alternate_mixes.length() < MAX_ALTERNATE_MIXES, EMaxMixesExceeded);
-    self.alternate_mixes.push_back(mix);
+
+    match (self.state) {
+        RecordingState::Created => {
+            assert!(self.mixes.length() < MAX_MIXES, EMaxMixesExceeded);
+            self.mixes.push_back(mix);
+
+            emit(RecordingMixAddedEvent {
+                recording_id: self.id(),
+            });
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
-public fun remove_alternate_mix<RecordingShare>(
+public fun remove_mix<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     mix_idx: u64,
 ): Mix {
-    self.authorize(cap);
-    self.alternate_mixes.remove(mix_idx)
+    match (self.state) {
+        RecordingState::Created => {
+            self.authorize(cap);
+
+            emit(RecordingMixRemovedEvent {
+                recording_id: self.id(),
+                mix_idx,
+            });
+
+            self.mixes.remove(mix_idx)
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+public fun swap_mix<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap,
+    mix_a_idx: u64,
+    mix_b_idx: u64,
+) {
+    match (self.state) {
+        RecordingState::Created => {
+            self.authorize(cap);
+            self.mixes.swap(mix_a_idx, mix_b_idx);
+
+            emit(RecordingMixSwappedEvent {
+                recording_id: self.id(),
+                mix_a_idx,
+                mix_b_idx,
+            });
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
 public fun add_contributor<RecordingShare>(
@@ -191,8 +353,18 @@ public fun add_contributor<RecordingShare>(
     cap: &RecordingAdminCap,
     contributor_id: ContributorID,
 ) {
-    self.authorize(cap);
-    self.contributors.insert(contributor_id, vec_set::empty());
+    match (self.state) {
+        RecordingState::Created => {
+            self.authorize(cap);
+            self.contributors.insert(contributor_id, vec_set::empty());
+
+            emit(RecordingContributorAddedEvent {
+                recording_id: self.id(),
+                contributor_id,
+            });
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
 public fun remove_contributor<RecordingShare>(
@@ -200,8 +372,19 @@ public fun remove_contributor<RecordingShare>(
     cap: &RecordingAdminCap,
     contributor_id: ContributorID,
 ): (ContributorID, VecSet<RecordingContributorRole>) {
-    self.authorize(cap);
-    self.contributors.remove(&contributor_id)
+    match (self.state) {
+        RecordingState::Created => {
+            self.authorize(cap);
+
+            emit(RecordingContributorRemovedEvent {
+                recording_id: self.id(),
+                contributor_id,
+            });
+
+            self.contributors.remove(&contributor_id)
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
 public fun add_contributor_role<RecordingShare>(
@@ -280,12 +463,8 @@ public fun genre_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
     self.genre_id
 }
 
-public fun primary_mix<RecordingShare>(self: &Recording<RecordingShare>): &Mix {
-    &self.primary_mix
-}
-
-public fun alternate_mixes<RecordingShare>(self: &Recording<RecordingShare>): &vector<Mix> {
-    &self.alternate_mixes
+public fun mixes<RecordingShare>(self: &Recording<RecordingShare>): &vector<Mix> {
+    &self.mixes
 }
 
 public fun is_created_state<RecordingShare>(self: &Recording<RecordingShare>): bool {

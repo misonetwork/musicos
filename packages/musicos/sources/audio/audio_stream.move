@@ -50,3 +50,7 @@ public fun digest(self: &AudioStream): vector<u8> {
 public fun duration(self: &AudioStream): u64 {
     self.samples / (self.sample_rate as u64)
 }
+
+public fun duration_ms(self: &AudioStream): u64 {
+    (self.samples * 1_000) / (self.sample_rate as u64)
+}

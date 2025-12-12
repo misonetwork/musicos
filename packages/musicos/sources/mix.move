@@ -14,17 +14,10 @@ public struct Mix has drop, store {
     audio: Audio,
 }
 
-//=== Errors ===
-
-const EDurationMismatch: u64 = 0;
-
 //=== Public Functions ===
 
 // Create a new Mix with a Source.
 public fun new(audio: Audio, variant: MixVariant): Mix {
-    // Assert the Source is a lossless encode.
-    audio.codec().assert_is_lossless();
-
     Mix {
         variant,
         audio,

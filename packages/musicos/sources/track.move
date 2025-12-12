@@ -29,10 +29,7 @@ public fun new<RecordingShare>(
         composition_id: recording.composition_id(),
         composition_commission_rate: recording.composition_commission_rate(),
         recording_id: recording.id(),
-        duration: calculate_duration(
-            recording.primary_mix().audio().pcm().samples(),
-            recording.primary_mix().audio().pcm().sample_rate(),
-        ),
+        duration: recording.primary_mix().audio().stream().duration(),
         genre_id: recording.genre_id(),
     }
 }
