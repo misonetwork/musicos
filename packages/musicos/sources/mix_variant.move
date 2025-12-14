@@ -5,6 +5,8 @@ module musicos::mix_variant;
 
 use std::string::String;
 
+//=== Enums ===
+
 public enum MixVariant has copy, drop, store {
     Original,
     Instrumental,
@@ -17,6 +19,8 @@ public enum MixVariant has copy, drop, store {
     Live,
     Other(String),
 }
+
+//=== Public Functions ===
 
 public fun new_original(): MixVariant {
     MixVariant::Original
@@ -58,13 +62,7 @@ public fun new_other(name: String): MixVariant {
     MixVariant::Other(name)
 }
 
-public fun is_original(self: &MixVariant): bool {
-    match (self) {
-        MixVariant::Original => true,
-        _ => false,
-    }
-}
-
+//=== Public View Functions ===
 
 public fun name(self: &MixVariant): String {
     match (self) {
@@ -78,5 +76,12 @@ public fun name(self: &MixVariant): String {
         MixVariant::Acoustic => b"Acoustic".to_string(),
         MixVariant::Live => b"Live".to_string(),
         MixVariant::Other(name) => *name,
+    }
+}
+
+public fun is_original(self: &MixVariant): bool {
+    match (self) {
+        MixVariant::Original => true,
+        _ => false,
     }
 }

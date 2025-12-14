@@ -35,10 +35,15 @@ public struct Recording<phantom RecordingShare> has key, store {
     secondary_genres: VecSet<String>,
     artists: VecMap<ContributorID, RecordingArtistRole>,
     contributors: VecMap<ContributorID, VecSet<RecordingContributorRole>>,
-    mixes: vector<Mix>,
+    mixes: RecordingMixes,
     artifacts: vector<Artifact<RecordingArtifactVariant>>,
     snapshots: vector<Snapshot>,
     metadata_cap: MetadataCap<RecordingShare>,
+}
+
+public struct RecordingMixes has drop, store {
+    primary: Mix,
+    alterates: vector<Mix>,
 }
 
 // (derivation_idx)
@@ -145,6 +150,8 @@ const EAlreadyPublished: u64 = 8;
 const ENotVerifiedState: u64 = 9;
 const ENotCreatedState: u64 = 10;
 const ENotVerifyingState: u64 = 11;
+const ENotOriginalMixVariant: u64 = 12;
+const EInvalidMixVariant: u64 = 13;
 
 //=== Public Functions ===
 
@@ -168,7 +175,15 @@ public fun new<RecordingShare, CompositionShare>(
         );
     };
 
+    // Assert the provided `Mix` is an `Original` variant.
+    assert!(mix.variant().is_original(), ENotOriginalMixVariant);
+
     let composition_id = composition.id();
+
+    let mixes = RecordingMixes {
+        primary: mix,
+        alterates: vector[],
+    };
 
     let mut recording = Recording<RecordingShare> {
         id: claim(composition.uid_mut(), RecordingKey(derivation_idx)),
@@ -179,7 +194,7 @@ public fun new<RecordingShare, CompositionShare>(
         secondary_genres: vec_set::empty(),
         artists: vec_map::empty(),
         contributors: vec_map::empty(),
-        mixes: vector::singleton(mix),
+        mixes,
         artifacts: vector[],
         snapshots: vector[],
         metadata_cap,
@@ -287,17 +302,20 @@ public fun destroy<RecordingShare>(
 
 // Add a `Mix` to a `Recording`.
 // Requires the `Recording` to be in the `Created` state.
-public fun add_mix<RecordingShare>(
+public fun add_alternate_mix<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     mix: Mix,
 ) {
     self.authorize(cap);
 
+    // Assert the provided `Mix` is not an `Original` variant.
+    assert!(!mix.variant().is_original(), EInvalidMixVariant);
+
     match (self.state) {
         RecordingState::Created => {
-            assert!(self.mixes.length() < MAX_MIXES, EMaxMixesExceeded);
-            self.mixes.push_back(mix);
+            assert!(self.mixes.alterates.length() < MAX_MIXES, EMaxMixesExceeded);
+            self.mixes.alterates.push_back(mix);
 
             emit(RecordingMixAddedEvent {
                 recording_id: self.id(),
@@ -307,7 +325,7 @@ public fun add_mix<RecordingShare>(
     }
 }
 
-public fun remove_mix<RecordingShare>(
+public fun remove_alternate_mix<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     mix_idx: u64,
@@ -321,13 +339,13 @@ public fun remove_mix<RecordingShare>(
                 mix_idx,
             });
 
-            self.mixes.remove(mix_idx)
+            self.mixes.alterates.remove(mix_idx)
         },
         _ => abort ENotCreatedState,
     }
 }
 
-public fun swap_mix<RecordingShare>(
+public fun swap_alternate_mixes<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     mix_a_idx: u64,
@@ -336,7 +354,7 @@ public fun swap_mix<RecordingShare>(
     match (self.state) {
         RecordingState::Created => {
             self.authorize(cap);
-            self.mixes.swap(mix_a_idx, mix_b_idx);
+            self.mixes.alterates.swap(mix_a_idx, mix_b_idx);
 
             emit(RecordingMixSwappedEvent {
                 recording_id: self.id(),
@@ -463,8 +481,12 @@ public fun genre_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
     self.genre_id
 }
 
-public fun mixes<RecordingShare>(self: &Recording<RecordingShare>): &vector<Mix> {
-    &self.mixes
+public fun primary_mix<RecordingShare>(self: &Recording<RecordingShare>): &Mix {
+    &self.mixes.primary
+}
+
+public fun alternate_mixes<RecordingShare>(self: &Recording<RecordingShare>): &vector<Mix> {
+    &self.mixes.alterates
 }
 
 public fun is_created_state<RecordingShare>(self: &Recording<RecordingShare>): bool {

@@ -23,9 +23,19 @@ public struct Obligation has copy, drop, store {
 
 //=== Enums ===
 
+/// Defines an obligation's payout rule and settlement condition.
+///
+/// In MusicOS, an `Obligation` is paid from principal *before* forwarding the
+/// remainder to rights holders (e.g., advance recoupment).
 public enum ObligationKind has copy, drop, store {
+    /// Always pays `rate` (BPS) of principal.
+    /// `total_paid_value` tracks cumulative paid value.
     Percentage { rate: BPS, total_paid_value: u64 },
+    /// Pays `rate` (BPS) of principal only within `[start_ts, end_ts]` (ms).
+    /// Settles when `now > end_ts`. Tracks cumulative paid value.
     TimeBound { rate: BPS, total_paid_value: u64, start_ts: u64, end_ts: u64 },
+    /// Pays `min(rate(principal), balance_value)` and decrements `balance_value`.
+    /// Settles when `balance_value == 0`. Tracks cumulative paid value.
     ValueBound { rate: BPS, total_paid_value: u64, balance_value: u64, },
 }
 
