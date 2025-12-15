@@ -16,7 +16,7 @@ use musicos::share::{Self, share_icon_url};
 use musicos::snapshot::Snapshot;
 use musicos::stem::Stem;
 use std::string::String;
-use sui::balance::{Balance, withdraw_funds_from_object};
+use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
 use sui::coin_registry::{Currency, MetadataCap};
@@ -141,27 +141,17 @@ const EInvalidStemDuration: u64 = 14;
 public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     master: Audio,
-    derivation_idx: u32,
     genre: &Genre,
     currency: &mut Currency<RecordingShare>,
     metadata_cap: MetadataCap<RecordingShare>,
     treasury_cap: TreasuryCap<RecordingShare>,
     clock: &Clock,
 ): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>) {
-    // If the derivation index is not 0, assert the UID associated with the previous
-    // derivation index has been claimed and exists. This ensures UIDs generated for
-    // Recordings are sequential in nature.
-    if (derivation_idx > 0) {
-        assert!(
-            exists(composition.uid(), RecordingKey(derivation_idx - 1)),
-            ENotSequentialDerivationIndex,
-        );
-    };
-
     let composition_id = composition.id();
 
     let mut recording = Recording<RecordingShare> {
-        id: claim(composition.uid_mut(), RecordingKey(derivation_idx)),
+        // Derive a Recording ID from the Composition ID and the master's digest.
+        id: claim(composition.uid_mut(), master.stream().digest()),
         state: RecordingState::Created,
         composition_id,
         composition_commission_rate: composition.commission_rate(),

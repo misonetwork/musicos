@@ -27,8 +27,6 @@ public struct Composition<phantom CompositionShare> has key, store {
     id: UID,
     // State of the composition.
     state: CompositionState,
-    // Optional ISWC code for the composition.
-    iswc: Option<String>,
     // Title of the composition.
     title: String,
     // Optional subtitle of the composition.
@@ -96,7 +94,6 @@ public fun new<CompositionShare>(
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Created,
-        iswc: option::none(),
         title,
         subtitle: option::none(),
         contributors: vec_map::empty(),
@@ -115,7 +112,6 @@ public fun new<CompositionShare>(
 
     let mut description = b"MusicOS Composition Shares for ".to_string();
     description.append(composition.id().to_address().to_string());
-    description.append(b".".to_string());
 
     let balance = share::new<CompositionShare>(
         b"MusicOS Composition Share".to_string(),
