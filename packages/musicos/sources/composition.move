@@ -27,24 +27,26 @@ public struct Composition<phantom CompositionShare> has key, store {
     id: UID,
     // State of the composition.
     state: CompositionState,
-    // Commission rate that Recordings must pay to the Composition.
-    commission_rate: BPS,
+    // Optional ISWC code for the composition.
+    iswc: Option<String>,
     // Title of the composition.
     title: String,
     // Optional subtitle of the composition.
     subtitle: Option<String>,
-    // Optional Walrus quilt ID that acts as a folder for the composition's Walrus-based assets.
-    quilt_id: Option<String>,
     // Map of addresses to composition contributor roles.
     contributors: VecMap<ContributorID, VecSet<CompositionContributorRole>>,
     // Optional map of language codes to Walrus Blob IDs of LRC files.
     lyrics: Option<String>,
+    // Commission rate that Recordings must pay to the Composition.
+    commission_rate: BPS,
+    // Optional Walrus quilt ID that acts as a folder for the composition's Walrus-based assets.
+    quilt_id: Option<String>,
     // List of composition artifacts.
     artifacts: vector<Artifact<CompositionArtifactVariant>>,
-    // MetadataCap for the composition's share currency.
-    metadata_cap: MetadataCap<CompositionShare>,
     // Number of times the composition has been played.
     play_count: u64,
+    // MetadataCap for the composition's share currency.
+    metadata_cap: MetadataCap<CompositionShare>,
 }
 
 public enum CompositionState has copy, drop, store {
@@ -94,15 +96,16 @@ public fun new<CompositionShare>(
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Created,
-        commission_rate,
+        iswc: option::none(),
         title,
         subtitle: option::none(),
-        quilt_id: option::none(),
         contributors: vec_map::empty(),
         lyrics: option::none(),
+        commission_rate,
+        quilt_id: option::none(),
         artifacts: vector[],
-        metadata_cap,
         play_count: 0,
+        metadata_cap,
     };
 
     let composition_admin_cap = CompositionAdminCap {

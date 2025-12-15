@@ -4,18 +4,19 @@
 module musicos::recording;
 
 use interest_bps::bps::BPS;
+use music::music::MUSIC;
 use musicos::artifact::Artifact;
+use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::contributor::{Contributor, ContributorID};
 use musicos::genre::Genre;
-use musicos::mix::Mix;
-use musicos::music::MUSIC;
 use musicos::recording_artifact_variant::RecordingArtifactVariant;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share::{Self, share_icon_url};
 use musicos::snapshot::Snapshot;
+use musicos::stem::Stem;
 use std::string::String;
-use sui::balance::Balance;
+use sui::balance::{Balance, withdraw_funds_from_object};
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
 use sui::coin_registry::{Currency, MetadataCap};
@@ -35,15 +36,11 @@ public struct Recording<phantom RecordingShare> has key, store {
     secondary_genres: VecSet<String>,
     artists: VecMap<ContributorID, RecordingArtistRole>,
     contributors: VecMap<ContributorID, VecSet<RecordingContributorRole>>,
-    mixes: RecordingMixes,
+    master: Audio,
+    stems: vector<Stem>,
     artifacts: vector<Artifact<RecordingArtifactVariant>>,
     snapshots: vector<Snapshot>,
     metadata_cap: MetadataCap<RecordingShare>,
-}
-
-public struct RecordingMixes has drop, store {
-    primary: Mix,
-    alterates: vector<Mix>,
 }
 
 // (derivation_idx)
@@ -81,21 +78,6 @@ public struct RecordingContributorAddedEvent has copy, drop {
 public struct RecordingContributorRemovedEvent has copy, drop {
     recording_id: ID,
     contributor_id: ContributorID,
-}
-
-public struct RecordingMixAddedEvent has copy, drop {
-    recording_id: ID,
-}
-
-public struct RecordingMixRemovedEvent has copy, drop {
-    recording_id: ID,
-    mix_idx: u64,
-}
-
-public struct RecordingMixSwappedEvent has copy, drop {
-    recording_id: ID,
-    mix_a_idx: u64,
-    mix_b_idx: u64,
 }
 
 public struct RecordingVerificationRequestedEvent has copy, drop {
@@ -152,12 +134,13 @@ const ENotCreatedState: u64 = 10;
 const ENotVerifyingState: u64 = 11;
 const ENotOriginalMixVariant: u64 = 12;
 const EInvalidMixVariant: u64 = 13;
+const EInvalidStemDuration: u64 = 14;
 
 //=== Public Functions ===
 
 public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
-    mix: Mix,
+    master: Audio,
     derivation_idx: u32,
     genre: &Genre,
     currency: &mut Currency<RecordingShare>,
@@ -175,15 +158,7 @@ public fun new<RecordingShare, CompositionShare>(
         );
     };
 
-    // Assert the provided `Mix` is an `Original` variant.
-    assert!(mix.variant().is_original(), ENotOriginalMixVariant);
-
     let composition_id = composition.id();
-
-    let mixes = RecordingMixes {
-        primary: mix,
-        alterates: vector[],
-    };
 
     let mut recording = Recording<RecordingShare> {
         id: claim(composition.uid_mut(), RecordingKey(derivation_idx)),
@@ -194,7 +169,8 @@ public fun new<RecordingShare, CompositionShare>(
         secondary_genres: vec_set::empty(),
         artists: vec_map::empty(),
         contributors: vec_map::empty(),
-        mixes,
+        master,
+        stems: vector[],
         artifacts: vector[],
         snapshots: vector[],
         metadata_cap,
@@ -227,6 +203,25 @@ public fun new<RecordingShare, CompositionShare>(
     });
 
     (recording, recording_admin_cap, balance)
+}
+
+public fun add_stem<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap,
+    stem: Stem,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        RecordingState::Created => {
+            assert!(
+                stem.audio().stream().duration() == self.master.stream().duration(),
+                EInvalidStemDuration,
+            );
+            self.stems.push_back(stem);
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
 public fun request_verification<RecordingShare>(
@@ -298,72 +293,6 @@ public fun destroy<RecordingShare>(
     let RecordingAdminCap { id, .. } = cap;
     id.delete();
     metadata_cap
-}
-
-// Add a `Mix` to a `Recording`.
-// Requires the `Recording` to be in the `Created` state.
-public fun add_alternate_mix<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    mix: Mix,
-) {
-    self.authorize(cap);
-
-    // Assert the provided `Mix` is not an `Original` variant.
-    assert!(!mix.variant().is_original(), EInvalidMixVariant);
-
-    match (self.state) {
-        RecordingState::Created => {
-            assert!(self.mixes.alterates.length() < MAX_MIXES, EMaxMixesExceeded);
-            self.mixes.alterates.push_back(mix);
-
-            emit(RecordingMixAddedEvent {
-                recording_id: self.id(),
-            });
-        },
-        _ => abort ENotCreatedState,
-    }
-}
-
-public fun remove_alternate_mix<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    mix_idx: u64,
-): Mix {
-    match (self.state) {
-        RecordingState::Created => {
-            self.authorize(cap);
-
-            emit(RecordingMixRemovedEvent {
-                recording_id: self.id(),
-                mix_idx,
-            });
-
-            self.mixes.alterates.remove(mix_idx)
-        },
-        _ => abort ENotCreatedState,
-    }
-}
-
-public fun swap_alternate_mixes<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    mix_a_idx: u64,
-    mix_b_idx: u64,
-) {
-    match (self.state) {
-        RecordingState::Created => {
-            self.authorize(cap);
-            self.mixes.alterates.swap(mix_a_idx, mix_b_idx);
-
-            emit(RecordingMixSwappedEvent {
-                recording_id: self.id(),
-                mix_a_idx,
-                mix_b_idx,
-            });
-        },
-        _ => abort ENotCreatedState,
-    }
 }
 
 public fun add_contributor<RecordingShare>(
@@ -481,12 +410,8 @@ public fun genre_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
     self.genre_id
 }
 
-public fun primary_mix<RecordingShare>(self: &Recording<RecordingShare>): &Mix {
-    &self.mixes.primary
-}
-
-public fun alternate_mixes<RecordingShare>(self: &Recording<RecordingShare>): &vector<Mix> {
-    &self.mixes.alterates
+public fun master<RecordingShare>(self: &Recording<RecordingShare>): &Audio {
+    &self.master
 }
 
 public fun is_created_state<RecordingShare>(self: &Recording<RecordingShare>): bool {

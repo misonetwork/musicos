@@ -10,3 +10,7 @@ public struct Stem has drop, store {
     audio: Audio,
     description: Option<String>,
 }
+
+public fun audio(self: &Stem): &Audio {
+    &self.audio
+}

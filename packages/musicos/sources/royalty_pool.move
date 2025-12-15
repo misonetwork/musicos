@@ -5,7 +5,7 @@ module musicos::royalty_pool;
 
 use musicos::protocol::Protocol;
 use musicos::royalty_distribution::{Self, RoyaltyDistribution};
-use sui::balance::{Self, Balance};
+use sui::balance::{Self, Balance, withdraw_funds_from_object};
 use sui::derived_object::{claim, derive_address as derive_address_impl, exists as exists_impl};
 
 public struct RoyaltyPool<phantom Currency, phantom Share> has key, store {

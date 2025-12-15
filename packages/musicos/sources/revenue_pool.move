@@ -3,7 +3,7 @@
 
 module musicos::revenue_pool;
 
-use sui::balance::{Self, Balance};
+use sui::balance::{Self, Balance, withdraw_funds_from_object};
 use sui::derived_object::{claim, derive_address as derive_address_impl, exists as exists_impl};
 
 //=== Structs ===
@@ -26,8 +26,6 @@ public struct RevenuePoolKey<phantom Currency>() has copy, drop, store;
 const EDoesNotExist: u64 = 0;
 
 //=== Public Functions ===
-
-public fun receive_balance<Currency>(self: &mut RevenuePool<Currency>) {}
 
 public fun derive_address<Currency>(parent_id: ID): address {
     derive_address_impl(parent_id, RevenuePoolKey<Currency>())

@@ -5,7 +5,6 @@ module musicos::track;
 
 use interest_bps::bps::BPS;
 use musicos::recording::{Recording, RecordingAdminCap};
-use musicos::utils::calculate_duration;
 use std::string::String;
 
 //=== Structs ===
@@ -25,11 +24,12 @@ public fun new<RecordingShare>(
     recording: &Recording<RecordingShare>,
 ): Track {
     recording.authorize(cap);
+
     Track {
         composition_id: recording.composition_id(),
         composition_commission_rate: recording.composition_commission_rate(),
         recording_id: recording.id(),
-        duration: recording.primary_mix().audio().stream().duration(),
+        duration: recording.master().stream().duration(),
         genre_id: recording.genre_id(),
     }
 }
