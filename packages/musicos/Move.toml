@@ -2,14 +2,14 @@
 name = "MusicOS"
 edition = "2024.beta"
 license = "Apache 2.0"
-authors = ["Sona Labs, Pte Ltd (os@sonamusic.com)"]
+authors = ["Sona Labs, Pte Ltd (build@sonamusic.com)"]
 
 [dependencies]
 InterestBPS = { local = "../../../miraicloud/mirainet/interest-mvr/bps" }
 InterestMath = { local = "../../../miraicloud/mirainet/interest-mvr/math" }
-music = { local = "../coins/music" } # MUSIC token
-play =  { local = "../coins/play" } # PLAY token
-playtime = { local = "../coins/playtime" } # PLAYTIME token
+MUSIC = { local = "../coins/music" } # MUSIC token
+PLAY =  { local = "../coins/play" } # PLAY token
+PLAYTIME = { local = "../coins/playtime" } # PLAYTIME token
 
 [addresses]
 musicos = "0x0"

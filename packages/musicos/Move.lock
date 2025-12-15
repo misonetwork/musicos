@@ -3,18 +3,18 @@
 
 [move]
 version = 3
-manifest_digest = "7B0CCF1E1671980D6200FA06493A35574088C504A52C601CE16E5CD45C4DA169"
+manifest_digest = "F537657AADF8DD95039ACDADC491605F6E7C0B9D4E38ECE2AE9207CB151A9CDA"
 deps_digest = "8227D341C0550A37580C10FA45FE148A465225149C69D179737E0FE454AD6AEC"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "InterestBPS", name = "InterestBPS" },
   { id = "InterestMath", name = "InterestMath" },
+  { id = "MUSIC", name = "MUSIC" },
   { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "PLAY", name = "PLAY" },
+  { id = "PLAYTIME", name = "PLAYTIME" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
-  { id = "music", name = "music" },
-  { id = "play", name = "play" },
-  { id = "playtime", name = "playtime" },
 ]
 
 [[move.package]]
@@ -50,14 +50,47 @@ dependencies = [
 ]
 
 [[move.package]]
+id = "MUSIC"
+source = { local = "../coins/music" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[[move.package]]
 id = "MoveStdlib"
 source = { git = "https://github.com/MystenLabs/sui.git", rev = "c1f1ae650fb9f9248b39a569400b4420820868db", subdir = "crates/sui-framework/packages/move-stdlib" }
+
+[[move.package]]
+id = "PLAY"
+source = { local = "../coins/play" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
 
 [pinned.mainnet.InterestBPS]
 source = { local = "../../../miraicloud/mirainet/interest-mvr/bps" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
+
+[[move.package]]
+id = "PLAYTIME"
+source = { local = "../coins/playtime" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
 
 [[move.package]]
 id = "Sui"
@@ -76,55 +109,22 @@ dependencies = [
   { id = "Sui", name = "Sui" },
 ]
 
+[move.toolchain-version]
+compiler-version = "1.61.2"
+edition = "2024.beta"
+flavor = "sui"
+
 [pinned.mainnet.InterestMath]
 source = { local = "../../../miraicloud/mirainet/interest-mvr/math" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
-[[move.package]]
-id = "music"
-source = { local = "../coins/music" }
-
-dependencies = [
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-]
-
-[[move.package]]
-id = "play"
-source = { local = "../coins/play" }
-
-dependencies = [
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-]
-
 [pinned.mainnet.MoveStdlib]
 source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "ad937889f2f99bc666b05aaeadccb0d3d7d1f863" }
 use_environment = "mainnet"
 manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
-
-[[move.package]]
-id = "playtime"
-source = { local = "../coins/playtime" }
-
-dependencies = [
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
-]
-
-[move.toolchain-version]
-compiler-version = "1.61.2"
-edition = "2024.beta"
-flavor = "sui"
 
 [pinned.mainnet.Sui]
 source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "ad937889f2f99bc666b05aaeadccb0d3d7d1f863" }

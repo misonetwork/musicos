@@ -1,8 +1,8 @@
 [package]
-name = "music"
+name = "MUSIC"
 edition = "2024.beta"
 license = "Apache 2.0"
-authors = ["..."]      # e.g., ["Joe Smith (joesmith@noemail.com)", "John Snow (johnsnow@noemail.com)"]
+authors = ["Sona Labs, Pte Ltd (build@sonamusic.com)"]
 
 [dependencies]
 
