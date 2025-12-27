@@ -1,4 +1,4 @@
-// Copyright (c) Sona Labs, inc.
+// Copyright (c) Sona Labs, Pte Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 module musicos::share;
@@ -10,7 +10,7 @@ use sui::coin_registry::{Currency, MetadataCap};
 
 //=== Errors ===
 
-const ENotZeroSupply: u64 = 0;
+const EExceedsMaxSupply: u64 = 0;
 const EInvalidDecimals: u64 = 1;
 
 //=== Package Functions ===
@@ -18,24 +18,21 @@ const EInvalidDecimals: u64 = 1;
 public(package) fun intialize<Share>(
     name: String,
     description: String,
-    share_currency: &mut Currency<Share>,
-    share_metadata_cap: &MetadataCap<Share>,
-    mut share_treasury_cap: TreasuryCap<Share>,
+    icon_url: String,
+    currency: &mut Currency<Share>,
+    metadata_cap: &MetadataCap<Share>,
+    mut treasury_cap: TreasuryCap<Share>,
 ): Balance<Share> {
-    // Assert the currency has no supply.
-    assert!(share_treasury_cap.supply().value() == 0, ENotZeroSupply);
-    // Assert the currency has the correct number of decimals.
-    assert!(share_currency.decimals() == share_currency_decimals!(), EInvalidDecimals);
+    assert!(currency.decimals() == share_currency_decimals!(), EInvalidDecimals);
 
-    // Set metadata for the share currency.
-    share_currency.set_description(share_metadata_cap, description);
-    share_currency.set_icon_url(share_metadata_cap, share_icon_url!());
-    share_currency.set_name(share_metadata_cap, name);
+    currency.set_description(metadata_cap, description);
+    currency.set_icon_url(metadata_cap, icon_url);
+    currency.set_name(metadata_cap, name);
 
     // Mint the composition share balance.
-    let balance = share_treasury_cap.mint_balance(share_currency_supply!());
-    // Make the supply fixed.
-    share_currency.make_supply_fixed(share_treasury_cap);
+    let balance = treasury_cap.mint_balance(share_currency_supply!());
+    currency.make_supply_fixed(treasury_cap);
+    assert!(currency.total_supply().borrow() == share_currency_supply!(), EExceedsMaxSupply);
 
     balance
 }

@@ -1,55 +1,32 @@
-// Copyright (c) Sona Labs, Pte Ltd.
+// Copyright (c) Sona Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 module musicos::composition;
 
-use musicos::artifact::Artifact;
-use musicos::composition_artifact_variant::CompositionArtifactVariant;
+use interest_bps::bps::BPS;
 use musicos::composition_contributor_role::CompositionContributorRole;
-use musicos::contributor::{Contributor, ContributorID};
-use musicos::revenue_pool;
-use musicos::royalty_pool;
-use musicos::share::{Self, share_currency_supply, share_icon_url, share_currency_decimals};
+use musicos::contributor::Contributor;
+use musicos::protocol::Protocol;
+use musicos::share;
 use std::string::String;
-use sui::derived_object::claim;
+use std::type_name::{Self, TypeName};
+use sui::balance::Balance;
 use sui::clock::Clock;
-use sui::coin::{TreasuryCap};
+use sui::coin::TreasuryCap;
 use sui::coin_registry::{Currency, MetadataCap};
 use sui::event::emit;
-use sui::balance::Balance;
 use sui::vec_map::{Self, VecMap};
-use sui::vec_set::{Self, VecSet};
-use interest_bps::bps::BPS;
 
 //=== Structs ===
 
-public struct Composition<phantom CompositionShare> has key, store {
+public struct Composition<phantom CompositionShare> has key {
     id: UID,
-    // State of the composition.
     state: CompositionState,
-    // Title of the composition.
     title: String,
-    // Optional subtitle of the composition.
     subtitle: Option<String>,
-    // Map of addresses to composition contributor roles.
-    contributors: VecMap<ContributorID, VecSet<CompositionContributorRole>>,
-    // Optional map of language codes to Walrus Blob IDs of LRC files.
-    lyrics: Option<String>,
-    // Commission rate that Recordings must pay to the Composition.
+    contributors: VecMap<ID, vector<CompositionContributorRole>>,
     commission_rate: BPS,
-    // Optional Walrus quilt ID that acts as a folder for the composition's Walrus-based assets.
-    quilt_id: Option<String>,
-    // List of composition artifacts.
-    artifacts: vector<Artifact<CompositionArtifactVariant>>,
-    // Number of times the composition has been played.
-    play_count: u64,
-    // MetadataCap for the composition's share currency.
-    metadata_cap: MetadataCap<CompositionShare>,
-}
-
-public enum CompositionState has copy, drop, store {
-    Created,
-    Published(u64),
+    share_metadata_cap: MetadataCap<CompositionShare>,
 }
 
 public struct CompositionAdminCap has key, store {
@@ -57,185 +34,275 @@ public struct CompositionAdminCap has key, store {
     composition_id: ID,
 }
 
-public struct CompositionAdminCapKey() has copy, drop, store;
-
-//=== Events ===
-
-public struct CompositionCreatedEvent has copy, drop, store {
+public struct ShareCompositionPromise {
     composition_id: ID,
 }
 
-//=== Constants ===
+//=== Events ===
 
-const MAX_ARTIFACTS: u64 = 20;
-const MAX_CONTRIBUTORS: u64 = 100;
-const WORK_SHARE_DECIMALS: u8 = 6;
-const WORK_SHARE_SUPPLY: u64 = 100_000_000;
+public struct CompositionCreatedEvent has copy, drop {
+    composition_id: ID,
+    share_type: TypeName,
+}
+
+public struct CompositionContributorAddedEvent has copy, drop {
+    composition_id: ID,
+    contributor_id: ID,
+}
+
+public struct CompositionContributorRemovedEvent has copy, drop {
+    composition_id: ID,
+    contributor_id: ID,
+}
+
+public struct CompositionCommissionRateSetEvent has copy, drop {
+    composition_id: ID,
+    commission_rate: BPS,
+}
+
+//=== Enums ===
+
+public enum CompositionState has copy, drop, store {
+    Initialized,
+    Created,
+    Published(u64),
+}
 
 //=== Errors ===
 
-const EInvalidCompositionAdminCap: u64 = 0;
-const EMaxArtifactsExceeded: u64 = 1;
-const EMaxContributorsExceeded: u64 = 2;
-const EExceedsMaxSupply: u64 = 3;
-const EInvalidDecimals: u64 = 4;
-const EInvalidSymbol: u64 = 5;
+const EUnauthorized: u64 = 0;
+const ENotCreatedState: u64 = 1;
+const EContributorRoleAlreadyExists: u64 = 2;
+const EContributorRoleIndexOutOfBounds: u64 = 3;
+const EMinRolesNotMet: u64 = 4;
+const EMaxRolesExceeded: u64 = 5;
+const EInvalidComposition: u64 = 6;
 
 //=== Public Functions ===
 
 public fun new<CompositionShare>(
-    commission_rate: BPS,
     title: String,
-    currency: &mut Currency<CompositionShare>,
-    metadata_cap: MetadataCap<CompositionShare>,
-    treasury_cap: TreasuryCap<CompositionShare>,
+    subtitle: Option<String>,
+    commission_rate: BPS,
+    share_currency: &mut Currency<CompositionShare>,
+    share_metadata_cap: MetadataCap<CompositionShare>,
+    share_treasury_cap: TreasuryCap<CompositionShare>,
     ctx: &mut TxContext,
 ): (Composition<CompositionShare>, CompositionAdminCap, Balance<CompositionShare>) {
-    let mut composition = Composition<CompositionShare> {
+    let composition = Composition {
         id: object::new(ctx),
-        state: CompositionState::Created,
+        state: CompositionState::Initialized,
         title,
-        subtitle: option::none(),
+        subtitle,
         contributors: vec_map::empty(),
-        lyrics: option::none(),
         commission_rate,
-        quilt_id: option::none(),
-        artifacts: vector[],
-        play_count: 0,
-        metadata_cap,
+        share_metadata_cap,
     };
 
     let composition_admin_cap = CompositionAdminCap {
-        id: claim(&mut composition.id, CompositionAdminCapKey()),
+        id: object::new(ctx),
         composition_id: composition.id(),
     };
 
     let mut description = b"MusicOS Composition Shares for ".to_string();
     description.append(composition.id().to_address().to_string());
 
-    let balance = share::new<CompositionShare>(
+    let composition_shares = share::intialize<CompositionShare>(
         b"MusicOS Composition Share".to_string(),
         description,
-        share_icon_url!(),
-        currency,
-        &composition.metadata_cap,
-        treasury_cap,
+        share_currency,
+        &composition.share_metadata_cap,
+        share_treasury_cap,
     );
 
     emit(CompositionCreatedEvent {
         composition_id: composition.id(),
+        share_type: type_name::with_defining_ids<CompositionShare>(),
     });
 
-    (composition, composition_admin_cap, balance)
+    (composition, composition_admin_cap, composition_shares)
 }
 
-// TODO: Gate for protocol migration only.
-public fun destroy<CompositionShare>(self: Composition<CompositionShare>, cap: CompositionAdminCap): MetadataCap<CompositionShare> {
-    let Composition<CompositionShare> { id, metadata_cap,.. } = self;
-    id.delete();
-    let CompositionAdminCap { id, .. } = cap;
-    id.delete();
-    metadata_cap
+// Share a composition.
+// Required State: Initialized
+public fun share<CompositionShare>(
+    mut self: Composition<CompositionShare>,
+    promise: ShareCompositionPromise,
+) {
+    match (self.state) {
+        CompositionState::Initialized => {
+            let ShareCompositionPromise { composition_id } = promise;
+            assert!(self.id() == composition_id, EInvalidComposition);
+            self.state = CompositionState::Created;
+            transfer::share_object(self);
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
-// Publish a composition. Calling this function requires passing the Composition
-// object by value. This guarantees that a published composition is a shared object.
-#[allow(lint(share_owned))]
-public fun publish<CompositionShare>(mut self: Composition<CompositionShare>, cap: &CompositionAdminCap, clock: &Clock) {
+// Publish a composition.
+// Required State: Created
+public fun publish<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    clock: &Clock,
+) {
     self.authorize(cap);
-    self.state = CompositionState::Published(clock.timestamp_ms());
-    transfer::public_share_object(self);
+
+    match (self.state) {
+        CompositionState::Created => {
+            self.state = CompositionState::Published(clock.timestamp_ms());
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
-public fun set_subtitle<CompositionShare>(self: &mut Composition<CompositionShare>, cap: &CompositionAdminCap, subtitle: String) {
+// Set the title of a composition.
+// Required State: Created
+public fun set_title<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    title: String,
+) {
     self.authorize(cap);
-    self.subtitle.fill(subtitle)
+
+    match (self.state) {
+        CompositionState::Created => {
+            self.title = title;
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
-public fun set_quilt_id<CompositionShare>(self: &mut Composition<CompositionShare>, cap: &CompositionAdminCap, quilt_id: String) {
+// Set the subtitle of a composition.
+// Required State: Created
+public fun set_subtitle<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    subtitle: String,
+) {
     self.authorize(cap);
-    self.quilt_id = self.quilt_id.swap_or_fill(quilt_id);
+
+    match (self.state) {
+        CompositionState::Created => {
+            self.subtitle.swap_or_fill(subtitle);
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
+// Set the commission rate of a composition.
+public fun set_commission_rate<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    commission_rate: BPS,
+) {
+    self.authorize(cap);
+
+    self.commission_rate = commission_rate;
+
+    emit(CompositionCommissionRateSetEvent {
+        composition_id: self.id(),
+        commission_rate: commission_rate,
+    });
+}
+
+// Add a contributor to a composition.
+// Required State: Created
 public fun add_contributor<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    contributor_id: ContributorID
+    contributor: &Contributor,
+    roles: vector<CompositionContributorRole>,
+    protocol: &Protocol,
 ) {
     self.authorize(cap);
-    assert!(self.contributors.length() < MAX_CONTRIBUTORS, EMaxContributorsExceeded);
-    self.contributors.insert(contributor_id, vec_set::empty());
+
+    match (self.state) {
+        CompositionState::Created => {
+            assert!(roles.length() >= protocol.min_contributor_roles(), EMinRolesNotMet);
+            assert!(roles.length() <= protocol.max_contributor_roles(), EMaxRolesExceeded);
+            self.contributors.insert(contributor.id(), roles);
+
+            emit(CompositionContributorAddedEvent {
+                composition_id: self.id(),
+                contributor_id: contributor.id(),
+            });
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
+// Remove a contributor from a composition.
+// Required State: Created
 public fun remove_contributor<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    contributor_id: &ContributorID,
+    contributor_id: ID,
 ) {
     self.authorize(cap);
-    self.contributors.remove(contributor_id);
+
+    match (self.state) {
+        CompositionState::Created => {
+            self.contributors.remove(&contributor_id);
+
+            emit(CompositionContributorRemovedEvent {
+                composition_id: self.id(),
+                contributor_id: contributor_id,
+            });
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
-public fun add_contributor_role<CompositionShare>(
+// Add a role to a contributor.
+// Required State: Created
+public fun add_role_to_contributor<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    contributor_id: &ContributorID,
+    contributor_id: ID,
     role: CompositionContributorRole,
+    protocol: &Protocol,
 ) {
     self.authorize(cap);
-    self.contributors.get_mut(contributor_id).insert(role);
+
+    match (self.state) {
+        CompositionState::Created => {
+            let roles = self.contributors.get_mut(&contributor_id);
+            assert!(!roles.contains(&role), EContributorRoleAlreadyExists);
+            assert!(roles.length() < protocol.max_contributor_roles(), EMaxRolesExceeded);
+            roles.push_back(role);
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
-public fun remove_contributor_role<CompositionShare>(
+// Remove a role from a contributor.
+// Required State: Created
+public fun remove_role_from_contributor<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    contributor_id: &ContributorID,
-    role: CompositionContributorRole,
+    contributor_id: ID,
+    role_idx: u64,
+    protocol: &Protocol,
 ) {
     self.authorize(cap);
-    self.contributors.get_mut(contributor_id).remove(&role);
+
+    match (self.state) {
+        CompositionState::Created => {
+            let roles = self.contributors.get_mut(&contributor_id);
+            assert!(role_idx < roles.length(), EContributorRoleIndexOutOfBounds);
+            assert!(roles.length() > protocol.min_contributor_roles(), EMinRolesNotMet);
+            roles.swap_remove(role_idx);
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
-public fun add_artifact<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    artifact: Artifact<CompositionArtifactVariant>,
-) {
-    self.authorize(cap);
-    assert!(self.artifacts.length() < MAX_ARTIFACTS, EMaxArtifactsExceeded);
-    self.artifacts.push_back(artifact);
-}
+//=== Package Functions ===
 
-public fun remove_artifact<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    artifact_idx: u64,
-): Artifact<CompositionArtifactVariant> {
-    self.authorize(cap);
-    self.artifacts.remove(artifact_idx)
-}
-
-#[allow(lint(share_owned))]
-public fun initialize_revenue_pool<CompositionShare, RevenueCurrency>(self: &mut Composition<CompositionShare>) {
-    let revenue_pool = revenue_pool::new<RevenueCurrency>(&mut self.id);
-    transfer::public_share_object(revenue_pool);
-}
-
-#[allow(lint(share_owned))]
-public fun initialize_royalty_pool<CompositionShare, RevenueCurrency>(self: &mut Composition<CompositionShare>) {
-    let royalty_pool = royalty_pool::new<CompositionShare, RevenueCurrency>(&mut self.id);
-    transfer::public_share_object(royalty_pool);
-}
-
-// Derive the address of the Composition's RevenuePool and transfer
-// funds to the RevenuePool's balance accumulator.
-public fun deposit_revenue<CompositionShare, RevenueCurrency>(self: &Composition<CompositionShare>, balance: Balance<RevenueCurrency>, ctx: &mut TxContext) {
-    // Assert the RevenuePool for the provided Composition/Currency pair exists.
-    revenue_pool::assert_exists<RevenueCurrency>(&self.id);
-    // Transfer the funds to the RevenuePool's balance accumulator.
-    // TODO: Migrate to accumulators when possible.
-    //balance.send_funds(revenue_pool::derive_address<Currency>(self.id()));
-    transfer::public_transfer(balance.into_coin(ctx), revenue_pool::derive_address<RevenueCurrency>(self.id()));
+public(package) fun uid_mut<CompositionShare>(self: &mut Composition<CompositionShare>): &mut UID {
+    &mut self.id
 }
 
 //=== Public View Functions ===
@@ -244,43 +311,29 @@ public fun id<CompositionShare>(self: &Composition<CompositionShare>): ID {
     self.id.to_inner()
 }
 
-public fun authorize<CompositionShare>(self: &Composition<CompositionShare>, cap: &CompositionAdminCap) {
-    assert!(object::id(self) == cap.composition_id, EInvalidCompositionAdminCap);
+public fun title<CompositionShare>(self: &Composition<CompositionShare>): &String {
+    &self.title
+}
+
+public fun subtitle<CompositionShare>(self: &Composition<CompositionShare>): &Option<String> {
+    &self.subtitle
+}
+
+public fun contributors<CompositionShare>(
+    self: &Composition<CompositionShare>,
+): &VecMap<ID, vector<CompositionContributorRole>> {
+    &self.contributors
 }
 
 public fun commission_rate<CompositionShare>(self: &Composition<CompositionShare>): BPS {
     self.commission_rate
 }
 
-
-//=== Package Functions ===
-
-public(package) fun uid<CompositionShare>(self: &Composition<CompositionShare>): &UID {
-    &self.id
-}
-
-public(package) fun uid_mut<CompositionShare>(self: &mut Composition<CompositionShare>): &mut UID {
-    &mut self.id
-}
-
 //=== Private Functions ===
 
-fun build_work_share_icon_url<Work: key>(work: &Work): String {
-    let mut name = b"https://img.coda.network/workshare.webp".to_string();
-    name.append(object::id(work).to_address().to_string());
-    name
-}
-
-fun build_work_share_name<Work: key>(work: &Work): String {
-    let mut name = b"CODASHARE-".to_string();
-    name.append(object::id(work).to_address().to_string());
-    name
-}
-
-fun build_work_share_description<Work: key>(work: &Work): String {
-    let mut description = b"Coda shares for".to_string();
-    description.append(" ");
-    description.append(object::id(work).to_address().to_string());
-    description.append(" ");
-    description
+public(package) fun authorize<CompositionShare>(
+    self: &Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+) {
+    assert!(self.id() == cap.composition_id, EUnauthorized);
 }

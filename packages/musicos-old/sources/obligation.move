@@ -7,15 +7,12 @@ module musicos::obligation;
 use interest_bps::bps::BPS;
 use std::u64::min;
 use std::string::String;
-use sui::balance::{Self, Balance};
-use sui::coin::{Self, Coin};
+use sui::balance::Balance;
 use sui::clock::Clock;
-use sui::balance::withdraw_funds_from_object;
 
 //=== Structs ===
 
-// TODO: Maybe refactor to remove copy?
-public struct Obligation has copy, drop, store {
+public struct Obligation has drop, store {
     kind: ObligationKind,
     state: ObligationState,
     recipient: address,

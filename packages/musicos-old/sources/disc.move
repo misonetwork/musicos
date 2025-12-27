@@ -1,4 +1,4 @@
-// Copyright (c) Sona Labs, Inc.
+// Copyright (c) Sona Labs, Pte Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 module musicos::disc;
@@ -9,8 +9,8 @@ use std::string::String;
 //=== Structs ===
 
 public struct Disc has drop, store {
-    tracks: vector<Track>,
     artwork: Option<String>,
+    tracks: vector<Track>,
     duration: u64,
 }
 
@@ -33,8 +33,8 @@ public fun new(tracks: vector<Track>): Disc {
     });
 
     Disc {
-        tracks,
         artwork: option::none(),
+        tracks,
         duration,
     }
 }
