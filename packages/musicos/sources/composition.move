@@ -34,9 +34,7 @@ public struct CompositionAdminCap has key, store {
     composition_id: ID,
 }
 
-public struct ShareCompositionPromise {
-    composition_id: ID,
-}
+public struct ShareCompositionPromise(ID)
 
 //=== Events ===
 
@@ -127,11 +125,11 @@ public fun new<CompositionShare>(
 // Required State: Initialized
 public fun share<CompositionShare>(
     mut self: Composition<CompositionShare>,
-    promise: ShareCompositionPromise,
+    share_composition_promise: ShareCompositionPromise,
 ) {
     match (self.state) {
         CompositionState::Initialized => {
-            let ShareCompositionPromise { composition_id } = promise;
+            let ShareCompositionPromise(composition_id) = share_composition_promise;
             assert!(self.id() == composition_id, EInvalidComposition);
             self.state = CompositionState::Created;
             transfer::share_object(self);
