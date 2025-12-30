@@ -3,6 +3,7 @@
 
 module musicos::disc;
 
+use musicos::protocol::Protocol;
 use musicos::track::Track;
 use std::string::String;
 
@@ -14,18 +15,14 @@ public struct Disc has drop, store {
     duration: u64,
 }
 
-//=== Constants ===
-
-const MAX_TRACKS: u64 = 50;
-
 //=== Errors ===
 
 const EMaxTracksExceeded: u64 = 0;
 
 //=== Public Functions ===
 
-public fun new(tracks: vector<Track>): Disc {
-    assert!(tracks.length() <= MAX_TRACKS, EMaxTracksExceeded);
+public fun new(tracks: vector<Track>, protocol: &Protocol): Disc {
+    assert!(tracks.length() <= protocol.max_tracks_per_disc(), EMaxTracksExceeded);
 
     let mut duration = 0;
     tracks.do_ref!(|track| {

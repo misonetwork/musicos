@@ -6,6 +6,7 @@ module musicos::release;
 use interest_bps::bps::{Self, BPS};
 use interest_math::u64::sum;
 use musicos::disc::Disc;
+use musicos::protocol::Protocol;
 use musicos::track_identifier::TrackIdentifier;
 use musicos::track_info;
 use musicos::track_sequence::{Self, TrackSequence};
@@ -65,16 +66,21 @@ const ENotCreatedState: u64 = 2;
 const EInvalidReleaseForPromise: u64 = 3;
 const EInvalidTrackSplitsLength: u64 = 4;
 const EInvalidTrackSplitsSum: u64 = 5;
+const EMaxDiscsExceeded: u64 = 6;
 
 //=== Public Functions ===
 
+// Create a new release.
 public fun new(
     kind: ReleaseKind,
     title: String,
     subtitle: Option<String>,
     discs: vector<Disc>,
+    protocol: &Protocol,
     ctx: &mut TxContext,
 ): (Release, ReleaseAdminCap, ShareReleasePromise) {
+    assert!(discs.length() <= protocol.max_discs_per_release(), EMaxDiscsExceeded);
+
     // Build a track sequence for the release.
     let track_sequence = track_sequence::new(&discs);
 
@@ -99,6 +105,8 @@ public fun new(
     (release, release_admin_cap, share_release_promise)
 }
 
+// Turn the release into a shared object.
+// Required State: Initialized
 public fun share(mut self: Release, share_release_promise: ShareReleasePromise) {
     match (self.state) {
         ReleaseState::Initialized => {
@@ -117,23 +125,32 @@ public fun share(mut self: Release, share_release_promise: ShareReleasePromise) 
     }
 }
 
+// Transition the release from `Created` state to `Published` state.
+// To successfully publish, the track splits must be set and the sum of the track splits must be 10_000 (100%).
+// Required State: Created
 public fun publish(self: &mut Release, cap: &ReleaseAdminCap, clock: &Clock) {
     self.authorize(cap);
 
     match (self.state) {
         ReleaseState::Created => {
-            // Assert the number of track splits is equal to the length of the track sequence.
-            assert!(
-                self.track_splits.length() == self.track_sequence.length() as u64,
-                EInvalidTrackSplitsLength,
-            );
-            // Assert the sum of the track splits is equal to 10_000 (100%).
-            assert!(
-                sum(self.track_splits.map!(|split| split.value())) == bps::max_value!(),
-                EInvalidTrackSplitsSum,
-            );
+            self.assert_track_splits_length();
+            self.assert_track_splits_sum();
 
             self.state = ReleaseState::Published(clock.timestamp_ms());
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+// Set the track splits for the release.
+// Required State: Created
+public fun set_track_splits(self: &mut Release, track_splits: vector<BPS>) {
+    match (self.state) {
+        ReleaseState::Created => {
+            self.track_splits = track_splits;
+
+            self.assert_track_splits_length();
+            self.assert_track_splits_sum();
         },
         _ => abort ENotCreatedState,
     }
@@ -149,4 +166,20 @@ public fun id(self: &Release): ID {
 
 fun authorize(self: &Release, cap: &ReleaseAdminCap) {
     assert!(self.id() == cap.release_id, EUnauthorized);
+}
+
+// Assert the number of track splits is equal to the length of the track sequence.
+fun assert_track_splits_length(self: &Release) {
+    assert!(
+        self.track_splits.length() == self.track_sequence.length() as u64,
+        EInvalidTrackSplitsLength,
+    );
+}
+
+// Assert the sum of the track splits is equal to 10_000 (100%).
+fun assert_track_splits_sum(self: &Release) {
+    assert!(
+        sum(self.track_splits.map!(|split| split.value())) == bps::max_value!(),
+        EInvalidTrackSplitsSum,
+    );
 }
