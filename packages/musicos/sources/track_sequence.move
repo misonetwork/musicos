@@ -4,47 +4,62 @@
 module musicos::track_sequence;
 
 use musicos::disc::Disc;
+use musicos::protocol::Protocol;
+use musicos::track_identifier::{Self, TrackIdentifier};
 
 //=== Errors ===
 
 const ENoDiscs: u64 = 0;
 const EDiscIndexOutOfBounds: u64 = 1;
 const ETrackIndexOutOfBounds: u64 = 2;
+const EMaxSequenceLengthExceeded: u64 = 3;
+const ESequenceIndexOutOfBounds: u64 = 4;
 
 //=== Structs ===
 
 public struct TrackSequence has drop, store {
     // Number of tracks on each disc.
     tracks_per_disc: vector<u8>,
-    // Total number of tracks in the sequence.
-    length: u16,
+    lookup: vector<u16>,
 }
 
 //=== Package Functions ===
 
 // Create a new track sequence.
-public(package) fun new(discs: &vector<Disc>): TrackSequence {
+public(package) fun new(discs: &vector<Disc>, protocol: &Protocol): TrackSequence {
     assert!(!discs.is_empty(), ENoDiscs);
 
     let mut tracks_per_disc: vector<u8> = vector[];
-    let mut length: u16 = 0;
+    let mut lookup: vector<u16> = vector[];
 
-    discs.do_ref!(|disc| {
+    discs.length().do!(|disc_idx| {
+        let disc = &discs[disc_idx];
         let track_count = disc.tracks().length();
+
+        track_count.do!(|track_idx| {
+            let packed = ((disc_idx as u16) << 8) | (track_idx as u16);
+            lookup.push_back(packed);
+        });
+
         tracks_per_disc.push_back(track_count as u8);
-        length = length + (track_count as u16);
     });
+
+    // Assert the length of the track sequence doesn't exceed the protocol's allowed maximum.
+    assert!(
+        lookup.length() <= protocol.max_track_sequence_length() as u64,
+        EMaxSequenceLengthExceeded,
+    );
 
     TrackSequence {
         tracks_per_disc,
-        length,
+        lookup,
     }
 }
 
 //=== Public View Functions ===
 
 // Get the next disc and track indexes given the current disc and track indexes.
-public fun next(self: &TrackSequence, disc_idx: u8, track_idx: u8): (u8, u8) {
+public fun next(self: &TrackSequence, disc_idx: u8, track_idx: u8): TrackIdentifier {
     let disc_idx_u64 = disc_idx as u64;
 
     let disc_count = self.tracks_per_disc.length();
@@ -54,16 +69,16 @@ public fun next(self: &TrackSequence, disc_idx: u8, track_idx: u8): (u8, u8) {
     assert!(track_idx < track_count, ETrackIndexOutOfBounds);
 
     if (track_idx + 1 < track_count) {
-        (disc_idx, track_idx + 1)
+        track_identifier::new(disc_idx, track_idx + 1)
     } else if (disc_idx_u64 + 1 < disc_count) {
-        (disc_idx + 1, 0)
+        track_identifier::new(disc_idx + 1, 0)
     } else {
-        (0, 0)
+        track_identifier::new(0, 0)
     }
 }
 
 // Get the previous disc and track indexes given the current disc and track indexes.
-public fun previous(self: &TrackSequence, disc_idx: u8, track_idx: u8): (u8, u8) {
+public fun previous(self: &TrackSequence, disc_idx: u8, track_idx: u8): TrackIdentifier {
     let disc_idx_u64 = disc_idx as u64;
 
     let disc_count = self.tracks_per_disc.length();
@@ -73,21 +88,34 @@ public fun previous(self: &TrackSequence, disc_idx: u8, track_idx: u8): (u8, u8)
     assert!(track_idx < track_count, ETrackIndexOutOfBounds);
 
     if (track_idx > 0) {
-        (disc_idx, track_idx - 1)
+        track_identifier::new(disc_idx, track_idx - 1)
     } else if (disc_idx_u64 > 0) {
         let prev_disc_idx = (disc_idx_u64 - 1) as u8;
         let prev_track_count = self.tracks_per_disc[disc_idx_u64 - 1];
-        (prev_disc_idx, prev_track_count - 1)
+        track_identifier::new(prev_disc_idx, prev_track_count - 1)
     } else {
         let last_disc_idx = (disc_count - 1) as u8;
         let last_track_count = self.tracks_per_disc[disc_count - 1];
-        (last_disc_idx, last_track_count - 1)
+        track_identifier::new(last_disc_idx, last_track_count - 1)
     }
 }
 
 // Length of the track sequence.
-public fun length(self: &TrackSequence): u16 {
-    self.length
+public fun length(self: &TrackSequence): u8 {
+    self.lookup.length() as u8
+}
+
+// Get the disc and track indexes for a given sequence index.
+public fun track_identifier(self: &TrackSequence, sequence_idx: u8): TrackIdentifier {
+    let sequence_idx_u64 = sequence_idx as u64;
+    let lookup_length = self.lookup.length();
+    assert!(sequence_idx_u64 < lookup_length, ESequenceIndexOutOfBounds);
+
+    let packed = self.lookup[sequence_idx_u64];
+    let disc_idx = ((packed >> 8) & 0xFF) as u8;
+    let track_idx = (packed & 0xFF) as u8;
+
+    track_identifier::new(disc_idx, track_idx)
 }
 
 // Number of tracks on each disc.
