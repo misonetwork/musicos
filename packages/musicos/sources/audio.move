@@ -37,7 +37,7 @@ public fun new<Authority: drop>(
     protocol: &Protocol,
 ): Audio {
     assert!(
-        protocol.audio_creation_authorities().contains(&with_defining_ids<Authority>()),
+        protocol.audio_creation_authority_types().contains(&with_defining_ids<Authority>()),
         EInvalidAudioCreationAuthority,
     );
 
@@ -89,6 +89,10 @@ public fun samples(self: &Audio): u64 {
 
 public fun digest(self: &Audio): &vector<u8> {
     &self.stream.digest
+}
+
+public fun duration(self: &Audio): u64 {
+    self.stream.samples / (self.stream.sample_rate_hz as u64)
 }
 
 public fun spectral_centroid(self: &Audio): I32 {

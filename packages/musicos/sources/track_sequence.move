@@ -7,14 +7,6 @@ use musicos::disc::Disc;
 use musicos::protocol::Protocol;
 use musicos::track_identifier::{Self, TrackIdentifier};
 
-//=== Errors ===
-
-const ENoDiscs: u64 = 0;
-const EDiscIndexOutOfBounds: u64 = 1;
-const ETrackIndexOutOfBounds: u64 = 2;
-const EMaxSequenceLengthExceeded: u64 = 3;
-const ESequenceIndexOutOfBounds: u64 = 4;
-
 //=== Structs ===
 
 public struct TrackSequence has drop, store {
@@ -22,6 +14,14 @@ public struct TrackSequence has drop, store {
     tracks_per_disc: vector<u8>,
     lookup: vector<u16>,
 }
+
+//=== Errors ===
+
+const ENoDiscs: u64 = 0;
+const EDiscIndexOutOfBounds: u64 = 1;
+const ETrackIndexOutOfBounds: u64 = 2;
+const EMaxSequenceLengthExceeded: u64 = 3;
+const ESequenceIndexOutOfBounds: u64 = 4;
 
 //=== Package Functions ===
 

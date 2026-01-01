@@ -3,6 +3,8 @@
 
 module musicos::contributor;
 
+//=== Structs ===
+
 public struct Contributor has key {
     id: UID,
     kind: ContributorKind,
@@ -13,10 +15,14 @@ public struct ContributorAdminCap has key, store {
     contributor_id: ID,
 }
 
+//=== Enums ===
+
 public enum ContributorKind has copy, drop, store {
     Individual,
     Group,
 }
+
+//=== Public Functions ===
 
 public fun new(ctx: &mut TxContext): ContributorAdminCap {
     let contributor = Contributor {
@@ -33,6 +39,8 @@ public fun new(ctx: &mut TxContext): ContributorAdminCap {
 
     contributor_admin_cap
 }
+
+//=== Public View Functions ===
 
 public fun id(contributor: &Contributor): ID {
     object::id(contributor)

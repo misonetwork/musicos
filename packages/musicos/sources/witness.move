@@ -3,7 +3,11 @@
 
 module musicos::witness;
 
+//=== Structs ===
+
 public struct Witness() has drop;
+
+//=== Package Functions ===
 
 public(package) fun new(): Witness {
     Witness()

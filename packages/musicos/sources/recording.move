@@ -141,7 +141,10 @@ public fun add_stem<RecordingShare>(
 
     match (self.state) {
         RecordingState::Created => {
-            assert!(self.stems.length() < protocol.max_recording_stems(), EMaxStemsExceeded);
+            assert!(
+                self.stems.length() < protocol.max_stems_per_recording() as u64,
+                EMaxStemsExceeded,
+            );
 
             emit(RecordingStemAddedEvent {
                 recording_id: self.id(),
@@ -182,6 +185,18 @@ public fun remove_stem<RecordingShare>(
 
 public fun id<RecordingShare>(recording: &Recording<RecordingShare>): ID {
     recording.id.to_inner()
+}
+
+public fun composition_id<RecordingShare>(recording: &Recording<RecordingShare>): ID {
+    recording.composition_id
+}
+
+public fun composition_commission_rate<RecordingShare>(recording: &Recording<RecordingShare>): BPS {
+    recording.composition_commission_rate
+}
+
+public fun genre_id<RecordingShare>(recording: &Recording<RecordingShare>): ID {
+    recording.genre_id
 }
 
 public fun master<RecordingShare>(recording: &Recording<RecordingShare>): &Audio {

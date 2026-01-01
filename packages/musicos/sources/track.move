@@ -29,7 +29,7 @@ public fun new<RecordingShare>(
         composition_id: recording.composition_id(),
         composition_commission_rate: recording.composition_commission_rate(),
         recording_id: recording.id(),
-        duration: recording.master().stream().duration(),
+        duration: recording.master().duration(),
         genre_id: recording.genre_id(),
     }
 }

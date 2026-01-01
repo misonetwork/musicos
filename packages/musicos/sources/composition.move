@@ -73,7 +73,7 @@ const ENotCreatedState: u64 = 1;
 const EContributorRoleAlreadyExists: u64 = 2;
 const EContributorRoleIndexOutOfBounds: u64 = 3;
 const EMinRolesNotMet: u64 = 4;
-const EMaxRolesExceeded: u64 = 5;
+const EExceedsMaxRoles: u64 = 5;
 const EInvalidComposition: u64 = 6;
 
 //=== Public Functions ===
@@ -218,8 +218,11 @@ public fun add_contributor<CompositionShare>(
 
     match (self.state) {
         CompositionState::Created => {
-            assert!(roles.length() >= protocol.min_contributor_roles(), EMinRolesNotMet);
-            assert!(roles.length() <= protocol.max_contributor_roles(), EMaxRolesExceeded);
+            assert!(roles.length() >= protocol.min_roles_per_contributor() as u64, EMinRolesNotMet);
+            assert!(
+                roles.length() <= protocol.max_roles_per_contributor() as u64,
+                EExceedsMaxRoles,
+            );
             self.contributors.insert(contributor.id(), roles);
 
             emit(CompositionContributorAddedEvent {
@@ -268,7 +271,7 @@ public fun add_role_to_contributor<CompositionShare>(
         CompositionState::Created => {
             let roles = self.contributors.get_mut(&contributor_id);
             assert!(!roles.contains(&role), EContributorRoleAlreadyExists);
-            assert!(roles.length() < protocol.max_contributor_roles(), EMaxRolesExceeded);
+            assert!(roles.length() < protocol.max_roles_per_contributor() as u64, EExceedsMaxRoles);
             roles.push_back(role);
         },
         _ => abort ENotCreatedState,
@@ -290,7 +293,7 @@ public fun remove_role_from_contributor<CompositionShare>(
         CompositionState::Created => {
             let roles = self.contributors.get_mut(&contributor_id);
             assert!(role_idx < roles.length(), EContributorRoleIndexOutOfBounds);
-            assert!(roles.length() > protocol.min_contributor_roles(), EMinRolesNotMet);
+            assert!(roles.length() > protocol.min_roles_per_contributor() as u64, EMinRolesNotMet);
             roles.swap_remove(role_idx);
         },
         _ => abort ENotCreatedState,

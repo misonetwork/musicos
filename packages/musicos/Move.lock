@@ -113,3 +113,16 @@ dependencies = [
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
 ]
+
+[move.toolchain-version]
+compiler-version = "1.61.2"
+edition = "2024.beta"
+flavor = "sui"
+
+[env]
+
+[env.mirainet]
+chain-id = "41a7d3bf"
+original-published-id = "0xb12beac4203c9684c843a1bc0a2636d28ad698f6219c1da3db6b3bfcd6bcff75"
+latest-published-id = "0xb12beac4203c9684c843a1bc0a2636d28ad698f6219c1da3db6b3bfcd6bcff75"
+published-version = "1"

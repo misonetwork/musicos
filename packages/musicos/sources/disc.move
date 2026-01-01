@@ -22,7 +22,7 @@ const EMaxTracksExceeded: u64 = 0;
 //=== Public Functions ===
 
 public fun new(tracks: vector<Track>, protocol: &Protocol): Disc {
-    assert!(tracks.length() <= protocol.max_tracks_per_disc(), EMaxTracksExceeded);
+    assert!(tracks.length() <= protocol.max_tracks_per_disc() as u64, EMaxTracksExceeded);
 
     let mut duration = 0;
     tracks.do_ref!(|track| {

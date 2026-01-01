@@ -5,11 +5,15 @@ module musicos::snapshot;
 
 use std::string::String;
 
+//=== Structs ===
+
 public struct Snapshot has drop, store {
     kind: SnapshotKind,
     contributor_id: ID,
     blob_id: String,
 }
+
+//=== Enums ===
 
 public enum SnapshotKind has copy, drop, store {
     Audio(String),

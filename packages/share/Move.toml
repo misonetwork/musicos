@@ -1,8 +1,8 @@
 [package]
-name = "share_currency_template"
+name = "share"
 edition = "2024.beta"
 license = "Apache 2.0"
-authors = ["Studio Mirai, LLC (dev@sm.xyz)"]
+authors = ["Sona Labs, Inc. (musicos@sonamusic.com)"]
 
 [dependencies]
 

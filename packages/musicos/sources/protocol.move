@@ -7,6 +7,8 @@ use interest_bps::bps::{Self, BPS};
 use std::type_name::{TypeName, with_defining_ids};
 use sui::vec_set::{Self, VecSet};
 
+//=== Structs ===
+
 public struct PROTOCOL() has drop;
 
 public struct Protocol has key, store {
@@ -25,6 +27,8 @@ public struct Protocol has key, store {
     max_tracks_per_disc: u8,
     max_track_sequence_length: u8,
 }
+
+//=== Constants ===
 
 const DEFAULT_FACILITATOR_HISTORY_WINDOW_LENGTH: u8 = 100;
 const DEFAULT_FACILITATOR_COMMISSION_RATE_VALUE: u64 = 10; // 0.1%
@@ -123,12 +127,12 @@ public fun set_max_track_sequence_length(self: &mut Protocol, length: u8) {
 
 //=== Public View Functions ===
 
-public fun audio_creation_authority_types(self: &Protocol): VecSet<TypeName> {
-    self.audio_creation_authority_types
+public fun audio_creation_authority_types(self: &Protocol): &VecSet<TypeName> {
+    &self.audio_creation_authority_types
 }
 
-public fun contributor_verification_authority_types(self: &Protocol): VecSet<TypeName> {
-    self.contributor_verification_authority_types
+public fun contributor_verification_authority_types(self: &Protocol): &VecSet<TypeName> {
+    &self.contributor_verification_authority_types
 }
 
 public fun facilitator_commission_rate(self: &Protocol): BPS {
@@ -139,8 +143,8 @@ public fun facilitator_history_window_length(self: &Protocol): u8 {
     self.facilitator_history_window_length
 }
 
-public fun facilitator_types(self: &Protocol): VecSet<TypeName> {
-    self.facilitator_types
+public fun facilitator_types(self: &Protocol): &VecSet<TypeName> {
+    &self.facilitator_types
 }
 
 public fun max_roles_per_contributor(self: &Protocol): u8 {

@@ -4,20 +4,15 @@
 module musicos::release;
 
 use interest_bps::bps::{Self, BPS};
-use interest_math::i128;
 use interest_math::u64::sum;
 use musicos::disc::Disc;
-use musicos::facilitator::{Self, Facilitator};
 use musicos::protocol::Protocol;
 use musicos::revenue_pool::{Self, RevenuePool};
 use musicos::royalty_pool;
 use musicos::track_sequence::{Self, TrackSequence};
 use std::string::String;
-use std::type_name::{TypeName, with_defining_ids};
-use std::u64::min;
 use sui::clock::Clock;
 use sui::event::emit;
-use sui::random::Random;
 
 //=== Structs ===
 
@@ -45,10 +40,8 @@ public struct ReleaseCreatedEvent has copy, drop {
     release_id: ID,
 }
 
-public struct ReleaseRevenueForwardedEvent has copy, drop {
+public struct ReleaseRevenueForwardedEvent<phantom Currency> has copy, drop {
     release_id: ID,
-    timestamp: u64,
-    currency_type: TypeName,
     composition_id: ID,
     composition_split_value: u64,
     recording_id: ID,
@@ -80,7 +73,6 @@ const EInvalidTrackSplitsLength: u64 = 5;
 const EInvalidTrackSplitsSum: u64 = 6;
 const EMaxDiscsExceeded: u64 = 7;
 const EIncorrectRevenuePool: u64 = 8;
-const EMaxTracksPerReleaseExceeded: u64 = 9;
 
 //=== Public Functions ===
 
@@ -97,7 +89,7 @@ public fun new(
     assert!(discs.length() <= protocol.max_discs_per_release() as u64, EMaxDiscsExceeded);
 
     // Build a track sequence for the release based on the number of discs.
-    let track_sequence = track_sequence::new(&discs);
+    let track_sequence = track_sequence::new(&discs, protocol);
 
     let release = Release {
         id: object::new(ctx),
@@ -172,50 +164,38 @@ public fun set_track_splits(self: &mut Release, track_splits: vector<BPS>) {
 }
 
 // Forward funds from a release's revenue pool to the royalty pools of the release's compositions and recordings.
-entry fun forward_revenue<Currency, Identity: key>(
-    self: &Release,
-    revenue_pool: &mut RevenuePool<Currency>,
-    facilitator: &mut Facilitator<Identity>,
-    facilitator_identity: &Identity,
-    protocol: &Protocol,
-    clock: &Clock,
-    random: &Random,
-    ctx: &mut TxContext,
-) {
+public fun forward_revenue<Currency>(self: &Release, revenue_pool: &mut RevenuePool<Currency>) {
     match (self.state) {
         ReleaseState::Published(_) => {
-            // Authorize the facilitator to forward revenue.
-            facilitator.authorize(facilitator_identity, protocol);
             // Assert the provided revenue pool is the correct one for the release.
             self.assert_revenue_pool_for_release(revenue_pool);
 
             // Acquire a mutable reference to the revenue pool's balance.
             let revenue = revenue_pool.balance_mut();
-            // Pay a commission to the facilitator.
-            facilitator::pay_commission<Currency>(revenue, protocol, ctx);
 
             // Store the value to distribute to the compositions and recordings.
             let distribution_value = revenue.value();
 
-            let mut rg = random.new_generator(ctx);
+            let release_id = self.id();
 
-            let mut sequence_indexes = vector::tabulate!(self.track_sequence.length(), |i| i as u8);
-            rg.shuffle(&mut sequence_indexes);
-
-            sequence_indexes.destroy!(|i| {
+            self.track_sequence.length().do!(|i| {
                 // Derive the track identifier for the given track sequence index.
                 let track_identifier = self.track_sequence.track_identifier(i);
+
                 // Fetch the disc and track with the track identifier.
                 let disc = &self.discs[track_identifier.disc_idx() as u64];
                 let track = &disc.tracks()[track_identifier.track_idx() as u64];
 
                 // Fetch the track split rate for the given track sequence index.
                 let track_split_rate = self.track_splits[i as u64];
+
                 // Split the track's revenue from the principal.
                 let rec_split_value = track_split_rate.calc(distribution_value);
                 let mut rec_split = revenue.split(rec_split_value);
+
                 // Calculate the composition's revenue share, and split the value from the recording's revenue.
-                let comp_split_value = track.composition_commission_rate().calc(rec_split.value());
+                // Use rec_split_value directly since split() guarantees the exact amount requested.
+                let comp_split_value = track.composition_commission_rate().calc(rec_split_value);
                 let comp_split = rec_split.split(comp_split_value);
 
                 let comp_id = track.composition_id();
@@ -225,10 +205,8 @@ entry fun forward_revenue<Currency, Identity: key>(
                 rec_split.send_funds(royalty_pool::derived_address<Currency>(rec_id));
                 comp_split.send_funds(royalty_pool::derived_address<Currency>(comp_id));
 
-                emit(ReleaseRevenueForwardedEvent {
-                    release_id: self.id(),
-                    timestamp: clock.timestamp_ms(),
-                    currency_type: with_defining_ids<Currency>(),
+                emit(ReleaseRevenueForwardedEvent<Currency> {
+                    release_id,
                     composition_id: comp_id,
                     composition_split_value: comp_split_value,
                     recording_id: rec_id,

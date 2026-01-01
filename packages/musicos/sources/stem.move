@@ -6,10 +6,14 @@ module musicos::stem;
 use musicos::audio::Audio;
 use std::string::String;
 
+//=== Structs ===
+
 public struct Stem has drop, store {
     audio: Audio,
     description: String,
 }
+
+//=== Public Functions ===
 
 public fun new(audio: Audio, description: String): Stem {
     Stem {
@@ -17,6 +21,8 @@ public fun new(audio: Audio, description: String): Stem {
         description,
     }
 }
+
+//=== Public View Functions ===
 
 public fun audio(self: &Stem): &Audio {
     &self.audio

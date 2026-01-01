@@ -3,11 +3,17 @@
 
 module musicos::track_identifier;
 
-public struct TrackIdentifier(u8, u8) has copy, drop, store;
+//=== Structs ===
+
+public struct TrackIdentifier(u8, u8) has drop, store;
+
+//=== Package Functions ===
 
 public(package) fun new(disc_index: u8, track_index: u8): TrackIdentifier {
     TrackIdentifier(disc_index, track_index)
 }
+
+//=== Package View Functions ===
 
 public(package) fun disc_idx(self: &TrackIdentifier): u8 {
     self.0
