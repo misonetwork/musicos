@@ -3,6 +3,7 @@ module musicos::royalty_entitlement;
 use musicos::royalty_pool::RoyaltyPool;
 use std::type_name::{TypeName, with_defining_ids};
 use sui::balance::{Self, Balance};
+use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
 use sui::vec_set::{Self, VecSet};
 
@@ -16,7 +17,7 @@ public struct RoyaltyEntitlement<phantom Share> has key, store {
 
 public enum RoyaltyEntitlementState has copy, drop, store {
     Unlocked,
-    Locked(VecMap<TypeName, u256>), // claim index
+    Locked(VecMap<TypeName, u256>), // claim index by currency type
     Unlocking(u64), // unlock epoch
 }
 
@@ -24,6 +25,49 @@ public struct ShareDepositReceipt {
     entitlement_id: ID,
     deposit_value: u64,
     pool_currency_types: VecSet<TypeName>,
+}
+
+//=== Events ===
+
+public struct RoyaltyEntitlementCreated has copy, drop {
+    entitlement_id: ID,
+}
+
+public struct RoyaltyEntitlementLockedEvent has copy, drop {
+    entitlement_id: ID,
+}
+
+public struct RoyaltyEntitlementLockRequestedEvent has copy, drop {
+    entitlement_id: ID,
+    unlock_epoch: u64,
+}
+
+public struct RoyaltyEntitlementUnlockedEvent has copy, drop {
+    entitlement_id: ID,
+}
+
+public struct RoyaltyEntitlementUnlockCanceledEvent has copy, drop {
+    entitlement_id: ID,
+}
+
+public struct RoyaltyEntitlementSharesDepositEvent has copy, drop {
+    entitlement_id: ID,
+    deposit_value: u64,
+}
+
+public struct RoyaltyEntitlementSharesWithdrawEvent has copy, drop {
+    entitlement_id: ID,
+    withdraw_value: u64,
+}
+
+public struct RoyaltyPoolRegisteredEvent<phantom Share, phantom Currency> has copy, drop {
+    entitlement_id: ID,
+    royalty_pool_id: ID,
+}
+
+public struct RoyaltyPoolUnregisteredEvent<phantom Share, phantom Currency> has copy, drop {
+    entitlement_id: ID,
+    royalty_pool_id: ID,
 }
 
 //=== Errors ===
@@ -50,17 +94,27 @@ const UNLOCK_DELAY_EPOCHS: u64 = 2;
 //=== Public Functions ===
 
 public fun new<Share>(ctx: &mut TxContext): RoyaltyEntitlement<Share> {
-    RoyaltyEntitlement {
+    let entitlement = RoyaltyEntitlement {
         id: object::new(ctx),
         state: RoyaltyEntitlementState::Unlocked,
         balance: balance::zero(),
-    }
+    };
+
+    emit(RoyaltyEntitlementCreated {
+        entitlement_id: entitlement.id(),
+    });
+
+    entitlement
 }
 
 public fun lock<Share>(self: &mut RoyaltyEntitlement<Share>) {
     match (self.state) {
         RoyaltyEntitlementState::Unlocked => {
             self.state = RoyaltyEntitlementState::Locked(vec_map::empty());
+
+            emit(RoyaltyEntitlementLockedEvent {
+                entitlement_id: self.id(),
+            });
         },
         _ => abort ENotUnlockedState,
     }
@@ -70,7 +124,14 @@ public fun request_unlock<Share>(self: &mut RoyaltyEntitlement<Share>, ctx: &TxC
     match (self.state) {
         RoyaltyEntitlementState::Locked(royalty_pool_registrations) => {
             assert!(royalty_pool_registrations.is_empty(), ERegistrationsNotEmpty);
-            self.state = RoyaltyEntitlementState::Unlocking(ctx.epoch() + UNLOCK_DELAY_EPOCHS);
+
+            let unlock_epoch = ctx.epoch() + UNLOCK_DELAY_EPOCHS;
+            self.state = RoyaltyEntitlementState::Unlocking(unlock_epoch);
+
+            emit(RoyaltyEntitlementLockRequestedEvent {
+                entitlement_id: self.id(),
+                unlock_epoch,
+            });
         },
         _ => abort ENotLockedState,
     }
@@ -81,6 +142,10 @@ public fun unlock<Share>(self: &mut RoyaltyEntitlement<Share>, ctx: &TxContext) 
         RoyaltyEntitlementState::Unlocking(unlock_epoch) => {
             assert!(ctx.epoch() >= unlock_epoch, EUnlockEpochNotReached);
             self.state = RoyaltyEntitlementState::Unlocked;
+
+            emit(RoyaltyEntitlementUnlockedEvent {
+                entitlement_id: self.id(),
+            });
         },
         _ => abort ENotUnlockingState,
     }
@@ -90,6 +155,10 @@ public fun cancel_unlock<Share>(self: &mut RoyaltyEntitlement<Share>) {
     match (self.state) {
         RoyaltyEntitlementState::Unlocking(_) => {
             self.state = RoyaltyEntitlementState::Locked(vec_map::empty());
+
+            emit(RoyaltyEntitlementUnlockCanceledEvent {
+                entitlement_id: self.id(),
+            });
         },
         _ => abort ENotUnlockingState,
     }
@@ -105,6 +174,11 @@ public fun register_royalty_pool<Share, Currency>(
             assert!(!registrations.contains(&currency_type), ERoyaltyPoolAlreadyRegistered);
             registrations.insert(currency_type, royalty_pool.cumulative_reward_per_share());
             royalty_pool.increase_staked_shares(self.balance.value());
+
+            emit(RoyaltyPoolRegisteredEvent<Share, Currency> {
+                entitlement_id: self.id(),
+                royalty_pool_id: royalty_pool.id(),
+            });
         },
         _ => abort ENotLockedState,
     }
@@ -118,18 +192,25 @@ public fun unregister_royalty_pool<Share, Currency>(
         RoyaltyEntitlementState::Locked(registrations) => {
             let currency_type = with_defining_ids<Currency>();
             assert!(registrations.contains(&currency_type), ERoyaltyPoolNotRegistered);
+
             let (_, last_claim_index) = registrations.remove(&currency_type);
             assert!(
                 last_claim_index == royalty_pool.cumulative_reward_per_share(),
                 ELastClaimIndexMismatch,
             );
+
             royalty_pool.decrease_staked_shares(self.balance.value());
+
+            emit(RoyaltyPoolUnregisteredEvent<Share, Currency> {
+                entitlement_id: self.id(),
+                royalty_pool_id: royalty_pool.id(),
+            });
         },
         _ => abort ENotLockedState,
     }
 }
 
-public fun deposit_shares<Share>(
+public fun request_share_deposit<Share>(
     self: &mut RoyaltyEntitlement<Share>,
     balance: Balance<Share>,
 ): ShareDepositReceipt {
@@ -148,18 +229,25 @@ public fun deposit_shares<Share>(
         _ => {},
     };
 
+    let deposit_value = balance.value();
+
+    self.balance.join(balance);
+
     let receipt = ShareDepositReceipt {
         entitlement_id: self.id(),
-        deposit_value: balance.value(),
+        deposit_value,
         pool_currency_types,
     };
 
-    self.balance.join(balance);
+    emit(RoyaltyEntitlementSharesDepositEvent {
+        entitlement_id: self.id(),
+        deposit_value,
+    });
 
     receipt
 }
 
-public fun resolve_deposit<Share, Currency>(
+public fun resolve_share_deposit<Share, Currency>(
     self: &RoyaltyEntitlement<Share>,
     receipt: &mut ShareDepositReceipt,
     royalty_pool: &mut RoyaltyPool<Share, Currency>,
@@ -172,9 +260,9 @@ public fun resolve_deposit<Share, Currency>(
     royalty_pool.increase_staked_shares(receipt.deposit_value);
 }
 
-public fun destroy_deposit_receipt(receipt: ShareDepositReceipt) {
-    let ShareDepositReceipt { pool_currency_types, .. } = receipt;
-    assert!(pool_currency_types.is_empty(), EReceiptCurrencyTypesNotEmpty);
+public fun finalize_share_deposit(receipt: ShareDepositReceipt) {
+    assert!(receipt.pool_currency_types.is_empty(), EReceiptCurrencyTypesNotEmpty);
+    let ShareDepositReceipt { .. } = receipt;
 }
 
 public fun withdraw_shares<Share>(
@@ -185,7 +273,14 @@ public fun withdraw_shares<Share>(
         RoyaltyEntitlementState::Unlocked => {
             let withdraw_value = value.destroy_or!(self.balance.value());
             assert!(withdraw_value <= self.balance.value(), EWithdrawValueExceedsBalance);
-            self.balance.split(withdraw_value)
+            let balance = self.balance.split(withdraw_value);
+
+            emit(RoyaltyEntitlementSharesWithdrawEvent {
+                entitlement_id: self.id(),
+                withdraw_value: balance.value(),
+            });
+
+            balance
         },
         _ => abort ENotUnlockedState,
     }

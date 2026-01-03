@@ -17,6 +17,7 @@ public struct REVENUE_POOL() has drop;
 public struct RevenuePool<phantom Currency> has key, store {
     id: UID,
     balance: Balance<Currency>,
+    cumulative_earnings: u128,
 }
 
 // Registry object for tracking derived addresses for RevenuePools.
@@ -80,6 +81,7 @@ public(package) fun new<Currency>(parent: &mut UID): RevenuePool<Currency> {
     RevenuePool {
         id: derived_object::claim(parent, RevenuePoolKey<Currency>()),
         balance: balance::zero(),
+        cumulative_earnings: 0,
     }
 }
 
@@ -112,10 +114,13 @@ public fun assert_exists<Currency>(parent: &UID) {
 //=== Private Functions ===
 
 fun deposit_impl<Currency>(self: &mut RevenuePool<Currency>, balance: Balance<Currency>) {
+    let deposit_value = balance.value();
+
+    self.cumulative_earnings = self.cumulative_earnings + (deposit_value as u128);
+    self.balance.join(balance);
+
     emit(RevenueDepositedEvent<Currency> {
         revenue_pool_id: self.id(),
-        value: balance.value(),
+        value: deposit_value,
     });
-
-    self.balance.join(balance);
 }

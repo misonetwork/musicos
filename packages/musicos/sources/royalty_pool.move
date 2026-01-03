@@ -20,6 +20,7 @@ public struct RoyaltyPool<phantom Share, phantom Currency> has key, store {
     balance: Balance<Currency>,
     staked_shares: u64,
     cumulative_reward_per_share: u256,
+    cumulative_deposits: u128,
 }
 
 // Registry object for tracking derived addresses for RoyaltyPools.
@@ -86,7 +87,7 @@ public fun batch_receive_and_deposit<Share, Currency>(
     assert!(!coins_to_receive.is_empty(), ENoCoinsToReceive);
 
     let parent = &mut self.id;
-    let mut balance: Balance<Currency> = balance::zero();
+    let mut balance = balance::zero<Currency>();
 
     coins_to_receive.destroy!(|coin_to_receive| {
         let coin = transfer::public_receive(parent, coin_to_receive);
@@ -108,6 +109,7 @@ public(package) fun new<Share, Currency>(parent: &mut UID): RoyaltyPool<Share, C
         balance: balance::zero(),
         staked_shares: 0,
         cumulative_reward_per_share: 0,
+        cumulative_deposits: 0,
     }
 }
 
@@ -187,13 +189,14 @@ fun deposit_impl<Share, Currency>(
 
     let deposit_value = balance.value();
 
+    let reward_per_share = (deposit_value as u256) * PRECISION / (self.staked_shares as u256);
+    self.cumulative_reward_per_share = self.cumulative_reward_per_share + reward_per_share;
+    self.cumulative_deposits = self.cumulative_deposits + (deposit_value as u128);
+
+    self.balance.join(balance);
+
     emit(RoyaltyDepositedEvent<Currency> {
         royalty_pool_id: self.id(),
         value: deposit_value,
     });
-
-    let reward_per_share = (deposit_value as u256) * PRECISION / (self.staked_shares as u256);
-    self.cumulative_reward_per_share = self.cumulative_reward_per_share + reward_per_share;
-
-    self.balance.join(balance);
 }
