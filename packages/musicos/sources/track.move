@@ -11,7 +11,7 @@ use std::string::String;
 
 public struct Track has drop, store {
     composition_id: ID,
-    composition_commission_rate: BPS,
+    composition_split: BPS,
     recording_id: ID,
     duration: u64,
     genre_id: ID,
@@ -27,7 +27,7 @@ public fun new<RecordingShare>(
 
     Track {
         composition_id: recording.composition_id(),
-        composition_commission_rate: recording.composition_commission_rate(),
+        composition_split: recording.composition_split(),
         recording_id: recording.id(),
         duration: recording.master().duration(),
         genre_id: recording.genre_id(),
@@ -40,8 +40,8 @@ public fun composition_id(self: &Track): ID {
     self.composition_id
 }
 
-public fun composition_commission_rate(self: &Track): BPS {
-    self.composition_commission_rate
+public fun composition_split(self: &Track): BPS {
+    self.composition_split
 }
 
 public fun recording_id(self: &Track): ID {

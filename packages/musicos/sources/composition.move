@@ -25,7 +25,7 @@ public struct Composition<phantom CompositionShare> has key {
     title: String,
     subtitle: Option<String>,
     contributors: VecMap<ID, vector<CompositionContributorRole>>,
-    commission_rate: BPS,
+    split: BPS,
     share_metadata_cap: MetadataCap<CompositionShare>,
 }
 
@@ -53,9 +53,9 @@ public struct CompositionContributorRemovedEvent has copy, drop {
     contributor_id: ID,
 }
 
-public struct CompositionCommissionRateSetEvent has copy, drop {
+public struct CompositionSplitSetEvent has copy, drop {
     composition_id: ID,
-    commission_rate: BPS,
+    split: BPS,
 }
 
 //=== Enums ===
@@ -81,7 +81,7 @@ const EInvalidComposition: u64 = 6;
 public fun new<CompositionShare>(
     title: String,
     subtitle: Option<String>,
-    commission_rate: BPS,
+    split: BPS,
     share_currency: &mut Currency<CompositionShare>,
     share_metadata_cap: MetadataCap<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
@@ -93,7 +93,7 @@ public fun new<CompositionShare>(
         title,
         subtitle,
         contributors: vec_map::empty(),
-        commission_rate,
+        split,
         share_metadata_cap,
     };
 
@@ -189,19 +189,19 @@ public fun set_subtitle<CompositionShare>(
     }
 }
 
-// Set the commission rate of a composition.
-public fun set_commission_rate<CompositionShare>(
+// Set the composition split of a composition.
+public fun set_split<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    commission_rate: BPS,
+    split: BPS,
 ) {
     self.authorize(cap);
 
-    self.commission_rate = commission_rate;
+    self.split = split;
 
-    emit(CompositionCommissionRateSetEvent {
+    emit(CompositionSplitSetEvent {
         composition_id: self.id(),
-        commission_rate: commission_rate,
+        split: split,
     });
 }
 
@@ -326,8 +326,8 @@ public fun contributors<CompositionShare>(
     &self.contributors
 }
 
-public fun commission_rate<CompositionShare>(self: &Composition<CompositionShare>): BPS {
-    self.commission_rate
+public fun split<CompositionShare>(self: &Composition<CompositionShare>): BPS {
+    self.split
 }
 
 //=== Private Functions ===

@@ -189,31 +189,32 @@ public fun forward_revenue<Currency>(self: &Release, revenue_pool: &mut RevenueP
                 let track = &disc.tracks()[track_identifier.track_idx() as u64];
 
                 // Fetch the track split rate for the given track sequence index.
-                let track_split_rate = self.track_splits[i as u64];
+                let track_split = self.track_splits[i as u64];
 
-                // Split the track's revenue from the principal.
-                let rec_split_value = track_split_rate.calc(distribution_value);
-                let mut rec_split = revenue.split(rec_split_value);
+                if (track_split.value() > 0) {
+                    let rec_split_value = track_split.calc(distribution_value);
+                    let mut rec_split_balance = revenue.split(rec_split_value);
 
-                // Calculate the composition's revenue share, and split the value from the recording's revenue.
-                // Use rec_split_value directly since split() guarantees the exact amount requested.
-                let comp_split_value = track.composition_commission_rate().calc(rec_split_value);
-                let comp_split = rec_split.split(comp_split_value);
+                    // Calculate the composition's revenue share, and split the value from the recording's revenue.
+                    // Use rec_split_value directly since split() guarantees the exact amount requested.
+                    let comp_split_value = track.composition_split().calc(rec_split_value);
+                    let comp_split_balance = rec_split_balance.split(comp_split_value);
 
-                let comp_id = track.composition_id();
-                let rec_id = track.recording_id();
+                    let comp_id = track.composition_id();
+                    let rec_id = track.recording_id();
 
-                // Transfer funds to the royalty pools for the composition and recording.
-                rec_split.send_funds(royalty_pool::derived_address<Currency>(rec_id));
-                comp_split.send_funds(royalty_pool::derived_address<Currency>(comp_id));
+                    // Transfer funds to the royalty pools for the composition and recording.
+                    rec_split_balance.send_funds(royalty_pool::derived_address<Currency>(rec_id));
+                    comp_split_balance.send_funds(royalty_pool::derived_address<Currency>(comp_id));
 
-                emit(ReleaseRevenueForwardedEvent<Currency> {
-                    release_id,
-                    composition_id: comp_id,
-                    composition_split_value: comp_split_value,
-                    recording_id: rec_id,
-                    recording_split_value: rec_split_value,
-                });
+                    emit(ReleaseRevenueForwardedEvent<Currency> {
+                        release_id,
+                        composition_id: comp_id,
+                        composition_split_value: comp_split_value,
+                        recording_id: rec_id,
+                        recording_split_value: rec_split_value,
+                    });
+                };
             });
         },
         _ => abort ENotPublishedState,

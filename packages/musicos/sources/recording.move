@@ -29,7 +29,7 @@ public struct Recording<phantom RecordingShare> has key {
     id: UID,
     state: RecordingState,
     composition_id: ID,
-    composition_commission_rate: BPS,
+    composition_split: BPS,
     genre_id: ID,
     contributors: VecMap<ID, vector<RecordingContributorRole>>,
     master: Audio,
@@ -95,7 +95,7 @@ public fun new<RecordingShare, CompositionShare>(
         id: claim(composition.uid_mut(), RecordingKey(*master.digest())),
         state: RecordingState::Initialized,
         composition_id,
-        composition_commission_rate: composition.commission_rate(),
+        composition_split: composition.split(),
         genre_id: genre_id,
         contributors: vec_map::empty(),
         master,
@@ -191,8 +191,8 @@ public fun composition_id<RecordingShare>(recording: &Recording<RecordingShare>)
     recording.composition_id
 }
 
-public fun composition_commission_rate<RecordingShare>(recording: &Recording<RecordingShare>): BPS {
-    recording.composition_commission_rate
+public fun composition_split<RecordingShare>(recording: &Recording<RecordingShare>): BPS {
+    recording.composition_split
 }
 
 public fun genre_id<RecordingShare>(recording: &Recording<RecordingShare>): ID {
