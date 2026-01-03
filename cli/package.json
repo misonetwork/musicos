@@ -3,21 +3,24 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "bin": {
+    "musicos": "./src/index.ts"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@mysten/seal": "^0.9.3",
-    "@mysten/sui": "^1.44.0",
-    "@mysten/walrus": "^0.8.3",
+    "@mysten/seal": "^0.9.6",
+    "@mysten/sui": "^1.45.2",
+    "@mysten/walrus": "^0.8.6",
+    "commander": "^14.0.2",
     "envalid": "^8.1.1",
     "meyda": "^5.6.3",
     "music-tempo": "^1.0.3",
-    "p-map": "^7.0.3",
-    "pitchfinder": "^2.3.2",
-    "zod": "^4.1.12"
+    "p-map": "^7.0.4",
+    "zod": "^4.3.4"
   }
 }

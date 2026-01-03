@@ -80,18 +80,20 @@ const EInvalidComposition: u64 = 6;
 
 public fun new<CompositionShare>(
     title: String,
-    subtitle: Option<String>,
     split: BPS,
     share_currency: &mut Currency<CompositionShare>,
     share_metadata_cap: MetadataCap<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
+    protocol: &Protocol,
     ctx: &mut TxContext,
 ): (Composition<CompositionShare>, CompositionAdminCap, Balance<CompositionShare>) {
+    protocol.assert_is_active_state();
+
     let composition = Composition {
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
-        subtitle,
+        subtitle: option::none(),
         contributors: vec_map::empty(),
         split,
         share_metadata_cap,
@@ -126,7 +128,10 @@ public fun new<CompositionShare>(
 public fun share<CompositionShare>(
     mut self: Composition<CompositionShare>,
     share_composition_promise: ShareCompositionPromise,
+    protocol: &Protocol,
 ) {
+    protocol.assert_is_active_state();
+
     match (self.state) {
         CompositionState::Initialized => {
             let ShareCompositionPromise(composition_id) = share_composition_promise;
@@ -143,8 +148,11 @@ public fun share<CompositionShare>(
 public fun publish<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
+    protocol: &Protocol,
     clock: &Clock,
 ) {
+    protocol.assert_is_active_state();
+
     self.authorize(cap);
 
     match (self.state) {
@@ -161,7 +169,10 @@ public fun set_title<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
     title: String,
+    protocol: &Protocol,
 ) {
+    protocol.assert_is_active_state();
+
     self.authorize(cap);
 
     match (self.state) {

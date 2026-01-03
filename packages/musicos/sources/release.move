@@ -85,6 +85,8 @@ public fun new(
     protocol: &Protocol,
     ctx: &mut TxContext,
 ): (Release, ReleaseAdminCap, ShareReleasePromise) {
+    protocol.assert_is_active_state();
+
     // Assert the number of discs doesn't exceed the protocol's allowed maximum.
     assert!(discs.length() <= protocol.max_discs_per_release() as u64, EMaxDiscsExceeded);
 
@@ -135,7 +137,9 @@ public fun share(mut self: Release, share_release_promise: ShareReleasePromise) 
 // Transition the release from `Created` state to `Published` state.
 // To successfully publish, the track splits must be set and the sum of the track splits must be 10_000 (100%).
 // Required State: Created
-public fun publish(self: &mut Release, cap: &ReleaseAdminCap, clock: &Clock) {
+public fun publish(self: &mut Release, cap: &ReleaseAdminCap, protocol: &Protocol, clock: &Clock) {
+    protocol.assert_is_active_state();
+
     self.authorize(cap);
 
     match (self.state) {
@@ -166,7 +170,13 @@ public fun set_track_splits(self: &mut Release, cap: &ReleaseAdminCap, track_spl
 }
 
 // Forward funds from a release's revenue pool to the royalty pools of the release's compositions and recordings.
-public fun forward_revenue<Currency>(self: &Release, revenue_pool: &mut RevenuePool<Currency>) {
+public fun forward_revenue<Currency>(
+    self: &Release,
+    revenue_pool: &mut RevenuePool<Currency>,
+    protocol: &Protocol,
+) {
+    protocol.assert_is_active_state();
+
     match (self.state) {
         ReleaseState::Published(_) => {
             // Assert the provided revenue pool is the correct one for the release.

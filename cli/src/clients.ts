@@ -1,23 +1,21 @@
 import { SealClient } from "@mysten/seal";
+import { SuiGraphQLClient } from "@mysten/sui/graphql";
 import { SuiClient, getFullnodeUrl } from "@mysten/sui/client";
 import { SuiJsonRpcClient } from "@mysten/sui/jsonRpc";
 import { walrus } from "@mysten/walrus";
+import { cleanEnv, str } from "envalid";
 
-const serverObjectIds = [
-  "0x4fcb014ba76e01797efbbad90e1fccb375c72e99a17b6d477943b1fedd087fc7",
-];
-
-export const suiClient = new SuiClient({
-  url: "https://mirainet.tail34d64f.ts.net",
+const env = cleanEnv(process.env, {
+  SUI_RPC_URL: str(),
+  SUI_GQL_URL: str(),
 });
 
-export const sealClient = new SealClient({
-  suiClient,
-  serverConfigs: serverObjectIds.map((id) => ({
-    objectId: id,
-    weight: 1,
-  })),
-  verifyKeyServers: false,
+export const suiClient = new SuiClient({
+  url: env.SUI_RPC_URL,
+});
+
+export const suiGqlClient = new SuiGraphQLClient({
+  url: env.SUI_GQL_URL,
 });
 
 export const walrusClient = new SuiJsonRpcClient({

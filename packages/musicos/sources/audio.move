@@ -36,6 +36,8 @@ public fun new<Authority: drop>(
     features: AudioFeatures,
     protocol: &Protocol,
 ): Audio {
+    protocol.assert_is_active_state();
+
     assert!(
         protocol.audio_creation_authority_types().contains(&with_defining_ids<Authority>()),
         EInvalidAudioCreationAuthority,
@@ -53,7 +55,10 @@ public fun new_stream(
     sample_rate_hz: u32,
     samples: u64,
     digest: vector<u8>,
+    protocol: &Protocol,
 ): AudioStream {
+    protocol.assert_is_active_state();
+
     AudioStream {
         channels,
         bit_depth,
@@ -63,7 +68,9 @@ public fun new_stream(
     }
 }
 
-public fun new_features(spectral_centroid: I32): AudioFeatures {
+public fun new_features(spectral_centroid: I32, protocol: &Protocol): AudioFeatures {
+    protocol.assert_is_active_state();
+
     AudioFeatures {
         spectral_centroid,
     }
