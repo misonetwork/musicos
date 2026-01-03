@@ -151,7 +151,9 @@ public fun publish(self: &mut Release, cap: &ReleaseAdminCap, clock: &Clock) {
 
 // Set the track splits for the release.
 // Required State: Created
-public fun set_track_splits(self: &mut Release, track_splits: vector<BPS>) {
+public fun set_track_splits(self: &mut Release, cap: &ReleaseAdminCap, track_splits: vector<BPS>) {
+    self.authorize(cap);
+
     match (self.state) {
         ReleaseState::Created => {
             self.track_splits = track_splits;
@@ -222,6 +224,26 @@ public fun forward_revenue<Currency>(self: &Release, revenue_pool: &mut RevenueP
 
 public fun id(self: &Release): ID {
     self.id.to_inner()
+}
+
+public fun title(self: &Release): String {
+    self.title
+}
+
+public fun subtitle(self: &Release): Option<String> {
+    self.subtitle
+}
+
+public fun discs(self: &Release): &vector<Disc> {
+    &self.discs
+}
+
+public fun track_sequence(self: &Release): &TrackSequence {
+    &self.track_sequence
+}
+
+public fun track_splits(self: &Release): &vector<BPS> {
+    &self.track_splits
 }
 
 //=== Private Functions ===
