@@ -15,14 +15,18 @@ public struct Disc has drop, store {
     duration: u64,
 }
 
+//=== Constants ===
+
+const MAX_TRACKS_PER_DISC: u8 = 50;
+
 //=== Errors ===
 
 const EMaxTracksExceeded: u64 = 0;
 
 //=== Public Functions ===
 
-public fun new(tracks: vector<Track>, protocol: &Protocol): Disc {
-    assert!(tracks.length() <= protocol.max_tracks_per_disc() as u64, EMaxTracksExceeded);
+public fun new(tracks: vector<Track>): Disc {
+    assert!(tracks.length() <= MAX_TRACKS_PER_DISC as u64, EMaxTracksExceeded);
 
     let mut duration = 0;
     tracks.do_ref!(|track| {

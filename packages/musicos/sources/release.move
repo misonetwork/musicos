@@ -40,13 +40,14 @@ public struct ReleaseCreatedEvent has copy, drop {
     release_id: ID,
 }
 
-public struct ReleaseRevenueForwardedEvent<phantom Currency> has copy, drop {
+public struct ReleaseRevenueDistributedEvent<phantom Currency> has copy, drop {
     release_id: ID,
-    composition_id: ID,
-    composition_split_value: u64,
-    recording_id: ID,
-    recording_split_value: u64,
+    distribution_value: u64,
 }
+
+//=== Constants ===
+
+const MAX_DISCS_PER_RELEASE: u8 = 10;
 
 //=== Enums ===
 
@@ -73,6 +74,7 @@ const EInvalidTrackSplitsLength: u64 = 5;
 const EInvalidTrackSplitsSum: u64 = 6;
 const EMaxDiscsExceeded: u64 = 7;
 const EIncorrectRevenuePool: u64 = 8;
+const ENoRevenueToDistribute: u64 = 9;
 
 //=== Public Functions ===
 
@@ -87,11 +89,10 @@ public fun new(
 ): (Release, ReleaseAdminCap, ShareReleasePromise) {
     protocol.assert_is_active_state();
 
-    // Assert the number of discs doesn't exceed the protocol's allowed maximum.
-    assert!(discs.length() <= protocol.max_discs_per_release() as u64, EMaxDiscsExceeded);
+    assert!(discs.length() <= MAX_DISCS_PER_RELEASE as u64, EMaxDiscsExceeded);
 
     // Build a track sequence for the release based on the number of discs.
-    let track_sequence = track_sequence::new(&discs, protocol);
+    let track_sequence = track_sequence::new(&discs);
 
     let release = Release {
         id: object::new(ctx),
@@ -169,8 +170,8 @@ public fun set_track_splits(self: &mut Release, cap: &ReleaseAdminCap, track_spl
     }
 }
 
-// Forward funds from a release's revenue pool to the royalty pools of the release's compositions and recordings.
-public fun forward_revenue<Currency>(
+// Distribute funds from a release's revenue pool to the royalty pools of the release's compositions and recordings.
+public fun distribute_revenue<Currency>(
     self: &Release,
     revenue_pool: &mut RevenuePool<Currency>,
     protocol: &Protocol,
@@ -184,9 +185,10 @@ public fun forward_revenue<Currency>(
 
             // Acquire a mutable reference to the revenue pool's balance.
             let revenue = revenue_pool.balance_mut();
-
             // Store the value to distribute to the compositions and recordings.
             let distribution_value = revenue.value();
+
+            assert!(distribution_value > 0, ENoRevenueToDistribute);
 
             let release_id = self.id();
 
@@ -216,15 +218,12 @@ public fun forward_revenue<Currency>(
                     // Transfer funds to the royalty pools for the composition and recording.
                     rec_split_balance.send_funds(royalty_pool::derived_address<Currency>(rec_id));
                     comp_split_balance.send_funds(royalty_pool::derived_address<Currency>(comp_id));
-
-                    emit(ReleaseRevenueForwardedEvent<Currency> {
-                        release_id,
-                        composition_id: comp_id,
-                        composition_split_value: comp_split_value,
-                        recording_id: rec_id,
-                        recording_split_value: rec_split_value,
-                    });
                 };
+            });
+
+            emit(ReleaseRevenueDistributedEvent<Currency> {
+                release_id,
+                distribution_value,
             });
         },
         _ => abort ENotPublishedState,

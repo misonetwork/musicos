@@ -21,12 +21,6 @@ public struct Protocol has key, store {
     facilitator_commission_rate: BPS,
     facilitator_history_window_length: u8,
     facilitator_types: VecSet<TypeName>,
-    max_roles_per_contributor: u8,
-    min_roles_per_contributor: u8,
-    max_stems_per_recording: u8,
-    max_discs_per_release: u8,
-    max_tracks_per_disc: u8,
-    max_track_sequence_length: u8,
     royalty_distribution_duration_epochs: u64,
 }
 
@@ -77,12 +71,6 @@ fun init(_otw: PROTOCOL, ctx: &mut TxContext) {
         facilitator_history_window_length: DEFAULT_FACILITATOR_HISTORY_WINDOW_LENGTH,
         facilitator_commission_rate: bps::new(DEFAULT_FACILITATOR_COMMISSION_RATE_VALUE),
         facilitator_types: vec_set::empty(),
-        max_roles_per_contributor: DEFAULT_MAX_ROLES_PER_CONTRIBUTOR,
-        min_roles_per_contributor: DEFAULT_MIN_ROLES_PER_CONTRIBUTOR,
-        max_stems_per_recording: DEFAULT_MAX_STEMS_PER_RECORDING,
-        max_discs_per_release: DEFAULT_MAX_DISCS_PER_RELEASE,
-        max_tracks_per_disc: DEFAULT_MAX_TRACKS_PER_DISC,
-        max_track_sequence_length: DEFAULT_MAX_TRACK_SEQUENCE_LENGTH,
         royalty_distribution_duration_epochs: DEFAULT_ROYALTY_DISTRIBUTION_DURATION_EPOCHS,
     };
 
@@ -166,30 +154,6 @@ public fun remove_facilitator_type<Facilitator: drop>(self: &mut Protocol) {
     self.facilitator_types.remove(&with_defining_ids<Facilitator>());
 }
 
-public fun set_max_roles_per_contributor(self: &mut Protocol, count: u8) {
-    self.max_roles_per_contributor = count;
-}
-
-public fun set_min_roles_per_contributor(self: &mut Protocol, count: u8) {
-    self.min_roles_per_contributor = count;
-}
-
-public fun set_max_stems_per_recording(self: &mut Protocol, count: u8) {
-    self.max_stems_per_recording = count;
-}
-
-public fun set_max_discs_per_release(self: &mut Protocol, count: u8) {
-    self.max_discs_per_release = count;
-}
-
-public fun set_max_tracks_per_disc(self: &mut Protocol, count: u8) {
-    self.max_tracks_per_disc = count;
-}
-
-public fun set_max_track_sequence_length(self: &mut Protocol, length: u8) {
-    self.max_track_sequence_length = length;
-}
-
 public fun set_royalty_distribution_duration_epochs(self: &mut Protocol, duration: u64) {
     self.royalty_distribution_duration_epochs = duration;
 }
@@ -249,30 +213,6 @@ public fun facilitator_history_window_length(self: &Protocol): u8 {
 
 public fun facilitator_types(self: &Protocol): &VecSet<TypeName> {
     &self.facilitator_types
-}
-
-public fun max_roles_per_contributor(self: &Protocol): u8 {
-    self.max_roles_per_contributor
-}
-
-public fun min_roles_per_contributor(self: &Protocol): u8 {
-    self.min_roles_per_contributor
-}
-
-public fun max_stems_per_recording(self: &Protocol): u8 {
-    self.max_stems_per_recording
-}
-
-public fun max_discs_per_release(self: &Protocol): u8 {
-    self.max_discs_per_release
-}
-
-public fun max_tracks_per_disc(self: &Protocol): u8 {
-    self.max_tracks_per_disc
-}
-
-public fun max_track_sequence_length(self: &Protocol): u8 {
-    self.max_track_sequence_length
 }
 
 public fun royalty_distribution_duration_epochs(self: &Protocol): u64 {

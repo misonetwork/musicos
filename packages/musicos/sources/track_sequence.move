@@ -4,7 +4,6 @@
 module musicos::track_sequence;
 
 use musicos::disc::Disc;
-use musicos::protocol::Protocol;
 use musicos::track_identifier::{Self, TrackIdentifier};
 
 //=== Structs ===
@@ -14,6 +13,10 @@ public struct TrackSequence has drop, store {
     tracks_per_disc: vector<u8>,
     lookup: vector<TrackIdentifier>,
 }
+
+//=== Constants ===
+
+const MAX_TRACK_SEQUENCE_LENGTH: u8 = 150;
 
 //=== Errors ===
 
@@ -26,7 +29,7 @@ const ESequenceIndexOutOfBounds: u64 = 4;
 //=== Package Functions ===
 
 // Create a new track sequence.
-public(package) fun new(discs: &vector<Disc>, protocol: &Protocol): TrackSequence {
+public(package) fun new(discs: &vector<Disc>): TrackSequence {
     assert!(!discs.is_empty(), ENoDiscs);
 
     let mut tracks_per_disc: vector<u8> = vector[];
@@ -43,11 +46,8 @@ public(package) fun new(discs: &vector<Disc>, protocol: &Protocol): TrackSequenc
         tracks_per_disc.push_back(track_count as u8);
     });
 
-    // Assert the length of the track sequence doesn't exceed the protocol's allowed maximum.
-    assert!(
-        lookup.length() <= protocol.max_track_sequence_length() as u64,
-        EMaxSequenceLengthExceeded,
-    );
+    // Assert the length of the track sequence doesn't exceed the allowed maximum.
+    assert!(lookup.length() <= MAX_TRACK_SEQUENCE_LENGTH as u64, EMaxSequenceLengthExceeded);
 
     TrackSequence {
         tracks_per_disc,

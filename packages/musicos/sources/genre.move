@@ -3,6 +3,7 @@
 
 module musicos::genre;
 
+use musicos::admin::AdminCap;
 use std::string::String;
 use sui::derived_object::claim;
 use sui::event::emit;
@@ -41,8 +42,7 @@ fun init(_otw: GENRE, ctx: &mut TxContext) {
 
 //=== Public Functions ===
 
-// TODO: Gate behind admin.
-public fun new(name: String, genre_registry: &mut GenreRegistry) {
+public fun new(_: &AdminCap, name: String, genre_registry: &mut GenreRegistry) {
     let genre = Genre {
         id: claim(&mut genre_registry.id, GenreKey(name)),
         name,

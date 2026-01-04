@@ -71,6 +71,10 @@ public enum RecordingState has copy, drop, store {
     Published(u64),
 }
 
+//=== Constants ===
+
+const MAX_STEMS_PER_RECORDING: u8 = 10;
+
 //=== Errors ===
 
 const EUnauthorized: u64 = 0;
@@ -138,16 +142,12 @@ public fun add_stem<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     stem: Stem,
-    protocol: &Protocol,
 ) {
     self.authorize(cap);
 
     match (self.state) {
         RecordingState::Created => {
-            assert!(
-                self.stems.length() < protocol.max_stems_per_recording() as u64,
-                EMaxStemsExceeded,
-            );
+            assert!(self.stems.length() < MAX_STEMS_PER_RECORDING as u64, EMaxStemsExceeded);
 
             emit(RecordingStemAddedEvent {
                 recording_id: self.id(),
