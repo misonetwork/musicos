@@ -3,7 +3,10 @@
 
 module musicos::contributor;
 
+use std::string::String;
+use sui::clock::Clock;
 use sui::derived_object::claim;
+use sui::dynamic_field as df;
 use sui::vec_set::{Self, VecSet};
 
 //=== Structs ===
@@ -14,12 +17,17 @@ public struct Contributor has key {
     id: UID,
     kind: ContributorKind,
     state: ContributorState,
+    name: String,
 }
 
 public struct ContributorAdminCap has key, store {
     id: UID,
     contributor_id: ID,
 }
+
+public struct ContributorCredit<phantom Work: key>(ID) has copy, drop, store;
+public struct ContributorMetadataKey<phantom Metadata: drop + store>() has copy, drop, store;
+
 //=== Derivation Keys ===
 
 public struct ContributorAdminCapKey(ID) has copy, drop, store;
@@ -43,11 +51,17 @@ const ENotGroupKind: u64 = 1;
 
 //=== Public Functions ===
 
-public fun new(kind: ContributorKind, ctx: &mut TxContext): ContributorAdminCap {
+public fun new(
+    kind: ContributorKind,
+    name: String,
+    handle: String,
+    ctx: &mut TxContext,
+): ContributorAdminCap {
     let mut contributor = Contributor {
         id: object::new(ctx),
         kind,
         state: ContributorState::Created,
+        name,
     };
 
     let contributor_id = contributor.id();
@@ -101,6 +115,57 @@ public fun destroy(self: Contributor, cap: ContributorAdminCap) {
 
     let ContributorAdminCap { id, .. } = cap;
     id.delete();
+}
+
+public fun add_metadata<Metadata: drop + store>(
+    self: &mut Contributor,
+    cap: &ContributorAdminCap,
+    metadata: Metadata,
+) {
+    self.authorize(cap);
+
+    df::add(&mut self.id, ContributorMetadataKey<Metadata>(), metadata)
+}
+
+public fun remove_metadata<Metadata: drop + store>(
+    self: &mut Contributor,
+    cap: &ContributorAdminCap,
+): Metadata {
+    self.authorize(cap);
+
+    df::remove<ContributorMetadataKey<Metadata>, Metadata>(
+        &mut self.id,
+        ContributorMetadataKey<Metadata>(),
+    )
+}
+
+public fun set_metadata<Metadata: drop + store>(
+    self: &mut Contributor,
+    cap: &ContributorAdminCap,
+    metadata: Metadata,
+) {
+    self.authorize(cap);
+
+    df::remove_if_exists<ContributorMetadataKey<Metadata>, Metadata>(
+        &mut self.id,
+        ContributorMetadataKey<Metadata>(),
+    );
+
+    df::add(&mut self.id, ContributorMetadataKey<Metadata>(), metadata)
+}
+
+public fun borrow_metadata<Metadata: drop + store>(self: &Contributor): &Metadata {
+    df::borrow<ContributorMetadataKey<Metadata>, Metadata>(
+        &self.id,
+        ContributorMetadataKey<Metadata>(),
+    )
+}
+
+public fun has_metadata<Metadata: drop + store>(self: &Contributor): bool {
+    df::exists_with_type<ContributorMetadataKey<Metadata>, Metadata>(
+        &self.id,
+        ContributorMetadataKey<Metadata>(),
+    )
 }
 
 public fun new_individual_kind(): ContributorKind {
