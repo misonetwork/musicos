@@ -33,9 +33,31 @@ public struct RoyaltyPoolKey<phantom Currency>() has copy, drop, store;
 
 //=== Events ===
 
+public struct RoyaltyPoolCreatedEvent<phantom Share, phantom Currency> has copy, drop {
+    royalty_pool_id: ID,
+}
+
 public struct RoyaltyDepositedEvent<phantom Currency> has copy, drop {
     royalty_pool_id: ID,
     value: u64,
+}
+
+public struct RoyaltyPoolStakedSharesIncreasedEvent<
+    phantom Share,
+    phantom Currency,
+> has copy, drop {
+    royalty_pool_id: ID,
+    previous_staked_shares: u64,
+    new_staked_shares: u64,
+}
+
+public struct RoyaltyPoolStakedSharesDecreasedEvent<
+    phantom Share,
+    phantom Currency,
+> has copy, drop {
+    royalty_pool_id: ID,
+    previous_staked_shares: u64,
+    new_staked_shares: u64,
 }
 
 //=== Constants ===
@@ -104,28 +126,53 @@ public fun batch_receive_and_deposit<Share, Currency>(
 //=== Package Functions ===
 
 public(package) fun new<Share, Currency>(parent: &mut UID): RoyaltyPool<Share, Currency> {
-    RoyaltyPool {
+    let royalty_pool = RoyaltyPool {
         id: derived_object::claim(parent, RoyaltyPoolKey<Currency>()),
         balance: balance::zero(),
         staked_shares: 0,
         cumulative_reward_per_share: 0,
         cumulative_deposits: 0,
-    }
+    };
+
+    emit(RoyaltyPoolCreatedEvent<Share, Currency> {
+        royalty_pool_id: royalty_pool.id(),
+    });
+
+    royalty_pool
 }
 
 public(package) fun increase_staked_shares<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     value: u64,
 ) {
-    self.staked_shares = self.staked_shares + value;
-    assert!(self.staked_shares <= share_currency_supply!(), EStakedSharesOverflow)
+    let previous_staked_shares = self.staked_shares;
+    let new_staked_shares = previous_staked_shares + value;
+
+    assert!(new_staked_shares <= share_currency_supply!(), EStakedSharesOverflow);
+
+    self.staked_shares = new_staked_shares;
+
+    emit(RoyaltyPoolStakedSharesIncreasedEvent<Share, Currency> {
+        royalty_pool_id: self.id(),
+        previous_staked_shares,
+        new_staked_shares,
+    });
 }
 
 public(package) fun decrease_staked_shares<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
     value: u64,
 ) {
+    let previous_staked_shares = self.staked_shares;
+    let new_staked_shares = previous_staked_shares - value;
+
     self.staked_shares = self.staked_shares - value;
+
+    emit(RoyaltyPoolStakedSharesDecreasedEvent<Share, Currency> {
+        royalty_pool_id: self.id(),
+        previous_staked_shares,
+        new_staked_shares,
+    });
 }
 
 public(package) fun uid_mut<Share, Currency>(self: &mut RoyaltyPool<Share, Currency>): &mut UID {

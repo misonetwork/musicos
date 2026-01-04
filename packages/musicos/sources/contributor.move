@@ -4,7 +4,6 @@
 module musicos::contributor;
 
 use std::string::String;
-use sui::clock::Clock;
 use sui::derived_object::claim;
 use sui::dynamic_field as df;
 use sui::vec_set::{Self, VecSet};

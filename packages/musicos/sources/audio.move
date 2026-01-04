@@ -26,6 +26,8 @@ public struct AudioFeatures has drop, store {
     spectral_centroid: I32,
 }
 
+//=== Errors ===
+
 const EInvalidAudioCreationAuthority: u64 = 0;
 
 //=== Public Functions ===
