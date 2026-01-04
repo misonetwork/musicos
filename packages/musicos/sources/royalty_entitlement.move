@@ -29,7 +29,7 @@ public struct ShareDepositReceipt {
 
 //=== Events ===
 
-public struct RoyaltyEntitlementCreated has copy, drop {
+public struct RoyaltyEntitlementCreatedEvent has copy, drop {
     entitlement_id: ID,
 }
 
@@ -50,12 +50,12 @@ public struct RoyaltyEntitlementUnlockCanceledEvent has copy, drop {
     entitlement_id: ID,
 }
 
-public struct RoyaltyEntitlementSharesDepositEvent has copy, drop {
+public struct RoyaltyEntitlementShareDepositEvent has copy, drop {
     entitlement_id: ID,
     deposit_value: u64,
 }
 
-public struct RoyaltyEntitlementSharesWithdrawEvent has copy, drop {
+public struct RoyaltyEntitlementShareWithdrawalEvent has copy, drop {
     entitlement_id: ID,
     withdraw_value: u64,
 }
@@ -85,6 +85,7 @@ const EInvalidEntitlement: u64 = 9;
 const EReceiptCurrencyTypeNotFound: u64 = 10;
 const EReceiptCurrencyTypesNotEmpty: u64 = 11;
 const EUnsupportedStateForDeposit: u64 = 12;
+const EZeroBalance: u64 = 13;
 
 //=== Constants ===
 
@@ -100,7 +101,7 @@ public fun new<Share>(ctx: &mut TxContext): RoyaltyEntitlement<Share> {
         balance: balance::zero(),
     };
 
-    emit(RoyaltyEntitlementCreated {
+    emit(RoyaltyEntitlementCreatedEvent {
         entitlement_id: entitlement.id(),
     });
 
@@ -214,6 +215,8 @@ public fun request_share_deposit<Share>(
     self: &mut RoyaltyEntitlement<Share>,
     balance: Balance<Share>,
 ): ShareDepositReceipt {
+    assert!(balance.value() > 0, EZeroBalance);
+
     let mut pool_currency_types: VecSet<TypeName> = vec_set::empty();
 
     match (&self.state) {
@@ -239,11 +242,6 @@ public fun request_share_deposit<Share>(
         pool_currency_types,
     };
 
-    emit(RoyaltyEntitlementSharesDepositEvent {
-        entitlement_id: self.id(),
-        deposit_value,
-    });
-
     receipt
 }
 
@@ -262,7 +260,12 @@ public fun resolve_share_deposit<Share, Currency>(
 
 public fun finalize_share_deposit(receipt: ShareDepositReceipt) {
     assert!(receipt.pool_currency_types.is_empty(), EReceiptCurrencyTypesNotEmpty);
-    let ShareDepositReceipt { .. } = receipt;
+    let ShareDepositReceipt { entitlement_id, deposit_value, .. } = receipt;
+
+    emit(RoyaltyEntitlementShareDepositEvent {
+        entitlement_id,
+        deposit_value,
+    });
 }
 
 public fun withdraw_shares<Share>(
@@ -275,7 +278,7 @@ public fun withdraw_shares<Share>(
             assert!(withdraw_value <= self.balance.value(), EWithdrawValueExceedsBalance);
             let balance = self.balance.split(withdraw_value);
 
-            emit(RoyaltyEntitlementSharesWithdrawEvent {
+            emit(RoyaltyEntitlementShareWithdrawalEvent {
                 entitlement_id: self.id(),
                 withdraw_value: balance.value(),
             });
