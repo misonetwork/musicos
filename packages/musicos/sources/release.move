@@ -34,6 +34,13 @@ public struct ReleaseAdminCap has key, store {
 
 public struct ShareReleasePromise(ID)
 
+//=== Enums ===
+
+public enum ReleaseOrigin has copy, drop, store {
+    Native(u64),
+    Legacy(u64),
+}
+
 //=== Events ===
 
 public struct ReleaseCreatedEvent has copy, drop {

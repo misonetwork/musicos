@@ -45,16 +45,13 @@ public enum ContributorState has copy, drop, store {
 //=== Errors ===
 
 const EUnauthorized: u64 = 0;
-const ENotGroupKind: u64 = 1;
+const ENotIndividualKind: u64 = 1;
+const ENotGroupKind: u64 = 2;
+const EDuplicateContributor: u64 = 3;
 
 //=== Public Functions ===
 
-public fun new(
-    kind: ContributorKind,
-    name: String,
-    handle: String,
-    ctx: &mut TxContext,
-): ContributorAdminCap {
+public fun new(kind: ContributorKind, name: String, ctx: &mut TxContext): ContributorAdminCap {
     let mut contributor = Contributor {
         id: object::new(ctx),
         kind,
@@ -82,8 +79,13 @@ public fun add_contributor(
     self.authorize(cap);
 
     match (&mut self.kind) {
-        ContributorKind::Group(members) => {
-            members.insert(contributor.id());
+        ContributorKind::Group(contributors) => {
+            // Assert the contributor that is being added is an individual.
+            contributor.assert_is_individual_kind();
+            // Assert the contributor that is being added is not already a contributors to the group.
+            assert!(!contributors.contains(&contributor.id()), EDuplicateContributor);
+            // Add the contributor to the group.
+            contributors.insert(contributor.id());
         },
         _ => abort ENotGroupKind,
     }
@@ -178,6 +180,28 @@ public fun new_group_kind(): ContributorKind {
 
 public fun id(contributor: &Contributor): ID {
     object::id(contributor)
+}
+
+public fun is_individual_kind(contributor: &Contributor): bool {
+    match (&contributor.kind) {
+        ContributorKind::Individual => true,
+        _ => false,
+    }
+}
+
+public fun is_group_kind(contributor: &Contributor): bool {
+    match (&contributor.kind) {
+        ContributorKind::Group(_) => true,
+        _ => false,
+    }
+}
+
+public fun assert_is_individual_kind(contributor: &Contributor) {
+    assert!(is_individual_kind(contributor), ENotIndividualKind);
+}
+
+public fun assert_is_group_kind(contributor: &Contributor) {
+    assert!(is_group_kind(contributor), ENotGroupKind);
 }
 
 //=== Private Functions ===
