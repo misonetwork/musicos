@@ -38,6 +38,7 @@ public struct RevenueDepositedEvent<phantom Currency> has copy, drop {
 //=== Errors ===
 
 const EDoesNotExist: u64 = 0;
+const ENoCoinsToReceive: u64 = 1;
 
 //=== Init Function ===
 
@@ -75,6 +76,31 @@ public fun receive_and_deposit<Currency>(
     self.deposit_impl(coin.into_balance());
 }
 
+// Batch receive coins and deposit the combined balance into the royalty pool.
+public fun batch_receive_and_deposit<Currency>(
+    self: &mut RevenuePool<Currency>,
+    coins_to_receive: vector<Receiving<Coin<Currency>>>,
+    protocol: &Protocol,
+) {
+    protocol.assert_is_active_state();
+
+    assert!(!coins_to_receive.is_empty(), ENoCoinsToReceive);
+
+    let parent = &mut self.id;
+    let mut balance = balance::zero<Currency>();
+
+    coins_to_receive.destroy!(|coin_to_receive| {
+        let coin = transfer::public_receive(parent, coin_to_receive);
+        balance.join(coin.into_balance());
+    });
+
+    if (balance.value() > 0) {
+        self.deposit_impl(balance);
+    } else {
+        balance.destroy_zero();
+    }
+}
+
 //=== Package Functions ===
 
 public(package) fun new<Currency>(parent: &mut UID): RevenuePool<Currency> {
@@ -99,6 +125,10 @@ public fun id<Currency>(self: &RevenuePool<Currency>): ID {
 
 public fun balance<Currency>(self: &RevenuePool<Currency>): &Balance<Currency> {
     &self.balance
+}
+
+public fun cumulative_earnings<Currency>(self: &RevenuePool<Currency>): u128 {
+    self.cumulative_earnings
 }
 
 public fun derived_address<Currency>(parent_id: ID): address {

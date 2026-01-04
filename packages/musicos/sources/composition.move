@@ -66,6 +66,11 @@ public enum CompositionState has copy, drop, store {
     Published(u64),
 }
 
+//=== Constants ===
+
+const MIN_ROLES_PER_CONTRIBUTOR: u64 = 1;
+const MAX_ROLES_PER_CONTRIBUTOR: u64 = 20;
+
 //=== Errors ===
 
 const EUnauthorized: u64 = 0;
@@ -223,17 +228,14 @@ public fun add_contributor<CompositionShare>(
     cap: &CompositionAdminCap,
     contributor: &Contributor,
     roles: vector<CompositionContributorRole>,
-    protocol: &Protocol,
 ) {
     self.authorize(cap);
 
     match (self.state) {
         CompositionState::Created => {
-            assert!(roles.length() >= protocol.min_roles_per_contributor() as u64, EMinRolesNotMet);
-            assert!(
-                roles.length() <= protocol.max_roles_per_contributor() as u64,
-                EExceedsMaxRoles,
-            );
+            assert!(roles.length() >= MIN_ROLES_PER_CONTRIBUTOR, EMinRolesNotMet);
+            assert!(roles.length() <= MAX_ROLES_PER_CONTRIBUTOR, EExceedsMaxRoles);
+
             self.contributors.insert(contributor.id(), roles);
 
             emit(CompositionContributorAddedEvent {
@@ -274,15 +276,16 @@ public fun add_role_to_contributor<CompositionShare>(
     cap: &CompositionAdminCap,
     contributor_id: ID,
     role: CompositionContributorRole,
-    protocol: &Protocol,
 ) {
     self.authorize(cap);
 
     match (self.state) {
         CompositionState::Created => {
             let roles = self.contributors.get_mut(&contributor_id);
+
             assert!(!roles.contains(&role), EContributorRoleAlreadyExists);
-            assert!(roles.length() < protocol.max_roles_per_contributor() as u64, EExceedsMaxRoles);
+            assert!(roles.length() < MAX_ROLES_PER_CONTRIBUTOR, EExceedsMaxRoles);
+
             roles.push_back(role);
         },
         _ => abort ENotCreatedState,
@@ -296,7 +299,6 @@ public fun remove_role_from_contributor<CompositionShare>(
     cap: &CompositionAdminCap,
     contributor_id: ID,
     role_idx: u64,
-    protocol: &Protocol,
 ) {
     self.authorize(cap);
 
@@ -304,7 +306,7 @@ public fun remove_role_from_contributor<CompositionShare>(
         CompositionState::Created => {
             let roles = self.contributors.get_mut(&contributor_id);
             assert!(role_idx < roles.length(), EContributorRoleIndexOutOfBounds);
-            assert!(roles.length() > protocol.min_roles_per_contributor() as u64, EMinRolesNotMet);
+            assert!(roles.length() > MIN_ROLES_PER_CONTRIBUTOR, EMinRolesNotMet);
             roles.swap_remove(role_idx);
         },
         _ => abort ENotCreatedState,

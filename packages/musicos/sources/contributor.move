@@ -25,7 +25,6 @@ public struct ContributorAdminCap has key, store {
     contributor_id: ID,
 }
 
-public struct ContributorCredit<phantom Work: key>(ID) has copy, drop, store;
 public struct ContributorMetadataKey<phantom Metadata: drop + store>() has copy, drop, store;
 
 //=== Derivation Keys ===

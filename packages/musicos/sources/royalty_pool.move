@@ -142,16 +142,20 @@ public fun balance<Share, Currency>(self: &RoyaltyPool<Share, Currency>): &Balan
     &self.balance
 }
 
-public fun derived_address<Currency>(parent_id: ID): address {
-    derived_object::derive_address(parent_id, RoyaltyPoolKey<Currency>())
-}
-
 public fun staked_shares<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u64 {
     self.staked_shares
 }
 
 public fun cumulative_reward_per_share<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u256 {
     self.cumulative_reward_per_share
+}
+
+public fun cumulative_deposits<Share, Currency>(self: &RoyaltyPool<Share, Currency>): u128 {
+    self.cumulative_deposits
+}
+
+public fun derived_address<Currency>(parent_id: ID): address {
+    derived_object::derive_address(parent_id, RoyaltyPoolKey<Currency>())
 }
 
 //=== Assert Functions ===

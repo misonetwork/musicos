@@ -12,7 +12,7 @@ use musicos::track_identifier::{Self, TrackIdentifier};
 public struct TrackSequence has drop, store {
     // Number of tracks on each disc.
     tracks_per_disc: vector<u8>,
-    lookup: vector<u16>,
+    lookup: vector<TrackIdentifier>,
 }
 
 //=== Errors ===
@@ -30,15 +30,14 @@ public(package) fun new(discs: &vector<Disc>, protocol: &Protocol): TrackSequenc
     assert!(!discs.is_empty(), ENoDiscs);
 
     let mut tracks_per_disc: vector<u8> = vector[];
-    let mut lookup: vector<u16> = vector[];
+    let mut lookup: vector<TrackIdentifier> = vector[];
 
     discs.length().do!(|disc_idx| {
         let disc = &discs[disc_idx];
         let track_count = disc.tracks().length();
 
         track_count.do!(|track_idx| {
-            let packed = ((disc_idx as u16) << 8) | (track_idx as u16);
-            lookup.push_back(packed);
+            lookup.push_back(track_identifier::new(disc_idx as u8, track_idx as u8));
         });
 
         tracks_per_disc.push_back(track_count as u8);
@@ -106,16 +105,10 @@ public fun length(self: &TrackSequence): u8 {
 }
 
 // Get the disc and track indexes for a given sequence index.
-public fun track_identifier(self: &TrackSequence, sequence_idx: u8): TrackIdentifier {
+public fun track_identifier(self: &TrackSequence, sequence_idx: u8): &TrackIdentifier {
     let sequence_idx_u64 = sequence_idx as u64;
-    let lookup_length = self.lookup.length();
-    assert!(sequence_idx_u64 < lookup_length, ESequenceIndexOutOfBounds);
-
-    let packed = self.lookup[sequence_idx_u64];
-    let disc_idx = ((packed >> 8) & 0xFF) as u8;
-    let track_idx = (packed & 0xFF) as u8;
-
-    track_identifier::new(disc_idx, track_idx)
+    assert!(sequence_idx_u64 < self.lookup.length(), ESequenceIndexOutOfBounds);
+    &self.lookup[sequence_idx_u64]
 }
 
 // Number of tracks on each disc.

@@ -5,7 +5,7 @@ module musicos::track_identifier;
 
 //=== Structs ===
 
-public struct TrackIdentifier(u8, u8) has drop, store;
+public struct TrackIdentifier(u8, u8) has copy, drop, store;
 
 //=== Package Functions ===
 
