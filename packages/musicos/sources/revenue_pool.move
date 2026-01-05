@@ -3,7 +3,6 @@
 
 module musicos::revenue_pool;
 
-use musicos::protocol::Protocol;
 use sui::balance::{Self, Balance};
 use sui::coin::Coin;
 use sui::derived_object;
@@ -53,37 +52,15 @@ fun init(_otw: REVENUE_POOL, ctx: &mut TxContext) {
 //=== Public Functions ===
 
 // Deposit funds into the revenue pool.
-public fun deposit<Currency>(
-    self: &mut RevenuePool<Currency>,
-    balance: Balance<Currency>,
-    protocol: &Protocol,
-) {
-    protocol.assert_is_active_state();
-
+public fun deposit<Currency>(self: &mut RevenuePool<Currency>, balance: Balance<Currency>) {
     self.deposit_impl(balance);
 }
 
-// Receive a coin and deposit it into the revenue pool.
+// Receive coins and deposit the combined balance into the revenue pool.
 public fun receive_and_deposit<Currency>(
     self: &mut RevenuePool<Currency>,
-    coin_to_receive: Receiving<Coin<Currency>>,
-    protocol: &Protocol,
-) {
-    protocol.assert_is_active_state();
-
-    let coin = transfer::public_receive(&mut self.id, coin_to_receive);
-
-    self.deposit_impl(coin.into_balance());
-}
-
-// Batch receive coins and deposit the combined balance into the royalty pool.
-public fun batch_receive_and_deposit<Currency>(
-    self: &mut RevenuePool<Currency>,
     coins_to_receive: vector<Receiving<Coin<Currency>>>,
-    protocol: &Protocol,
 ) {
-    protocol.assert_is_active_state();
-
     assert!(!coins_to_receive.is_empty(), ENoCoinsToReceive);
 
     let parent = &mut self.id;

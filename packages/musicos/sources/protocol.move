@@ -3,7 +3,6 @@
 
 module musicos::protocol;
 
-use interest_bps::bps::{Self, BPS};
 use std::type_name::{TypeName, with_defining_ids};
 use sui::vec_set::{Self, VecSet};
 
@@ -36,21 +35,11 @@ public enum ProtocolState has copy, drop, store {
 
 //=== Constants ===
 
-const DEFAULT_FACILITATOR_HISTORY_WINDOW_LENGTH: u8 = 100;
-const DEFAULT_FACILITATOR_COMMISSION_RATE_VALUE: u64 = 10; // 0.1%
-const DEFAULT_MAX_ROLES_PER_CONTRIBUTOR: u8 = 10;
-const DEFAULT_MIN_ROLES_PER_CONTRIBUTOR: u8 = 1;
-const DEFAULT_MAX_STEMS_PER_RECORDING: u8 = 50;
-const DEFAULT_MAX_DISCS_PER_RELEASE: u8 = 10;
-const DEFAULT_MAX_TRACKS_PER_DISC: u8 = 50;
-const DEFAULT_MAX_TRACK_SEQUENCE_LENGTH: u8 = 250;
 const DEFAULT_ROYALTY_DISTRIBUTION_DURATION_EPOCHS: u64 = 10;
-const MAX_FACILITATOR_COMMISSION_RATE_VALUE: u64 = 50; // 0.5%
 const DEPRECATION_DELAY_EPOCHS: u64 = 5;
 
 //=== Errors ===
 
-const EExceedsMaxFacilitatorCommissionRate: u64 = 0;
 const ENotActiveState: u64 = 1;
 const ENotPausedState: u64 = 2;
 const ENotDeprecatingState: u64 = 3;

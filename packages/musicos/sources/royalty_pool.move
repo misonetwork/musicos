@@ -3,7 +3,6 @@
 
 module musicos::royalty_pool;
 
-use musicos::protocol::Protocol;
 use musicos::share::share_currency_supply;
 use sui::balance::{Self, Balance};
 use sui::coin::Coin;
@@ -70,7 +69,6 @@ const EDoesNotExist: u64 = 0;
 const EStakedSharesOverflow: u64 = 1;
 const ENoStakedShares: u64 = 2;
 const ENoCoinsToReceive: u64 = 3;
-const ECoinValueIsZero: u64 = 4;
 
 //=== Init Function ===
 
@@ -84,28 +82,11 @@ fun init(_otw: ROYALTY_POOL, ctx: &mut TxContext) {
 
 //=== Public Functions ===
 
-// Receive a coin and deposit it into the revenue pool.
+// Receive coins and deposit the combined balance into the royalty pool.
 public fun receive_and_deposit<Share, Currency>(
     self: &mut RoyaltyPool<Share, Currency>,
-    coin_to_receive: Receiving<Coin<Currency>>,
-    protocol: &Protocol,
-) {
-    protocol.assert_is_active_state();
-
-    let coin = transfer::public_receive(&mut self.id, coin_to_receive);
-    assert!(coin.value() > 0, ECoinValueIsZero);
-
-    self.deposit_impl(coin.into_balance());
-}
-
-// Batch receive coins and deposit the combined balance into the royalty pool.
-public fun batch_receive_and_deposit<Share, Currency>(
-    self: &mut RoyaltyPool<Share, Currency>,
     coins_to_receive: vector<Receiving<Coin<Currency>>>,
-    protocol: &Protocol,
 ) {
-    protocol.assert_is_active_state();
-
     assert!(!coins_to_receive.is_empty(), ENoCoinsToReceive);
 
     let parent = &mut self.id;

@@ -91,11 +91,8 @@ public fun new(
     title: String,
     subtitle: Option<String>,
     discs: vector<Disc>,
-    protocol: &Protocol,
     ctx: &mut TxContext,
 ): (Release, ReleaseAdminCap, ShareReleasePromise) {
-    protocol.assert_is_active_state();
-
     assert!(discs.length() <= MAX_DISCS_PER_RELEASE as u64, EMaxDiscsExceeded);
 
     // Build a track sequence for the release based on the number of discs.
@@ -145,9 +142,7 @@ public fun share(mut self: Release, share_release_promise: ShareReleasePromise) 
 // Transition the release from `Created` state to `Published` state.
 // To successfully publish, the track splits must be set and the sum of the track splits must be 10_000 (100%).
 // Required State: Created
-public fun publish(self: &mut Release, cap: &ReleaseAdminCap, protocol: &Protocol, clock: &Clock) {
-    protocol.assert_is_active_state();
-
+public fun publish(self: &mut Release, cap: &ReleaseAdminCap, clock: &Clock) {
     self.authorize(cap);
 
     match (self.state) {
@@ -178,13 +173,7 @@ public fun set_track_splits(self: &mut Release, cap: &ReleaseAdminCap, track_spl
 }
 
 // Distribute funds from a release's revenue pool to the royalty pools of the release's compositions and recordings.
-public fun distribute_revenue<Currency>(
-    self: &Release,
-    revenue_pool: &mut RevenuePool<Currency>,
-    protocol: &Protocol,
-) {
-    protocol.assert_is_active_state();
-
+public fun distribute_revenue<Currency>(self: &Release, revenue_pool: &mut RevenuePool<Currency>) {
     match (self.state) {
         ReleaseState::Published(_) => {
             // Assert the provided revenue pool is the correct one for the release.

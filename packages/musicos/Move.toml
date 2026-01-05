@@ -9,8 +9,6 @@ CurrencyTreasury = { git = "https://github.com/studio-mirai/currency_treasury.gi
 InterestBPS = { local = "../../../miraicloud/mirainet/interest-mvr/bps" }
 InterestMath = { local = "../../../miraicloud/mirainet/interest-mvr/math" }
 MUSIC = { local = "../coins/music" } # MUSIC token
-PLAY =  { local = "../coins/play" } # PLAY token
-PLAYTIME = { local = "../coins/playtime" } # PLAYTIME token
 
 [addresses]
 musicos = "0x0"
