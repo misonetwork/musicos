@@ -4,18 +4,16 @@
 module musicos::play;
 
 use musicos::protocol::Protocol;
-use std::type_name::{TypeName, with_defining_ids};
+use std::type_name::with_defining_ids;
 use sui::clock::Clock;
 use sui::event::emit;
 
 //=== Structs ===
 
-public struct Play<phantom Player> {
+public struct Play<phantom Authority: drop> has drop {
     // Unique identifier for the play receipt.
     // We use a fresh address instead of a UID because `Play` is a hot potato.
     play_id: ID,
-    play_authority_type: TypeName,
-    player_id: Option<ID>,
     composition_id: ID,
     recording_id: ID,
     genre_id: ID,
@@ -28,10 +26,8 @@ public struct Play<phantom Player> {
 
 //=== Events ===
 
-public struct PlayCreatedEvent<phantom Player> has copy, drop {
+public struct PlayCreatedEvent<phantom Authority: drop> has copy, drop {
     play_id: ID,
-    play_authority_type: TypeName,
-    player_id: Option<ID>,
     composition_id: ID,
     recording_id: ID,
     genre_id: ID,
@@ -48,9 +44,8 @@ const ENotPlayAuthority: u64 = 0;
 
 //=== Public Functions ===
 
-public fun new<Authority: drop, Player>(
+public fun new<Authority: drop>(
     _: Authority,
-    player_id: Option<ID>,
     composition_id: ID,
     recording_id: ID,
     genre_id: ID,
@@ -59,20 +54,20 @@ public fun new<Authority: drop, Player>(
     protocol: &Protocol,
     clock: &Clock,
     ctx: &mut TxContext,
-): Play<Player> {
-    let play_authority_type = with_defining_ids<Authority>();
+): Play<Authority> {
     // TODO: Maybe move to protocol.move?
-    assert!(protocol.play_authority_types().contains(&play_authority_type), ENotPlayAuthority);
+    assert!(
+        protocol.play_authority_types().contains(&with_defining_ids<Authority>()),
+        ENotPlayAuthority,
+    );
 
     let play_id = ctx.fresh_object_address().to_id();
     let played_by = ctx.sender();
     let play_epoch = ctx.epoch();
     let play_timestamp_ms = clock.timestamp_ms();
 
-    emit(PlayCreatedEvent<Player> {
+    emit(PlayCreatedEvent<Authority> {
         play_id,
-        play_authority_type,
-        player_id,
         composition_id,
         recording_id,
         genre_id,
@@ -85,8 +80,6 @@ public fun new<Authority: drop, Player>(
 
     Play {
         play_id,
-        play_authority_type,
-        player_id,
         composition_id,
         recording_id,
         genre_id,
@@ -100,46 +93,38 @@ public fun new<Authority: drop, Player>(
 
 //=== Public View Functions ===
 
-public fun play_id<Player>(self: &Play<Player>): ID {
+public fun play_id<Authority: drop>(self: &Play<Authority>): ID {
     self.play_id
 }
 
-public fun play_authority_type<Player>(self: &Play<Player>): TypeName {
-    self.play_authority_type
-}
-
-public fun player_id<Player>(self: &Play<Player>): Option<ID> {
-    self.player_id
-}
-
-public fun composition_id<Player>(self: &Play<Player>): ID {
+public fun composition_id<Authority: drop>(self: &Play<Authority>): ID {
     self.composition_id
 }
 
-public fun recording_id<Player>(self: &Play<Player>): ID {
+public fun recording_id<Authority: drop>(self: &Play<Authority>): ID {
     self.recording_id
 }
 
-public fun genre_id<Player>(self: &Play<Player>): ID {
+public fun genre_id<Authority: drop>(self: &Play<Authority>): ID {
     self.genre_id
 }
 
-public fun played_by<Player>(self: &Play<Player>): address {
+public fun played_by<Authority: drop>(self: &Play<Authority>): address {
     self.played_by
 }
 
-public fun play_epoch<Player>(self: &Play<Player>): u64 {
+public fun play_epoch<Authority: drop>(self: &Play<Authority>): u64 {
     self.play_epoch
 }
 
-public fun play_timestamp_ms<Player>(self: &Play<Player>): u64 {
+public fun play_timestamp_ms<Authority: drop>(self: &Play<Authority>): u64 {
     self.play_timestamp_ms
 }
 
-public fun played_duration<Player>(self: &Play<Player>): u64 {
+public fun played_duration<Authority: drop>(self: &Play<Authority>): u64 {
     self.played_duration
 }
 
-public fun track_duration<Player>(self: &Play<Player>): u64 {
+public fun track_duration<Authority: drop>(self: &Play<Authority>): u64 {
     self.track_duration
 }
