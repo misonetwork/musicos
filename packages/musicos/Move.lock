@@ -2,10 +2,11 @@
 
 [move]
 version = 3
-manifest_digest = "0262E174F353E0A2F620AC8CFABD01209CA51212FA3A6B6F010D5B03DDB5F39D"
+manifest_digest = "7AF8763C8BA683044B9EC73FE71C3BBA6ADD906F7888564C54505F591177423E"
 deps_digest = "CB99E3BEE139471F3765AE330F855F3B376156AA54F37DEDE11BBE5BB0D3BB74"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
+  { id = "CurrencyTreasury", name = "CurrencyTreasury" },
   { id = "InterestBPS", name = "InterestBPS" },
   { id = "InterestMath", name = "InterestMath" },
   { id = "MUSIC", name = "MUSIC" },
@@ -14,7 +15,6 @@ dependencies = [
   { id = "PLAYTIME", name = "PLAYTIME" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
-  { id = "coin_treasury", name = "coin_treasury" },
 ]
 
 [[move.package]]
@@ -22,6 +22,17 @@ id = "Bridge"
 source = { git = "https://github.com/MystenLabs/sui.git", rev = "c1f1ae650fb9f9248b39a569400b4420820868db", subdir = "crates/sui-framework/packages/bridge" }
 
 dependencies = [
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[[move.package]]
+id = "CurrencyTreasury"
+source = { git = "https://github.com/studio-mirai/currency_treasury.git", rev = "main", subdir = "" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
@@ -101,17 +112,6 @@ source = { git = "https://github.com/MystenLabs/sui.git", rev = "c1f1ae650fb9f92
 dependencies = [
   { id = "MoveStdlib", name = "MoveStdlib" },
   { id = "Sui", name = "Sui" },
-]
-
-[[move.package]]
-id = "coin_treasury"
-source = { local = "../../../coin_treasury" }
-
-dependencies = [
-  { id = "Bridge", name = "Bridge" },
-  { id = "MoveStdlib", name = "MoveStdlib" },
-  { id = "Sui", name = "Sui" },
-  { id = "SuiSystem", name = "SuiSystem" },
 ]
 
 [move.toolchain-version]

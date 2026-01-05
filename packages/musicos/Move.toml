@@ -5,7 +5,7 @@ license = "Apache 2.0"
 authors = ["Sona Labs, Inc. (musicos@sonamusic.com)"]
 
 [dependencies]
-coin_treasury = { local = "../../../coin_treasury" }
+CurrencyTreasury = { git = "https://github.com/studio-mirai/currency_treasury.git", rev = "main" }
 InterestBPS = { local = "../../../miraicloud/mirainet/interest-mvr/bps" }
 InterestMath = { local = "../../../miraicloud/mirainet/interest-mvr/math" }
 MUSIC = { local = "../coins/music" } # MUSIC token

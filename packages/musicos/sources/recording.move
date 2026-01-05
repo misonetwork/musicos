@@ -8,11 +8,9 @@ use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::contributor::Contributor;
 use musicos::genre::Genre;
-use musicos::protocol::Protocol;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share;
 use musicos::stem::Stem;
-use std::string::String;
 use std::type_name::{Self, TypeName};
 use sui::balance::Balance;
 use sui::clock::Clock;
@@ -21,7 +19,6 @@ use sui::coin_registry::{Currency, MetadataCap};
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
-use sui::vec_set::{Self, VecSet};
 
 //=== Structs ===
 
@@ -44,6 +41,8 @@ public struct RecordingAdminCap has key, store {
 
 public struct RecordingKey(vector<u8>) has copy, drop, store;
 
+public struct ShareRecordingPromise(ID)
+
 //=== Events ===
 
 public struct RecordingCreatedEvent has copy, drop {
@@ -51,6 +50,10 @@ public struct RecordingCreatedEvent has copy, drop {
     share_type: TypeName,
     composition_id: ID,
     genre_id: ID,
+}
+
+public struct RecordingPublishedEvent has copy, drop {
+    recording_id: ID,
 }
 
 public struct RecordingStemAddedEvent has copy, drop {
@@ -80,6 +83,8 @@ const MAX_STEMS_PER_RECORDING: u8 = 10;
 const EUnauthorized: u64 = 0;
 const ENotCreatedState: u64 = 1;
 const EMaxStemsExceeded: u64 = 2;
+const EInvalidRecordingForPromise: u64 = 3;
+const ENoContributors: u64 = 4;
 
 //=== Public Functions ===
 
@@ -90,11 +95,8 @@ public fun new<RecordingShare, CompositionShare>(
     share_currency: &mut Currency<RecordingShare>,
     share_metadata_cap: MetadataCap<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
-    protocol: &Protocol,
     ctx: &mut TxContext,
-): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>) {
-    protocol.assert_is_active_state();
-
+): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>, ShareRecordingPromise) {
     let composition_id = composition.id();
     let genre_id = genre.id();
 
@@ -126,6 +128,8 @@ public fun new<RecordingShare, CompositionShare>(
         share_treasury_cap,
     );
 
+    let share_recording_promise = ShareRecordingPromise(recording.id());
+
     emit(RecordingCreatedEvent {
         recording_id: recording.id(),
         share_type: type_name::with_defining_ids<RecordingShare>(),
@@ -133,7 +137,48 @@ public fun new<RecordingShare, CompositionShare>(
         genre_id,
     });
 
-    (recording, recording_admin_cap, recording_shares)
+    (recording, recording_admin_cap, recording_shares, share_recording_promise)
+}
+
+// Share a recording.
+// Required State: Initialized
+public fun share<RecordingShare>(
+    mut self: Recording<RecordingShare>,
+    share_recording_promise: ShareRecordingPromise,
+) {
+    match (self.state) {
+        RecordingState::Initialized => {
+            let ShareRecordingPromise(recording_id) = share_recording_promise;
+            assert!(self.id() == recording_id, EInvalidRecordingForPromise);
+            self.state = RecordingState::Created;
+            transfer::share_object(self);
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+// Publish a recording.
+// Required State: Created
+public fun publish<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap,
+    clock: &Clock,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        RecordingState::Created => {
+            // Assert the recording has at least one contributor.
+            assert!(!self.contributors.is_empty(), ENoContributors);
+
+            self.state = RecordingState::Published(clock.timestamp_ms());
+
+            emit(RecordingPublishedEvent {
+                recording_id: self.id(),
+            });
+        },
+        _ => abort ENotCreatedState,
+    };
 }
 
 // Adds a stem to a recording.

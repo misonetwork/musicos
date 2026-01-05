@@ -6,10 +6,8 @@ module musicos::composition;
 use interest_bps::bps::BPS;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
-use musicos::protocol::Protocol;
 use musicos::share;
 use std::string::String;
-use std::type_name::{Self, TypeName};
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
@@ -40,7 +38,10 @@ public struct ShareCompositionPromise(ID)
 
 public struct CompositionCreatedEvent has copy, drop {
     composition_id: ID,
-    share_type: TypeName,
+}
+
+public struct CompositionPublishedEvent has copy, drop {
+    composition_id: ID,
 }
 
 public struct CompositionContributorAddedEvent has copy, drop {
@@ -79,7 +80,8 @@ const EContributorRoleAlreadyExists: u64 = 2;
 const EContributorRoleIndexOutOfBounds: u64 = 3;
 const EMinRolesNotMet: u64 = 4;
 const EExceedsMaxRoles: u64 = 5;
-const EInvalidComposition: u64 = 6;
+const EInvalidCompositionForPromise: u64 = 6;
+const ENoContributors: u64 = 7;
 
 //=== Public Functions ===
 
@@ -89,11 +91,13 @@ public fun new<CompositionShare>(
     share_currency: &mut Currency<CompositionShare>,
     share_metadata_cap: MetadataCap<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
-    protocol: &Protocol,
     ctx: &mut TxContext,
-): (Composition<CompositionShare>, CompositionAdminCap, Balance<CompositionShare>) {
-    protocol.assert_is_active_state();
-
+): (
+    Composition<CompositionShare>,
+    CompositionAdminCap,
+    Balance<CompositionShare>,
+    ShareCompositionPromise,
+) {
     let composition = Composition {
         id: object::new(ctx),
         state: CompositionState::Initialized,
@@ -120,12 +124,13 @@ public fun new<CompositionShare>(
         share_treasury_cap,
     );
 
+    let share_composition_promise = ShareCompositionPromise(composition.id());
+
     emit(CompositionCreatedEvent {
         composition_id: composition.id(),
-        share_type: type_name::with_defining_ids<CompositionShare>(),
     });
 
-    (composition, composition_admin_cap, composition_shares)
+    (composition, composition_admin_cap, composition_shares, share_composition_promise)
 }
 
 // Share a composition.
@@ -133,14 +138,11 @@ public fun new<CompositionShare>(
 public fun share<CompositionShare>(
     mut self: Composition<CompositionShare>,
     share_composition_promise: ShareCompositionPromise,
-    protocol: &Protocol,
 ) {
-    protocol.assert_is_active_state();
-
     match (self.state) {
         CompositionState::Initialized => {
             let ShareCompositionPromise(composition_id) = share_composition_promise;
-            assert!(self.id() == composition_id, EInvalidComposition);
+            assert!(self.id() == composition_id, EInvalidCompositionForPromise);
             self.state = CompositionState::Created;
             transfer::share_object(self);
         },
@@ -153,16 +155,20 @@ public fun share<CompositionShare>(
 public fun publish<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    protocol: &Protocol,
     clock: &Clock,
 ) {
-    protocol.assert_is_active_state();
-
     self.authorize(cap);
 
     match (self.state) {
         CompositionState::Created => {
+            // Assert the composition has at least one contributor.
+            assert!(!self.contributors.is_empty(), ENoContributors);
+
             self.state = CompositionState::Published(clock.timestamp_ms());
+
+            emit(CompositionPublishedEvent {
+                composition_id: self.id(),
+            });
         },
         _ => abort ENotCreatedState,
     }
@@ -174,10 +180,7 @@ public fun set_title<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
     title: String,
-    protocol: &Protocol,
 ) {
-    protocol.assert_is_active_state();
-
     self.authorize(cap);
 
     match (self.state) {

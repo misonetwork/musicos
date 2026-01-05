@@ -5,6 +5,7 @@ license = "Apache 2.0"
 authors = ["Sona Labs, Pte Ltd (build@sonamusic.com)"]
 
 [dependencies]
+CurrencyTreasury = { git = "https://github.com/studio-mirai/currency_treasury.git", rev = "main" }
 
 [addresses]
 music = "0x0"

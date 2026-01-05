@@ -18,9 +18,7 @@ public struct Protocol has key, store {
     audio_creation_authority_types: VecSet<TypeName>,
     // Authority types for verifying Contributor objects.
     contributor_verification_authority_types: VecSet<TypeName>,
-    facilitator_commission_rate: BPS,
-    facilitator_history_window_length: u8,
-    facilitator_types: VecSet<TypeName>,
+    play_authority_types: VecSet<TypeName>,
     royalty_distribution_duration_epochs: u64,
 }
 
@@ -68,9 +66,7 @@ fun init(_otw: PROTOCOL, ctx: &mut TxContext) {
         state: ProtocolState::Genesis,
         audio_creation_authority_types: vec_set::empty(),
         contributor_verification_authority_types: vec_set::empty(),
-        facilitator_history_window_length: DEFAULT_FACILITATOR_HISTORY_WINDOW_LENGTH,
-        facilitator_commission_rate: bps::new(DEFAULT_FACILITATOR_COMMISSION_RATE_VALUE),
-        facilitator_types: vec_set::empty(),
+        play_authority_types: vec_set::empty(),
         royalty_distribution_duration_epochs: DEFAULT_ROYALTY_DISTRIBUTION_DURATION_EPOCHS,
     };
 
@@ -134,26 +130,6 @@ public fun remove_contributor_verification_authority_type<Authority: drop>(self:
     self.contributor_verification_authority_types.remove(&with_defining_ids<Authority>());
 }
 
-public fun set_facilitator_commission_rate(self: &mut Protocol, rate: BPS) {
-    assert!(
-        rate.value() <= MAX_FACILITATOR_COMMISSION_RATE_VALUE,
-        EExceedsMaxFacilitatorCommissionRate,
-    );
-    self.facilitator_commission_rate = rate;
-}
-
-public fun set_facilitator_history_window_length(self: &mut Protocol, length: u8) {
-    self.facilitator_history_window_length = length;
-}
-
-public fun add_facilitator_type<Facilitator: drop>(self: &mut Protocol) {
-    self.facilitator_types.insert(with_defining_ids<Facilitator>());
-}
-
-public fun remove_facilitator_type<Facilitator: drop>(self: &mut Protocol) {
-    self.facilitator_types.remove(&with_defining_ids<Facilitator>());
-}
-
 public fun set_royalty_distribution_duration_epochs(self: &mut Protocol, duration: u64) {
     self.royalty_distribution_duration_epochs = duration;
 }
@@ -203,16 +179,8 @@ public fun contributor_verification_authority_types(self: &Protocol): &VecSet<Ty
     &self.contributor_verification_authority_types
 }
 
-public fun facilitator_commission_rate(self: &Protocol): BPS {
-    self.facilitator_commission_rate
-}
-
-public fun facilitator_history_window_length(self: &Protocol): u8 {
-    self.facilitator_history_window_length
-}
-
-public fun facilitator_types(self: &Protocol): &VecSet<TypeName> {
-    &self.facilitator_types
+public fun play_authority_types(self: &Protocol): &VecSet<TypeName> {
+    &self.play_authority_types
 }
 
 public fun royalty_distribution_duration_epochs(self: &Protocol): u64 {
