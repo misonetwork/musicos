@@ -3,6 +3,7 @@
 
 module musicos::protocol;
 
+use musicos::musicos::AdminCap;
 use std::type_name::{TypeName, with_defining_ids};
 use sui::vec_set::{Self, VecSet};
 
@@ -19,6 +20,8 @@ public struct Protocol has key, store {
     contributor_verification_authority_types: VecSet<TypeName>,
     play_authority_types: VecSet<TypeName>,
     royalty_distribution_duration_epochs: u64,
+    composition_creation_fee: u64,
+    recording_creation_fee: u64,
 }
 
 //=== Enums ===
@@ -57,6 +60,8 @@ fun init(_otw: PROTOCOL, ctx: &mut TxContext) {
         contributor_verification_authority_types: vec_set::empty(),
         play_authority_types: vec_set::empty(),
         royalty_distribution_duration_epochs: DEFAULT_ROYALTY_DISTRIBUTION_DURATION_EPOCHS,
+        composition_creation_fee: 0,
+        recording_creation_fee: 0,
     };
 
     transfer::share_object(protocol);
@@ -64,7 +69,7 @@ fun init(_otw: PROTOCOL, ctx: &mut TxContext) {
 
 //=== Public Functions ===
 
-public fun set_active_state(self: &mut Protocol) {
+public fun set_active_state(self: &mut Protocol, _: &AdminCap) {
     match (self.state) {
         ProtocolState::Deprecated(..) => {
             abort EAlreadyDeprecatedState
@@ -75,7 +80,7 @@ public fun set_active_state(self: &mut Protocol) {
     self.state = ProtocolState::Active;
 }
 
-public fun set_paused_state(self: &mut Protocol) {
+public fun set_paused_state(self: &mut Protocol, _: &AdminCap) {
     match (self.state) {
         ProtocolState::Active => {
             self.state = ProtocolState::Paused;
@@ -84,7 +89,7 @@ public fun set_paused_state(self: &mut Protocol) {
     };
 }
 
-public fun set_deprecating_state(self: &mut Protocol, ctx: &TxContext) {
+public fun set_deprecating_state(self: &mut Protocol, _: &AdminCap, ctx: &TxContext) {
     match (self.state) {
         ProtocolState::Active => {
             self.state = ProtocolState::Deprecating(ctx.epoch() + DEPRECATION_DELAY_EPOCHS);
@@ -93,7 +98,11 @@ public fun set_deprecating_state(self: &mut Protocol, ctx: &TxContext) {
     };
 }
 
-public fun set_deprecated_state<MigrationAuthority: drop>(self: &mut Protocol, ctx: &TxContext) {
+public fun set_deprecated_state<MigrationAuthority: drop>(
+    self: &mut Protocol,
+    _: &AdminCap,
+    ctx: &TxContext,
+) {
     match (self.state) {
         ProtocolState::Deprecating(end_epoch) => {
             assert!(ctx.epoch() > end_epoch, EDeprecationDelayNotElapsed);
@@ -103,24 +112,45 @@ public fun set_deprecated_state<MigrationAuthority: drop>(self: &mut Protocol, c
     }
 }
 
-public fun add_audio_creation_authority_type<Authority: drop>(self: &mut Protocol) {
+public fun add_audio_creation_authority_type<Authority: drop>(self: &mut Protocol, _: &AdminCap) {
     self.audio_creation_authority_types.insert(with_defining_ids<Authority>());
 }
 
-public fun remove_audio_creation_authority_type<Authority: drop>(self: &mut Protocol) {
+public fun remove_audio_creation_authority_type<Authority: drop>(
+    self: &mut Protocol,
+    _: &AdminCap,
+) {
     self.audio_creation_authority_types.remove(&with_defining_ids<Authority>());
 }
 
-public fun add_contributor_verification_authority_type<Authority: drop>(self: &mut Protocol) {
+public fun add_contributor_verification_authority_type<Authority: drop>(
+    self: &mut Protocol,
+    _: &AdminCap,
+) {
     self.contributor_verification_authority_types.insert(with_defining_ids<Authority>());
 }
 
-public fun remove_contributor_verification_authority_type<Authority: drop>(self: &mut Protocol) {
+public fun remove_contributor_verification_authority_type<Authority: drop>(
+    self: &mut Protocol,
+    _: &AdminCap,
+) {
     self.contributor_verification_authority_types.remove(&with_defining_ids<Authority>());
 }
 
-public fun set_royalty_distribution_duration_epochs(self: &mut Protocol, duration: u64) {
+public fun set_royalty_distribution_duration_epochs(
+    self: &mut Protocol,
+    _: &AdminCap,
+    duration: u64,
+) {
     self.royalty_distribution_duration_epochs = duration;
+}
+
+public fun set_composition_creation_fee(self: &mut Protocol, _: &AdminCap, fee: u64) {
+    self.composition_creation_fee = fee;
+}
+
+public fun set_recording_creation_fee(self: &mut Protocol, _: &AdminCap, fee: u64) {
+    self.recording_creation_fee = fee;
 }
 
 //=== Public View Functions ===
@@ -174,6 +204,14 @@ public fun play_authority_types(self: &Protocol): &VecSet<TypeName> {
 
 public fun royalty_distribution_duration_epochs(self: &Protocol): u64 {
     self.royalty_distribution_duration_epochs
+}
+
+public fun composition_creation_fee(self: &Protocol): u64 {
+    self.composition_creation_fee
+}
+
+public fun recording_creation_fee(self: &Protocol): u64 {
+    self.recording_creation_fee
 }
 
 //=== Assert Functions ===

@@ -3,9 +3,14 @@
 
 module musicos::composition;
 
+use currency_treasury::burn_facility::BurnFacility;
 use interest_bps::bps::BPS;
+use music::music::MUSIC;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
+use musicos::protocol::Protocol;
+use musicos::revenue_pool;
+use musicos::royalty_pool;
 use musicos::share;
 use std::string::String;
 use sui::balance::Balance;
@@ -82,15 +87,19 @@ const EMinRolesNotMet: u64 = 4;
 const EExceedsMaxRoles: u64 = 5;
 const EInvalidCompositionForPromise: u64 = 6;
 const ENoContributors: u64 = 7;
+const EInvalidCompositionFee: u64 = 8;
 
 //=== Public Functions ===
 
 public fun new<CompositionShare>(
+    fee: Balance<MUSIC>,
     title: String,
     split: BPS,
     share_currency: &mut Currency<CompositionShare>,
     share_metadata_cap: MetadataCap<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
+    burn_facility: &BurnFacility<MUSIC>,
+    protocol: &Protocol,
     ctx: &mut TxContext,
 ): (
     Composition<CompositionShare>,
@@ -98,7 +107,10 @@ public fun new<CompositionShare>(
     Balance<CompositionShare>,
     ShareCompositionPromise,
 ) {
-    let composition = Composition {
+    assert!(fee.value() == protocol.composition_creation_fee(), EInvalidCompositionFee);
+    fee.send_funds(burn_facility.id().to_address());
+
+    let mut composition = Composition {
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
@@ -125,6 +137,10 @@ public fun new<CompositionShare>(
     );
 
     let share_composition_promise = ShareCompositionPromise(composition.id());
+
+    // Create MUSIC revenue and royalty pools for the composition.
+    composition.new_revenue_pool<MUSIC, CompositionShare>();
+    composition.new_royalty_pool<MUSIC, CompositionShare>();
 
     emit(CompositionCreatedEvent {
         composition_id: composition.id(),
@@ -314,6 +330,20 @@ public fun remove_role_from_contributor<CompositionShare>(
         },
         _ => abort ENotCreatedState,
     }
+}
+
+public fun new_revenue_pool<Currency, CompositionShare>(
+    recording: &mut Composition<CompositionShare>,
+) {
+    let revenue_pool = revenue_pool::new<Currency>(&mut recording.id);
+    transfer::public_share_object(revenue_pool);
+}
+
+public fun new_royalty_pool<Currency, CompositionShare>(
+    recording: &mut Composition<CompositionShare>,
+) {
+    let royalty_pool = royalty_pool::new<Currency, CompositionShare>(&mut recording.id);
+    transfer::public_share_object(royalty_pool);
 }
 
 //=== Package Functions ===

@@ -3,12 +3,17 @@
 
 module musicos::recording;
 
+use currency_treasury::burn_facility::BurnFacility;
 use interest_bps::bps::BPS;
+use music::music::MUSIC;
 use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::contributor::Contributor;
 use musicos::genre::Genre;
+use musicos::protocol::Protocol;
 use musicos::recording_contributor_role::RecordingContributorRole;
+use musicos::revenue_pool;
+use musicos::royalty_pool;
 use musicos::share;
 use musicos::stem::Stem;
 use std::type_name::{Self, TypeName};
@@ -85,22 +90,29 @@ const ENotCreatedState: u64 = 1;
 const EMaxStemsExceeded: u64 = 2;
 const EInvalidRecordingForPromise: u64 = 3;
 const ENoContributors: u64 = 4;
+const EInvalidRecordingFee: u64 = 5;
 
 //=== Public Functions ===
 
 public fun new<RecordingShare, CompositionShare>(
+    fee: Balance<MUSIC>,
     composition: &mut Composition<CompositionShare>,
     genre: &Genre,
     master: Audio,
     share_currency: &mut Currency<RecordingShare>,
     share_metadata_cap: MetadataCap<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
+    burn_facility: &BurnFacility<MUSIC>,
+    protocol: &Protocol,
     ctx: &mut TxContext,
 ): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>, ShareRecordingPromise) {
+    assert!(fee.value() == protocol.recording_creation_fee(), EInvalidRecordingFee);
+    fee.send_funds(burn_facility.id().to_address());
+
     let composition_id = composition.id();
     let genre_id = genre.id();
 
-    let recording = Recording<RecordingShare> {
+    let mut recording = Recording<RecordingShare> {
         id: claim(composition.uid_mut(), RecordingKey(*master.digest())),
         state: RecordingState::Initialized,
         composition_id,
@@ -129,6 +141,10 @@ public fun new<RecordingShare, CompositionShare>(
     );
 
     let share_recording_promise = ShareRecordingPromise(recording.id());
+
+    // Create MUSIC revenue and royalty pools for the recording.
+    recording.new_revenue_pool<MUSIC, RecordingShare>();
+    recording.new_royalty_pool<MUSIC, RecordingShare>();
 
     emit(RecordingCreatedEvent {
         recording_id: recording.id(),
@@ -227,6 +243,16 @@ public fun remove_stem<RecordingShare>(
         },
         _ => abort ENotCreatedState,
     }
+}
+
+public fun new_revenue_pool<Currency, RecordingShare>(recording: &mut Recording<RecordingShare>) {
+    let revenue_pool = revenue_pool::new<Currency>(&mut recording.id);
+    transfer::public_share_object(revenue_pool);
+}
+
+public fun new_royalty_pool<Currency, RecordingShare>(recording: &mut Recording<RecordingShare>) {
+    let royalty_pool = royalty_pool::new<Currency, RecordingShare>(&mut recording.id);
+    transfer::public_share_object(royalty_pool);
 }
 
 //=== Public View Functions ===

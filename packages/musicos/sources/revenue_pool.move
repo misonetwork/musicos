@@ -19,11 +19,6 @@ public struct RevenuePool<phantom Currency> has key, store {
     cumulative_earnings: u128,
 }
 
-// Registry object for tracking derived addresses for RevenuePools.
-public struct RevenuePoolRegistry has key {
-    id: UID,
-}
-
 /// Key used to deterministically derive the RevenuePool object ID.
 public struct RevenuePoolKey<phantom Currency>() has copy, drop, store;
 
@@ -38,16 +33,6 @@ public struct RevenueDepositedEvent<phantom Currency> has copy, drop {
 
 const EDoesNotExist: u64 = 0;
 const ENoCoinsToReceive: u64 = 1;
-
-//=== Init Function ===
-
-fun init(_otw: REVENUE_POOL, ctx: &mut TxContext) {
-    let revenue_pool_registry = RevenuePoolRegistry {
-        id: object::new(ctx),
-    };
-
-    transfer::share_object(revenue_pool_registry);
-}
 
 //=== Public Functions ===
 

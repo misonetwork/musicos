@@ -2,13 +2,13 @@
 name = "MusicOS"
 edition = "2024.beta"
 license = "Apache 2.0"
-authors = ["Sona Labs, Inc. (musicos@sonamusic.com)"]
+authors = ["Sona Labs, Inc. (build@sonamusic.com)"]
 
 [dependencies]
 CurrencyTreasury = { git = "https://github.com/studio-mirai/currency_treasury.git", rev = "main" }
 InterestBPS = { local = "../../../miraicloud/mirainet/interest-mvr/bps" }
 InterestMath = { local = "../../../miraicloud/mirainet/interest-mvr/math" }
-MUSIC = { local = "../coins/music" } # MUSIC token
+MUSIC = { local = "../coins/music" }
 
 [addresses]
 musicos = "0x0"

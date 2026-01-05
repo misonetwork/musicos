@@ -1,8 +1,10 @@
-module musicos::admin;
+module musicos::musicos;
 
 //=== Structs ===
 
-public struct ADMIN() has drop;
+public struct MUSICOS() has drop;
+
+public struct MusicOS() has drop;
 
 public struct AdminCap has key, store {
     id: UID,
@@ -10,10 +12,16 @@ public struct AdminCap has key, store {
 
 //=== Init Function ===
 
-fun init(_otw: ADMIN, ctx: &mut TxContext) {
+fun init(_otw: MUSICOS, ctx: &mut TxContext) {
     let admin_cap = AdminCap {
         id: object::new(ctx),
     };
 
     transfer::public_transfer(admin_cap, ctx.sender());
+}
+
+//=== Public Functions ===
+
+public fun new(): MusicOS {
+    MusicOS()
 }
