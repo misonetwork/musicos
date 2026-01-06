@@ -18,6 +18,7 @@ use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
 use sui::coin_registry::{Currency, MetadataCap};
+use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
 
@@ -39,6 +40,10 @@ public struct CompositionAdminCap has key, store {
 }
 
 public struct ShareCompositionPromise(ID)
+
+//=== Derivation Keys ===
+
+public struct CompositionAdminCapKey() has copy, drop, store;
 
 //=== Events ===
 
@@ -105,7 +110,7 @@ public fun new<CompositionShare>(
     Balance<CompositionShare>,
     ShareCompositionPromise,
 ) {
-    let composition = Composition {
+    let mut composition = Composition {
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
@@ -116,12 +121,13 @@ public fun new<CompositionShare>(
     };
 
     let composition_admin_cap = CompositionAdminCap {
-        id: object::new(ctx),
+        id: claim(&mut composition.id, CompositionAdminCapKey()),
         composition_id: composition.id(),
     };
 
-    let mut description = b"MusicOS Composition Shares for ".to_string();
+    let mut description = b"MusicOS Composition Shares for 0x".to_string();
     description.append(composition.id().to_address().to_string());
+    description.append(b".".to_string());
 
     let composition_shares = share::intialize<CompositionShare>(
         b"MusicOS Composition Share".to_string(),

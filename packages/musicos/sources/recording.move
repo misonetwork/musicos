@@ -46,6 +46,9 @@ public struct RecordingAdminCap has key, store {
 
 public struct ShareRecordingPromise(ID)
 
+//=== Derivation Keys ===
+
+public struct RecordingAdminCapKey() has copy, drop, store;
 public struct RecordingKey(vector<u8>) has copy, drop, store;
 
 //=== Events ===
@@ -106,7 +109,7 @@ public fun new<RecordingShare, CompositionShare>(
     let composition_id = composition.id();
     let genre_id = genre.id();
 
-    let recording = Recording<RecordingShare> {
+    let mut recording = Recording<RecordingShare> {
         id: claim(composition.uid_mut(), RecordingKey(*master.digest())),
         state: RecordingState::Initialized,
         composition_id,
@@ -119,12 +122,13 @@ public fun new<RecordingShare, CompositionShare>(
     };
 
     let recording_admin_cap = RecordingAdminCap {
-        id: object::new(ctx),
+        id: claim(&mut recording.id, RecordingAdminCapKey()),
         recording_id: recording.id(),
     };
 
-    let mut description = b"MusicOS Recording Shares for ".to_string();
+    let mut description = b"MusicOS Recording Shares for 0x".to_string();
     description.append(recording.id().to_address().to_string());
+    description.append(b".".to_string());
 
     let recording_shares = share::intialize<RecordingShare>(
         b"MusicOS Recording Share".to_string(),
