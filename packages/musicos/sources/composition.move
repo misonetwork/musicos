@@ -73,7 +73,6 @@ public struct CompositionSplitSetEvent has copy, drop {
 //=== Enums ===
 
 public enum CompositionState has copy, drop, store {
-    Initialized,
     Created,
     Published(u64),
 }
@@ -112,7 +111,7 @@ public fun new<CompositionShare>(
 ) {
     let mut composition = Composition {
         id: object::new(ctx),
-        state: CompositionState::Initialized,
+        state: CompositionState::Created,
         title,
         subtitle: option::none(),
         contributors: vec_map::empty(),
@@ -147,16 +146,15 @@ public fun new<CompositionShare>(
 }
 
 // Share a composition.
-// Required State: Initialized
+// Required State: Created
 public fun share<CompositionShare>(
-    mut self: Composition<CompositionShare>,
+    self: Composition<CompositionShare>,
     share_composition_promise: ShareCompositionPromise,
 ) {
     match (self.state) {
-        CompositionState::Initialized => {
+        CompositionState::Created => {
             let ShareCompositionPromise(composition_id) = share_composition_promise;
             assert!(self.id() == composition_id, EInvalidCompositionForPromise);
-            self.state = CompositionState::Created;
             transfer::share_object(self);
         },
         _ => abort ENotCreatedState,

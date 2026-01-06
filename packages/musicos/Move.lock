@@ -124,6 +124,6 @@ flavor = "sui"
 
 [env.mirainet]
 chain-id = "41a7d3bf"
-original-published-id = "0xd03e74c7fdaf83ff49f9028978463164d52c1ae64b6c740086947c449dc37459"
-latest-published-id = "0xd03e74c7fdaf83ff49f9028978463164d52c1ae64b6c740086947c449dc37459"
+original-published-id = "0x0edf2d4f8a4be0201f04eb3268cb5a7827b72c6d2cd43160a3486a7c8190834c"
+latest-published-id = "0x0edf2d4f8a4be0201f04eb3268cb5a7827b72c6d2cd43160a3486a7c8190834c"
 published-version = "1"
