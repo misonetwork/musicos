@@ -139,10 +139,6 @@ public fun new<CompositionShare>(
 
     let share_composition_promise = ShareCompositionPromise(composition.id());
 
-    // Create MUSIC revenue and royalty pools for the composition.
-    composition.new_revenue_pool<CompositionShare, MUSIC>();
-    composition.new_reward_pool<CompositionShare, MUSIC>();
-
     emit(CompositionCreatedEvent {
         composition_id: composition.id(),
     });
@@ -334,7 +330,7 @@ public fun remove_role_from_contributor<CompositionShare>(
 }
 
 public fun new_revenue_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
-    let revenue_pool = revenue_pool::new_derived<Currency, RevenuePoolKey<Currency>>(
+    let revenue_pool = revenue_pool::new<Currency, RevenuePoolKey<Currency>>(
         &mut self.id,
         key::new_revenue_pool_key<Currency>(),
     );

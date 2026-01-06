@@ -8,6 +8,7 @@ use interest_math::u64::sum;
 use musicos::disc::Disc;
 use musicos::key::{Self, RevenuePoolKey, RewardPoolKey};
 use musicos::track_sequence::{Self, TrackSequence};
+use revenue_pool::revenue_pool::{Self, RevenuePool};
 use reward_pool::reward_pool;
 use std::string::String;
 use sui::balance::Balance;
@@ -174,11 +175,15 @@ public fun set_track_splits(self: &mut Release, cap: &ReleaseAdminCap, track_spl
 
 // TODO: Integrate a RevenuePool.
 // Distribute funds from a release's revenue pool to the royalty pools of the release's compositions and recordings.
-public fun distribute_revenue<Currency>(self: &Release, revenue: &mut Balance<Currency>) {
+public fun distribute_revenue<Currency>(self: &Release, revenue_pool: &mut RevenuePool<Currency>) {
     match (self.state) {
         ReleaseState::Published(_) => {
             // Acquire a mutable reference to the revenue pool's balance.
-            // TODO: Add RevenuPool later, this is a temporary placeholder.
+            let revenue = revenue_pool.balance_mut<Currency, RevenuePoolKey<Currency>>(
+                &self.id,
+                key::new_revenue_pool_key(),
+            );
+
             // Store the value to distribute to the compositions and recordings.
             let distribution_value = revenue.value();
 
