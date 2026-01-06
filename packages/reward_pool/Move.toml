@@ -1,0 +1,17 @@
+[package]
+name = "reward_pool"
+edition = "2024.beta"
+license = "Apache 2.0"
+authors = ["Sona Labs, Inc. (musicos@sonamusic.com)"]
+
+[dependencies]
+Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "mainnet-v1.47.0" }
+
+[addresses]
+reward_pool = "0x0"
+
+
+
+
+
+

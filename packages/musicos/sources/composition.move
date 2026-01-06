@@ -8,10 +8,11 @@ use interest_bps::bps::BPS;
 use music::music::MUSIC;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
+use musicos::key::{Self, RewardPoolKey, RevenuePoolKey};
 use musicos::protocol::Protocol;
-use musicos::revenue_pool;
-use musicos::royalty_pool;
 use musicos::share;
+use revenue_pool::revenue_pool::{Self, RevenuePool};
+use reward_pool::reward_pool::{Self, RewardPool};
 use std::string::String;
 use sui::balance::Balance;
 use sui::clock::Clock;
@@ -139,8 +140,8 @@ public fun new<CompositionShare>(
     let share_composition_promise = ShareCompositionPromise(composition.id());
 
     // Create MUSIC revenue and royalty pools for the composition.
-    composition.new_revenue_pool<MUSIC, CompositionShare>();
-    composition.new_royalty_pool<MUSIC, CompositionShare>();
+    composition.new_revenue_pool<CompositionShare, MUSIC>();
+    composition.new_reward_pool<CompositionShare, MUSIC>();
 
     emit(CompositionCreatedEvent {
         composition_id: composition.id(),
@@ -332,18 +333,20 @@ public fun remove_role_from_contributor<CompositionShare>(
     }
 }
 
-public fun new_revenue_pool<Currency, CompositionShare>(
-    recording: &mut Composition<CompositionShare>,
-) {
-    let revenue_pool = revenue_pool::new<Currency>(&mut recording.id);
+public fun new_revenue_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
+    let revenue_pool = revenue_pool::new_derived<Currency, RevenuePoolKey<Currency>>(
+        &mut self.id,
+        key::new_revenue_pool_key<Currency>(),
+    );
     transfer::public_share_object(revenue_pool);
 }
 
-public fun new_royalty_pool<Currency, CompositionShare>(
-    recording: &mut Composition<CompositionShare>,
-) {
-    let royalty_pool = royalty_pool::new<Currency, CompositionShare>(&mut recording.id);
-    transfer::public_share_object(royalty_pool);
+public fun new_reward_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
+    let reward_pool = reward_pool::new_derived<CompositionShare, Currency, RewardPoolKey<Currency>>(
+        &mut self.id,
+        key::new_reward_pool_key<Currency>(),
+    );
+    transfer::public_share_object(reward_pool);
 }
 
 //=== Package Functions ===

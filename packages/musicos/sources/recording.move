@@ -8,14 +8,14 @@ use interest_bps::bps::BPS;
 use music::music::MUSIC;
 use musicos::audio::Audio;
 use musicos::composition::Composition;
-use musicos::contributor::Contributor;
 use musicos::genre::Genre;
+use musicos::key::{Self, RevenuePoolKey, RewardPoolKey};
 use musicos::protocol::Protocol;
 use musicos::recording_contributor_role::RecordingContributorRole;
-use musicos::revenue_pool;
-use musicos::royalty_pool;
 use musicos::share;
 use musicos::stem::Stem;
+use revenue_pool::revenue_pool::{Self, RevenuePool};
+use reward_pool::reward_pool::{Self, RewardPool};
 use std::type_name::{Self, TypeName};
 use sui::balance::Balance;
 use sui::clock::Clock;
@@ -44,9 +44,9 @@ public struct RecordingAdminCap has key, store {
     recording_id: ID,
 }
 
-public struct RecordingKey(vector<u8>) has copy, drop, store;
-
 public struct ShareRecordingPromise(ID)
+
+public struct RecordingKey(vector<u8>) has copy, drop, store;
 
 //=== Events ===
 
@@ -143,8 +143,7 @@ public fun new<RecordingShare, CompositionShare>(
     let share_recording_promise = ShareRecordingPromise(recording.id());
 
     // Create MUSIC revenue and royalty pools for the recording.
-    recording.new_revenue_pool<MUSIC, RecordingShare>();
-    recording.new_royalty_pool<MUSIC, RecordingShare>();
+    recording.new_reward_pool<RecordingShare, MUSIC>();
 
     emit(RecordingCreatedEvent {
         recording_id: recording.id(),
@@ -245,14 +244,20 @@ public fun remove_stem<RecordingShare>(
     }
 }
 
-public fun new_revenue_pool<Currency, RecordingShare>(recording: &mut Recording<RecordingShare>) {
-    let revenue_pool = revenue_pool::new<Currency>(&mut recording.id);
+public fun new_revenue_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
+    let revenue_pool = revenue_pool::new_derived<Currency, RevenuePoolKey<Currency>>(
+        &mut self.id,
+        key::new_revenue_pool_key<Currency>(),
+    );
     transfer::public_share_object(revenue_pool);
 }
 
-public fun new_royalty_pool<Currency, RecordingShare>(recording: &mut Recording<RecordingShare>) {
-    let royalty_pool = royalty_pool::new<Currency, RecordingShare>(&mut recording.id);
-    transfer::public_share_object(royalty_pool);
+public fun new_reward_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
+    let reward_pool = reward_pool::new_derived<RecordingShare, Currency, RewardPoolKey<Currency>>(
+        &mut self.id,
+        key::new_reward_pool_key<Currency>(),
+    );
+    transfer::public_share_object(reward_pool);
 }
 
 //=== Public View Functions ===

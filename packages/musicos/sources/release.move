@@ -6,11 +6,11 @@ module musicos::release;
 use interest_bps::bps::{Self, BPS};
 use interest_math::u64::sum;
 use musicos::disc::Disc;
-use musicos::protocol::Protocol;
-use musicos::revenue_pool::{Self, RevenuePool};
-use musicos::royalty_pool;
+use musicos::key::{Self, RevenuePoolKey, RewardPoolKey};
 use musicos::track_sequence::{Self, TrackSequence};
+use reward_pool::reward_pool;
 use std::string::String;
+use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::event::emit;
 
@@ -172,15 +172,13 @@ public fun set_track_splits(self: &mut Release, cap: &ReleaseAdminCap, track_spl
     }
 }
 
+// TODO: Integrate a RevenuePool.
 // Distribute funds from a release's revenue pool to the royalty pools of the release's compositions and recordings.
-public fun distribute_revenue<Currency>(self: &Release, revenue_pool: &mut RevenuePool<Currency>) {
+public fun distribute_revenue<Currency>(self: &Release, revenue: &mut Balance<Currency>) {
     match (self.state) {
         ReleaseState::Published(_) => {
-            // Assert the provided revenue pool is the correct one for the release.
-            self.assert_revenue_pool_for_release(revenue_pool);
-
             // Acquire a mutable reference to the revenue pool's balance.
-            let revenue = revenue_pool.balance_mut();
+            // TODO: Add RevenuPool later, this is a temporary placeholder.
             // Store the value to distribute to the compositions and recordings.
             let distribution_value = revenue.value();
 
@@ -212,8 +210,8 @@ public fun distribute_revenue<Currency>(self: &Release, revenue_pool: &mut Reven
                     let rec_id = track.recording_id();
 
                     // Transfer funds to the royalty pools for the composition and recording.
-                    rec_split_balance.send_funds(royalty_pool::derived_address<Currency>(rec_id));
-                    comp_split_balance.send_funds(royalty_pool::derived_address<Currency>(comp_id));
+                    comp_split_balance.send_funds(key::reward_pool_address<Currency>(comp_id));
+                    rec_split_balance.send_funds(key::reward_pool_address<Currency>(rec_id));
                 };
             });
 
@@ -275,15 +273,5 @@ fun assert_track_splits_sum(self: &Release) {
     assert!(
         sum(self.track_splits.map!(|split| split.value())) == bps::max_value!(),
         EInvalidTrackSplitsSum,
-    );
-}
-
-fun assert_revenue_pool_for_release<Currency>(
-    self: &Release,
-    revenue_pool: &RevenuePool<Currency>,
-) {
-    assert!(
-        revenue_pool.id().to_address() == revenue_pool::derived_address<Currency>(self.id()),
-        EIncorrectRevenuePool,
     );
 }

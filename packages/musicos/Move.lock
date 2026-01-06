@@ -2,15 +2,17 @@
 
 [move]
 version = 3
-manifest_digest = "8992ED21BAB6BC8AA12A0370C6EB44341259237C95F31B69FA0310C7BF3C038C"
-deps_digest = "04732BFEF428F74DE262001DC455D76B909EBC394B034A9A15CC095E4BDD9CEF"
+manifest_digest = "A0248C93926585BD69931AEA0A1B0CF59AF3B157810A15D5625B1B6F76494683"
+deps_digest = "CB99E3BEE139471F3765AE330F855F3B376156AA54F37DEDE11BBE5BB0D3BB74"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
   { id = "CurrencyTreasury", name = "CurrencyTreasury" },
   { id = "InterestBPS", name = "InterestBPS" },
   { id = "InterestMath", name = "InterestMath" },
-  { id = "MUSIC", name = "MUSIC" },
   { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Music", name = "Music" },
+  { id = "RevenuePool", name = "RevenuePool" },
+  { id = "RewardPool", name = "RewardPool" },
   { id = "Sui", name = "Sui" },
   { id = "SuiSystem", name = "SuiSystem" },
 ]
@@ -59,7 +61,11 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "MUSIC"
+id = "MoveStdlib"
+source = { git = "https://github.com/MystenLabs/sui.git", rev = "c1f1ae650fb9f9248b39a569400b4420820868db", subdir = "crates/sui-framework/packages/move-stdlib" }
+
+[[move.package]]
+id = "Music"
 source = { local = "../coins/music" }
 
 dependencies = [
@@ -71,8 +77,26 @@ dependencies = [
 ]
 
 [[move.package]]
-id = "MoveStdlib"
-source = { git = "https://github.com/MystenLabs/sui.git", rev = "c1f1ae650fb9f9248b39a569400b4420820868db", subdir = "crates/sui-framework/packages/move-stdlib" }
+id = "RevenuePool"
+source = { local = "../../../revenue_pool" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
+
+[[move.package]]
+id = "RewardPool"
+source = { local = "../../../reward_pool" }
+
+dependencies = [
+  { id = "Bridge", name = "Bridge" },
+  { id = "MoveStdlib", name = "MoveStdlib" },
+  { id = "Sui", name = "Sui" },
+  { id = "SuiSystem", name = "SuiSystem" },
+]
 
 [[move.package]]
 id = "Sui"

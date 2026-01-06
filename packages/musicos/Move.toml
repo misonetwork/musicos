@@ -8,7 +8,9 @@ authors = ["Sona Labs, Inc. (build@sonamusic.com)"]
 CurrencyTreasury = { git = "https://github.com/studio-mirai/currency_treasury.git", rev = "main" }
 InterestBPS = { local = "../../../miraicloud/mirainet/interest-mvr/bps" }
 InterestMath = { local = "../../../miraicloud/mirainet/interest-mvr/math" }
-MUSIC = { local = "../coins/music" }
+Music = { local = "../coins/music" }
+RevenuePool = { local = "../../../revenue_pool" }
+RewardPool = { local = "../../../reward_pool" }
 
 [addresses]
 musicos = "0x0"
