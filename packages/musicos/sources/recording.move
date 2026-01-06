@@ -104,7 +104,6 @@ public fun new<RecordingShare, CompositionShare>(
     share_currency: &mut Currency<RecordingShare>,
     share_metadata_cap: MetadataCap<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
-    ctx: &mut TxContext,
 ): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>, ShareRecordingPromise) {
     let composition_id = composition.id();
     let genre_id = genre.id();
