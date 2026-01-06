@@ -93,14 +93,11 @@ const EInvalidCompositionFee: u64 = 8;
 //=== Public Functions ===
 
 public fun new<CompositionShare>(
-    fee: Balance<MUSIC>,
     title: String,
     split: BPS,
     share_currency: &mut Currency<CompositionShare>,
     share_metadata_cap: MetadataCap<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
-    burn_facility: &BurnFacility<MUSIC>,
-    protocol: &Protocol,
     ctx: &mut TxContext,
 ): (
     Composition<CompositionShare>,
@@ -108,10 +105,7 @@ public fun new<CompositionShare>(
     Balance<CompositionShare>,
     ShareCompositionPromise,
 ) {
-    assert!(fee.value() == protocol.composition_creation_fee(), EInvalidCompositionFee);
-    fee.send_funds(burn_facility.id().to_address());
-
-    let mut composition = Composition {
+    let composition = Composition {
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
@@ -168,12 +162,19 @@ public fun share<CompositionShare>(
 public fun publish<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
+    fee: Balance<MUSIC>,
+    burn_facility: &BurnFacility<MUSIC>,
+    protocol: &Protocol,
     clock: &Clock,
 ) {
     self.authorize(cap);
 
     match (self.state) {
         CompositionState::Created => {
+            // Assert the fee is correct.
+            assert!(fee.value() == protocol.composition_publishing_fee(), EInvalidCompositionFee);
+            fee.send_funds(burn_facility.id().to_address());
+
             // Assert the composition has at least one contributor.
             assert!(!self.contributors.is_empty(), ENoContributors);
 
@@ -338,7 +339,7 @@ public fun new_revenue_pool<CompositionShare, Currency>(self: &mut Composition<C
 }
 
 public fun new_reward_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
-    let reward_pool = reward_pool::new_derived<CompositionShare, Currency, RewardPoolKey<Currency>>(
+    let reward_pool = reward_pool::new<CompositionShare, Currency, RewardPoolKey<Currency>>(
         &mut self.id,
         key::new_reward_pool_key<Currency>(),
     );

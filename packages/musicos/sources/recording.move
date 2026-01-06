@@ -14,8 +14,8 @@ use musicos::protocol::Protocol;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share;
 use musicos::stem::Stem;
-use revenue_pool::revenue_pool::{Self, RevenuePool};
-use reward_pool::reward_pool::{Self, RewardPool};
+use revenue_pool::revenue_pool;
+use reward_pool::reward_pool;
 use std::type_name::{Self, TypeName};
 use sui::balance::Balance;
 use sui::clock::Clock;
@@ -95,24 +95,18 @@ const EInvalidRecordingFee: u64 = 5;
 //=== Public Functions ===
 
 public fun new<RecordingShare, CompositionShare>(
-    fee: Balance<MUSIC>,
     composition: &mut Composition<CompositionShare>,
     genre: &Genre,
     master: Audio,
     share_currency: &mut Currency<RecordingShare>,
     share_metadata_cap: MetadataCap<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
-    burn_facility: &BurnFacility<MUSIC>,
-    protocol: &Protocol,
     ctx: &mut TxContext,
 ): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>, ShareRecordingPromise) {
-    assert!(fee.value() == protocol.recording_creation_fee(), EInvalidRecordingFee);
-    fee.send_funds(burn_facility.id().to_address());
-
     let composition_id = composition.id();
     let genre_id = genre.id();
 
-    let mut recording = Recording<RecordingShare> {
+    let recording = Recording<RecordingShare> {
         id: claim(composition.uid_mut(), RecordingKey(*master.digest())),
         state: RecordingState::Initialized,
         composition_id,
@@ -141,9 +135,6 @@ public fun new<RecordingShare, CompositionShare>(
     );
 
     let share_recording_promise = ShareRecordingPromise(recording.id());
-
-    // Create MUSIC revenue and royalty pools for the recording.
-    recording.new_reward_pool<RecordingShare, MUSIC>();
 
     emit(RecordingCreatedEvent {
         recording_id: recording.id(),
@@ -177,12 +168,19 @@ public fun share<RecordingShare>(
 public fun publish<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
+    fee: Balance<MUSIC>,
+    burn_facility: &BurnFacility<MUSIC>,
+    protocol: &Protocol,
     clock: &Clock,
 ) {
     self.authorize(cap);
 
     match (self.state) {
         RecordingState::Created => {
+            // Assert the fee is correct.
+            assert!(fee.value() == protocol.recording_publishing_fee(), EInvalidRecordingFee);
+            fee.send_funds(burn_facility.id().to_address());
+
             // Assert the recording has at least one contributor.
             assert!(!self.contributors.is_empty(), ENoContributors);
 
@@ -245,7 +243,7 @@ public fun remove_stem<RecordingShare>(
 }
 
 public fun new_revenue_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
-    let revenue_pool = revenue_pool::new_derived<Currency, RevenuePoolKey<Currency>>(
+    let revenue_pool = revenue_pool::new<Currency, RevenuePoolKey<Currency>>(
         &mut self.id,
         key::new_revenue_pool_key<Currency>(),
     );
@@ -253,7 +251,7 @@ public fun new_revenue_pool<RecordingShare, Currency>(self: &mut Recording<Recor
 }
 
 public fun new_reward_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
-    let reward_pool = reward_pool::new_derived<RecordingShare, Currency, RewardPoolKey<Currency>>(
+    let reward_pool = reward_pool::new<RecordingShare, Currency, RewardPoolKey<Currency>>(
         &mut self.id,
         key::new_reward_pool_key<Currency>(),
     );

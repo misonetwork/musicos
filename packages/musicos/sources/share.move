@@ -6,7 +6,7 @@ module musicos::share;
 use std::string::String;
 use sui::balance::Balance;
 use sui::coin::TreasuryCap;
-use sui::coin_registry::{Currency, MetadataCap};
+use sui::coin_registry::{Currency, MetadataCap, new_currency};
 
 //=== Errors ===
 

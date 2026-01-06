@@ -1,40 +1,24 @@
 module share::share;
 
-use sui::coin::TreasuryCap;
-use sui::coin_registry::{CoinRegistry, MetadataCap};
+use sui::coin_registry::new_currency_with_otw;
 
 //=== Structs ===
 
-public struct Share has key {
-    id: UID,
-}
+public struct SHARE() has drop;
 
-//=== Constants ===
-
-const SYMBOL: vector<u8> = b"SHARE";
-
-//=== Errors ===
-
-const EUnauthorized: u64 = 0;
-
-//=== Public Functions ===
-
-public fun initialize_currency(
-    coin_registry: &mut CoinRegistry,
-    ctx: &mut TxContext,
-): (MetadataCap<Share>, TreasuryCap<Share>) {
-    assert!(ctx.sender() == @initializer, EUnauthorized);
-
-    let (currency_initializer, treasury_cap) = coin_registry.new_currency<Share>(
+fun init(otw: SHARE, ctx: &mut TxContext) {
+    let (currency_initializer, treasury_cap) = new_currency_with_otw(
+        otw,
         6,
-        SYMBOL.to_string(),
-        b"".to_string(),
-        b"".to_string(),
-        b"".to_string(),
+        b"SHARE".to_string(),
+        b"SHARE".to_string(),
+        b"SHARE".to_string(),
+        b"https://sonamusic.com/share.webp".to_string(),
         ctx,
     );
 
     let metadata_cap = currency_initializer.finalize(ctx);
 
-    (metadata_cap, treasury_cap)
+    transfer::public_transfer(metadata_cap, ctx.sender());
+    transfer::public_transfer(treasury_cap, ctx.sender());
 }

@@ -214,7 +214,7 @@ public fun distribute_revenue<Currency>(self: &Release, revenue_pool: &mut Reven
                     let comp_id = track.composition_id();
                     let rec_id = track.recording_id();
 
-                    // Transfer funds to the royalty pools for the composition and recording.
+                    // Transfer funds to the reward pools for the composition and recording.
                     comp_split_balance.send_funds(key::reward_pool_address<Currency>(comp_id));
                     rec_split_balance.send_funds(key::reward_pool_address<Currency>(rec_id));
                 };

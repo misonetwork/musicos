@@ -2,13 +2,18 @@ import { Command } from "commander";
 import { Transaction } from "@mysten/sui/transactions";
 import { Ed25519Keypair } from "@mysten/sui/keypairs/ed25519";
 import { cleanEnv, str } from "envalid";
-import { suiClient } from "../clients";
+import { suiClient, suiGqlClient } from "../clients";
 import { isValidSuiAddress } from "@mysten/sui/utils";
+import { SuiGraphQLClient } from "@mysten/sui/graphql";
+import { graphql } from "@mysten/sui/graphql/schemas/latest";
 
 const env = cleanEnv(process.env, {
   MUSICOS_PACKAGE_ID: str(),
   SUI_MNEMONIC: str(),
 });
+
+const CONTRIBUTOR_TYPE = `${env.MUSICOS_PACKAGE_ID}::contributor::Contributor`;
+const CONTRIBUTOR_ADMIN_CAP_TYPE = `${env.MUSICOS_PACKAGE_ID}::contributor::ContributorAdminCap`;
 
 export function createContributorCommand(): Command {
   const command = new Command("contributor");
@@ -17,8 +22,9 @@ export function createContributorCommand(): Command {
     .command("create")
     .description("Create a contributor.")
     .argument("<kind>", "The kind of contributor to create (individual or group).")
+    .argument("<name>", "The name of the contributor.")
     .argument("<recipient>", "The address to send the ContributorAdminCap to.")
-    .action(async (kind: string, recipient: string) => {
+    .action(async (kind: string, name: string, recipient: string) => {
       if (kind !== "individual" && kind !== "group") {
         throw new Error("Invalid value for <kind>. Must be either 'individual' or 'group'.");
       }
@@ -36,7 +42,7 @@ export function createContributorCommand(): Command {
         });
         const contributorAdminCap = tx.moveCall({
           target: `${env.MUSICOS_PACKAGE_ID}::contributor::new`,
-          arguments: [contributorKind],
+          arguments: [contributorKind, tx.pure.string(name)],
         });
 
         if (!contributorAdminCap) {
@@ -84,6 +90,30 @@ export function createContributorCommand(): Command {
         console.error("Error creating contributor:", error);
         process.exit(1);
       }
+    });
+
+  command
+    .command("list")
+    .description("List contributors you have admin access to.")
+    .option("-a, --address <address>", "Address to query (defaults to your wallet address)")
+    .action(async (options: { address?: string }) => {
+      const query = graphql(`
+        query ($type: String) {
+          objects(filter: { type: $type }) {
+            nodes {
+              asMoveObject {
+                contents {
+                  json
+                }
+              }
+            }
+          }
+        }
+      `);
+      const result = await suiGqlClient.query({ query, variables: { type: CONTRIBUTOR_TYPE } });
+      result.data?.objects?.nodes?.forEach((contributor) => {
+        console.log(contributor.asMoveObject?.contents?.json);
+      });
     });
 
   return command;

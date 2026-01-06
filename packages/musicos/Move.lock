@@ -2,7 +2,7 @@
 
 [move]
 version = 3
-manifest_digest = "A0248C93926585BD69931AEA0A1B0CF59AF3B157810A15D5625B1B6F76494683"
+manifest_digest = "EDDEB8D692FE1ACEDF0BB59A05A336DA70102B92D3E066A6E9ECEED3CDB73012"
 deps_digest = "CB99E3BEE139471F3765AE330F855F3B376156AA54F37DEDE11BBE5BB0D3BB74"
 dependencies = [
   { id = "Bridge", name = "Bridge" },
@@ -29,7 +29,7 @@ dependencies = [
 
 [[move.package]]
 id = "CurrencyTreasury"
-source = { git = "https://github.com/studio-mirai/currency_treasury.git", rev = "main", subdir = "" }
+source = { local = "../../../currency_treasury" }
 
 dependencies = [
   { id = "Bridge", name = "Bridge" },
@@ -124,6 +124,6 @@ flavor = "sui"
 
 [env.mirainet]
 chain-id = "41a7d3bf"
-original-published-id = "0x360c281be83be64b2aaa181408e4156412be81ee54637850ad59e55d54673dc3"
-latest-published-id = "0x360c281be83be64b2aaa181408e4156412be81ee54637850ad59e55d54673dc3"
+original-published-id = "0x0a36c02e393d4e86f3f53fc731f0b7456c7c9aa3252092ea148533aebf7bc770"
+latest-published-id = "0x0a36c02e393d4e86f3f53fc731f0b7456c7c9aa3252092ea148533aebf7bc770"
 published-version = "1"

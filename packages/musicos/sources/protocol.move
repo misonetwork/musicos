@@ -20,8 +20,8 @@ public struct Protocol has key, store {
     contributor_verification_authority_types: VecSet<TypeName>,
     play_authority_types: VecSet<TypeName>,
     royalty_distribution_duration_epochs: u64,
-    composition_creation_fee: u64,
-    recording_creation_fee: u64,
+    composition_publishing_fee: u64,
+    recording_publishing_fee: u64,
 }
 
 //=== Enums ===
@@ -60,8 +60,8 @@ fun init(_otw: PROTOCOL, ctx: &mut TxContext) {
         contributor_verification_authority_types: vec_set::empty(),
         play_authority_types: vec_set::empty(),
         royalty_distribution_duration_epochs: DEFAULT_ROYALTY_DISTRIBUTION_DURATION_EPOCHS,
-        composition_creation_fee: 0,
-        recording_creation_fee: 0,
+        composition_publishing_fee: 0,
+        recording_publishing_fee: 0,
     };
 
     transfer::share_object(protocol);
@@ -145,12 +145,12 @@ public fun set_royalty_distribution_duration_epochs(
     self.royalty_distribution_duration_epochs = duration;
 }
 
-public fun set_composition_creation_fee(self: &mut Protocol, _: &AdminCap, fee: u64) {
-    self.composition_creation_fee = fee;
+public fun set_composition_publishing_fee(self: &mut Protocol, _: &AdminCap, fee: u64) {
+    self.composition_publishing_fee = fee;
 }
 
-public fun set_recording_creation_fee(self: &mut Protocol, _: &AdminCap, fee: u64) {
-    self.recording_creation_fee = fee;
+public fun set_recording_publishing_fee(self: &mut Protocol, _: &AdminCap, fee: u64) {
+    self.recording_publishing_fee = fee;
 }
 
 //=== Public View Functions ===
@@ -206,12 +206,12 @@ public fun royalty_distribution_duration_epochs(self: &Protocol): u64 {
     self.royalty_distribution_duration_epochs
 }
 
-public fun composition_creation_fee(self: &Protocol): u64 {
-    self.composition_creation_fee
+public fun composition_publishing_fee(self: &Protocol): u64 {
+    self.composition_publishing_fee
 }
 
-public fun recording_creation_fee(self: &Protocol): u64 {
-    self.recording_creation_fee
+public fun recording_publishing_fee(self: &Protocol): u64 {
+    self.recording_publishing_fee
 }
 
 //=== Assert Functions ===
