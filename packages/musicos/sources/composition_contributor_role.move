@@ -15,15 +15,15 @@ public enum CompositionContributorRole has copy, drop, store {
 
 //=== Public Functions ===
 
-public fun new_composer(): CompositionContributorRole {
+public fun new_composer_role(): CompositionContributorRole {
     CompositionContributorRole::Composer
 }
 
-public fun new_lyricist(): CompositionContributorRole {
+public fun new_lyricist_role(): CompositionContributorRole {
     CompositionContributorRole::Lyricist
 }
 
-public fun new_songwriter(): CompositionContributorRole {
+public fun new_songwriter_role(): CompositionContributorRole {
     CompositionContributorRole::Songwriter
 }
 

@@ -8,6 +8,7 @@ use interest_bps::bps::BPS;
 use music::music::MUSIC;
 use musicos::audio::Audio;
 use musicos::composition::Composition;
+use musicos::contributor::Contributor;
 use musicos::genre::Genre;
 use musicos::key::{Self, RevenuePoolKey, RewardPoolKey};
 use musicos::protocol::Protocol;
@@ -69,6 +70,16 @@ public struct RecordingStemAddedEvent has copy, drop {
     audio_digest: vector<u8>,
 }
 
+public struct RecordingContributorAddedEvent has copy, drop {
+    recording_id: ID,
+    contributor_id: ID,
+}
+
+public struct RecordingContributorRemovedEvent has copy, drop {
+    recording_id: ID,
+    contributor_id: ID,
+}
+
 public struct RecordingStemRemovedEvent has copy, drop {
     recording_id: ID,
     audio_digest: vector<u8>,
@@ -77,13 +88,14 @@ public struct RecordingStemRemovedEvent has copy, drop {
 //=== Enums ===
 
 public enum RecordingState has copy, drop, store {
-    Initialized,
     Created,
     Published(u64),
 }
 
 //=== Constants ===
 
+const MIN_ROLES_PER_CONTRIBUTOR: u64 = 1;
+const MAX_ROLES_PER_CONTRIBUTOR: u64 = 20;
 const MAX_STEMS_PER_RECORDING: u8 = 10;
 
 //=== Errors ===
@@ -94,6 +106,8 @@ const EMaxStemsExceeded: u64 = 2;
 const EInvalidRecordingForPromise: u64 = 3;
 const ENoContributors: u64 = 4;
 const EInvalidRecordingFee: u64 = 5;
+const EMinRolesNotMet: u64 = 6;
+const EExceedsMaxRoles: u64 = 7;
 
 //=== Public Functions ===
 
@@ -110,7 +124,7 @@ public fun new<RecordingShare, CompositionShare>(
 
     let mut recording = Recording<RecordingShare> {
         id: claim(composition.uid_mut(), RecordingKey(*master.digest())),
-        state: RecordingState::Initialized,
+        state: RecordingState::Created,
         composition_id,
         composition_split: composition.split(),
         genre_id: genre_id,
@@ -152,14 +166,13 @@ public fun new<RecordingShare, CompositionShare>(
 // Share a recording.
 // Required State: Initialized
 public fun share<RecordingShare>(
-    mut self: Recording<RecordingShare>,
+    self: Recording<RecordingShare>,
     share_recording_promise: ShareRecordingPromise,
 ) {
     match (self.state) {
-        RecordingState::Initialized => {
+        RecordingState::Created => {
             let ShareRecordingPromise(recording_id) = share_recording_promise;
             assert!(self.id() == recording_id, EInvalidRecordingForPromise);
-            self.state = RecordingState::Created;
             transfer::share_object(self);
         },
         _ => abort ENotCreatedState,
@@ -195,6 +208,52 @@ public fun publish<RecordingShare>(
         },
         _ => abort ENotCreatedState,
     };
+}
+
+// Add a contributor to a recording.
+public fun add_contributor<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap,
+    contributor: &Contributor,
+    roles: vector<RecordingContributorRole>,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        RecordingState::Created => {
+            assert!(roles.length() >= MIN_ROLES_PER_CONTRIBUTOR, EMinRolesNotMet);
+            assert!(roles.length() <= MAX_ROLES_PER_CONTRIBUTOR, EExceedsMaxRoles);
+
+            self.contributors.insert(contributor.id(), roles);
+
+            emit(RecordingContributorAddedEvent {
+                recording_id: self.id(),
+                contributor_id: contributor.id(),
+            });
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+// Remove a contributor from a recording.
+public fun remove_contributor<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap,
+    contributor_id: ID,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        RecordingState::Created => {
+            self.contributors.remove(&contributor_id);
+
+            emit(RecordingContributorRemovedEvent {
+                recording_id: self.id(),
+                contributor_id: contributor_id,
+            });
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
 // Adds a stem to a recording.
