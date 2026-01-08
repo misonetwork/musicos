@@ -28,7 +28,7 @@ public struct Composition<phantom CompositionShare> has key {
     id: UID,
     state: CompositionState,
     title: String,
-    subtitle: Option<String>,
+    alternate_titles: vector<String>,
     contributors: VecMap<ID, vector<CompositionContributorRole>>,
     split: BPS,
     share_metadata_cap: MetadataCap<CompositionShare>,
@@ -113,7 +113,7 @@ public fun new<CompositionShare>(
         id: object::new(ctx),
         state: CompositionState::Created,
         title,
-        subtitle: option::none(),
+        alternate_titles: vector[],
         contributors: vec_map::empty(),
         split,
         share_metadata_cap,
@@ -209,18 +209,31 @@ public fun set_title<CompositionShare>(
     }
 }
 
-// Set the subtitle of a composition.
-// Required State: Created
-public fun set_subtitle<CompositionShare>(
+public fun add_alternate_title<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    subtitle: String,
+    alternate_title: String,
 ) {
     self.authorize(cap);
 
     match (self.state) {
         CompositionState::Created => {
-            self.subtitle.swap_or_fill(subtitle);
+            self.alternate_titles.push_back(alternate_title);
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+public fun remove_alternate_title<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    alternate_title_idx: u64,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        CompositionState::Created => {
+            self.alternate_titles.swap_remove(alternate_title_idx);
         },
         _ => abort ENotCreatedState,
     }
@@ -366,8 +379,10 @@ public fun title<CompositionShare>(self: &Composition<CompositionShare>): &Strin
     &self.title
 }
 
-public fun subtitle<CompositionShare>(self: &Composition<CompositionShare>): &Option<String> {
-    &self.subtitle
+public fun alternate_titles<CompositionShare>(
+    self: &Composition<CompositionShare>,
+): &vector<String> {
+    &self.alternate_titles
 }
 
 public fun contributors<CompositionShare>(

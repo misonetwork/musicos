@@ -17,6 +17,7 @@ use musicos::share;
 use musicos::stem::Stem;
 use revenue_pool::revenue_pool;
 use reward_pool::reward_pool;
+use std::string::String;
 use std::type_name::{Self, TypeName};
 use sui::balance::Balance;
 use sui::clock::Clock;
@@ -25,19 +26,31 @@ use sui::coin_registry::{Currency, MetadataCap};
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
+use sui::vec_set::{Self, VecSet};
 
 //=== Structs ===
 
 public struct Recording<phantom RecordingShare> has key {
+    // System
     id: UID,
     state: RecordingState,
+    title: String,
+    title_version: Option<String>,
     composition_id: ID,
     composition_split: BPS,
     genre_id: ID,
+    secondary_genre_ids: VecSet<ID>,
+    language: Option<String>,
+    is_explicit: bool,
+    is_instrumental: bool,
+    p_line_year: u16,
+    p_line_text: Option<String>,
+    share_metadata_cap: MetadataCap<RecordingShare>,
+    artists: VecSet<ID>,
+    featured_artists: VecSet<ID>,
     contributors: VecMap<ID, vector<RecordingContributorRole>>,
     master: Audio,
     stems: vector<Stem>,
-    share_metadata_cap: MetadataCap<RecordingShare>,
 }
 
 public struct RecordingAdminCap has key, store {
@@ -127,8 +140,18 @@ public fun new<RecordingShare, CompositionShare>(
         state: RecordingState::Created,
         composition_id,
         composition_split: composition.split(),
-        genre_id: genre_id,
+        title: *composition.title(),
+        title_version: option::none(),
+        genre_id,
+        secondary_genre_ids: vec_set::empty(),
+        language: option::none(),
+        is_explicit: false,
+        is_instrumental: false,
+        p_line_year: 0,
+        p_line_text: option::none(),
         contributors: vec_map::empty(),
+        artists: vec_set::empty(),
+        featured_artists: vec_set::empty(),
         master,
         stems: vector[],
         share_metadata_cap,

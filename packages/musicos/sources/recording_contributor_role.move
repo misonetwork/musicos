@@ -18,7 +18,6 @@ public enum RecordingContributorRole has copy, drop, store {
     MusicDirector(Option<RecordingContributorLevel>),
     MusicSupervisor(Option<RecordingContributorLevel>),
     Orchestrator(Option<RecordingContributorLevel>),
-    Performer(Option<RecordingContributorLevel>),
     Producer(Option<RecordingContributorLevel>),
     RecordingEngineer(Option<RecordingContributorLevel>),
     SoundDesigner(Option<RecordingContributorLevel>),

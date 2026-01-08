@@ -4,7 +4,6 @@
 module musicos::release;
 
 use interest_bps::bps::{Self, BPS};
-use interest_math::u64::sum;
 use musicos::disc::Disc;
 use musicos::key::{Self, RevenuePoolKey, RewardPoolKey};
 use musicos::track_sequence::{Self, TrackSequence};
@@ -34,13 +33,6 @@ public struct ReleaseAdminCap has key, store {
 }
 
 public struct ShareReleasePromise(ID)
-
-//=== Enums ===
-
-public enum ReleaseOrigin has copy, drop, store {
-    Native(u64),
-    Legacy(u64),
-}
 
 //=== Events ===
 
@@ -276,7 +268,7 @@ fun assert_track_splits_length(self: &Release) {
 // Assert the sum of the track splits is equal to 10_000 (100%).
 fun assert_track_splits_sum(self: &Release) {
     assert!(
-        sum(self.track_splits.map!(|split| split.value())) == bps::max_value!(),
+        self.track_splits.fold!(0, |acc, split| acc + split.value()) == bps::max_value!(),
         EInvalidTrackSplitsSum,
     );
 }

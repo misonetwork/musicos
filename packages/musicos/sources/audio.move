@@ -3,18 +3,12 @@
 
 module musicos::audio;
 
-use interest_math::i32::I32;
 use musicos::protocol::Protocol;
 use std::type_name::with_defining_ids;
 
 //=== Structs ===
 
 public struct Audio has drop, store {
-    stream: AudioStream,
-    features: AudioFeatures,
-}
-
-public struct AudioStream has drop, store {
     channels: u8,
     bit_depth: u8,
     sample_rate_hz: u32,
@@ -22,20 +16,28 @@ public struct AudioStream has drop, store {
     digest: vector<u8>,
 }
 
-public struct AudioFeatures has drop, store {
-    spectral_centroid: I32,
-}
+//=== Constants ===
+
+const SUPPORTED_BIT_DEPTHS: vector<u8> = vector[16, 24, 32];
+const SUPPORTED_CHANNELS: vector<u8> = vector[1, 2]; // Mono, Stereo
+const SUPPORTED_SAMPLE_RATES_HZ: vector<u32> = vector[44_100, 48_000, 96_000, 192_000];
 
 //=== Errors ===
 
 const EInvalidAudioCreationAuthority: u64 = 0;
+const EUnsupportedBitDepth: u64 = 0;
+const EUnsupportedChannels: u64 = 1;
+const EUnsupportedSampleRate: u64 = 1;
 
 //=== Public Functions ===
 
 public fun new<Authority: drop>(
     _: Authority,
-    stream: AudioStream,
-    features: AudioFeatures,
+    channels: u8,
+    bit_depth: u8,
+    sample_rate_hz: u32,
+    samples: u64,
+    digest: vector<u8>,
     protocol: &Protocol,
 ): Audio {
     assert!(
@@ -43,20 +45,11 @@ public fun new<Authority: drop>(
         EInvalidAudioCreationAuthority,
     );
 
-    Audio {
-        stream,
-        features,
-    }
-}
+    assert!(supported_bit_depths!().contains(&bit_depth), EUnsupportedBitDepth);
+    assert!(supported_channels!().contains(&channels), EUnsupportedChannels);
+    assert!(supported_sample_rates_hz!().contains(&sample_rate_hz), EUnsupportedSampleRate);
 
-public fun new_stream(
-    channels: u8,
-    bit_depth: u8,
-    sample_rate_hz: u32,
-    samples: u64,
-    digest: vector<u8>,
-): AudioStream {
-    AudioStream {
+    Audio {
         channels,
         bit_depth,
         sample_rate_hz,
@@ -65,38 +58,40 @@ public fun new_stream(
     }
 }
 
-public fun new_features(spectral_centroid: I32): AudioFeatures {
-    AudioFeatures {
-        spectral_centroid,
-    }
-}
-
 //=== Public View Functions ===
 
 public fun channels(self: &Audio): u8 {
-    self.stream.channels
+    self.channels
 }
 
 public fun bit_depth(self: &Audio): u8 {
-    self.stream.bit_depth
+    self.bit_depth
 }
 
 public fun sample_rate_hz(self: &Audio): u32 {
-    self.stream.sample_rate_hz
+    self.sample_rate_hz
 }
 
 public fun samples(self: &Audio): u64 {
-    self.stream.samples
+    self.samples
 }
 
 public fun digest(self: &Audio): &vector<u8> {
-    &self.stream.digest
+    &self.digest
 }
 
 public fun duration(self: &Audio): u64 {
-    self.stream.samples / (self.stream.sample_rate_hz as u64)
+    self.samples / (self.sample_rate_hz as u64)
 }
 
-public fun spectral_centroid(self: &Audio): I32 {
-    self.features.spectral_centroid
+public macro fun supported_bit_depths(): vector<u8> {
+    SUPPORTED_BIT_DEPTHS
+}
+
+public macro fun supported_channels(): vector<u8> {
+    SUPPORTED_CHANNELS
+}
+
+public macro fun supported_sample_rates_hz(): vector<u32> {
+    SUPPORTED_SAMPLE_RATES_HZ
 }
