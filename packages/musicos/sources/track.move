@@ -3,7 +3,7 @@
 
 module musicos::track;
 
-use interest_bps::bps::BPS;
+use musicos::bps::BPS;
 use musicos::recording::{Recording, RecordingAdminCap};
 use std::string::String;
 
@@ -15,6 +15,8 @@ public struct Track has drop, store {
     recording_id: ID,
     duration: u64,
     genre_id: ID,
+    // Optional track-level artwork that overrides the release-level artwork.
+    artwork: Option<u256>,
 }
 
 //=== Public Functions ===
@@ -22,6 +24,7 @@ public struct Track has drop, store {
 public fun new<RecordingShare>(
     cap: &RecordingAdminCap,
     recording: &Recording<RecordingShare>,
+    artwork: Option<u256>,
 ): Track {
     recording.authorize(cap);
 
@@ -31,6 +34,7 @@ public fun new<RecordingShare>(
         recording_id: recording.id(),
         duration: recording.master().duration(),
         genre_id: recording.genre_id(),
+        artwork,
     }
 }
 

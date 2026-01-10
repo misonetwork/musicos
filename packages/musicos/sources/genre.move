@@ -3,7 +3,7 @@
 
 module musicos::genre;
 
-use musicos::musicos::AdminCap;
+use musicos::admin::AdminCap;
 use std::string::String;
 use sui::derived_object::claim;
 use sui::event::emit;

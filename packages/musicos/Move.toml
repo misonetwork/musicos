@@ -6,14 +6,11 @@ authors = ["Sona Labs, Inc. (build@sonamusic.com)"]
 
 [dependencies]
 currency_treasury = { local = "../../../currency_treasury" }
-interest_bps = { local = "../../../miraicloud/mirainet/interest-mvr/bps" }
+fee_pool = { local = "../../../fee_pool" }
 iso639_1 = { local = "../../../iso639_1" }
 music = { local = "../coins/music" }
 revenue_pool = { local = "../../../revenue_pool" }
 reward_pool = { local = "../../../reward_pool" }
 
-[addresses]
-admin = "0xf3a64ba48423dccce1b0e09f33984e88a8649a2aad0bfbd90ef5b3127f065d8d"
-
 [environments]
-mirainet = "41a7d3bf"
+mirainet = "dd32b170"

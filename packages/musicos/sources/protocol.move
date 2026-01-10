@@ -3,7 +3,9 @@
 
 module musicos::protocol;
 
-use musicos::musicos::AdminCap;
+use musicos::admin::AdminCap;
+use musicos::bps::{Self, BPS};
+use revenue_pool::revenue_pool::RevenuePool;
 use std::type_name::{TypeName, with_defining_ids};
 use sui::vec_set::{Self, VecSet};
 
@@ -14,6 +16,7 @@ public struct PROTOCOL() has drop;
 public struct Protocol has key, store {
     id: UID,
     state: ProtocolState,
+    commission_rate: BPS,
     // Authority types for creating Audio structs.
     audio_creation_authority_types: VecSet<TypeName>,
     // Authority types for verifying Contributor objects.
@@ -39,6 +42,7 @@ public enum ProtocolState has copy, drop, store {
 //=== Constants ===
 
 const DEFAULT_ROYALTY_DISTRIBUTION_DURATION_EPOCHS: u64 = 10;
+const DEFAULT_COMMISSION_RATE_VALUE: u64 = 100; // 1%
 const DEPRECATION_DELAY_EPOCHS: u64 = 5;
 
 //=== Errors ===
@@ -62,6 +66,7 @@ fun init(_otw: PROTOCOL, ctx: &mut TxContext) {
         royalty_distribution_duration_epochs: DEFAULT_ROYALTY_DISTRIBUTION_DURATION_EPOCHS,
         composition_publishing_fee: 0,
         recording_publishing_fee: 0,
+        commission_rate: bps::new(DEFAULT_COMMISSION_RATE_VALUE),
     };
 
     transfer::share_object(protocol);
@@ -155,6 +160,38 @@ public fun set_recording_publishing_fee(self: &mut Protocol, _: &AdminCap, fee: 
 
 //=== Public View Functions ===
 
+public fun id(self: &Protocol): ID {
+    self.id.to_inner()
+}
+
+public fun commission_rate(self: &Protocol): &BPS {
+    &self.commission_rate
+}
+
+public fun audio_creation_authority_types(self: &Protocol): &VecSet<TypeName> {
+    &self.audio_creation_authority_types
+}
+
+public fun contributor_verification_authority_types(self: &Protocol): &VecSet<TypeName> {
+    &self.contributor_verification_authority_types
+}
+
+public fun play_authority_types(self: &Protocol): &VecSet<TypeName> {
+    &self.play_authority_types
+}
+
+public fun royalty_distribution_duration_epochs(self: &Protocol): u64 {
+    self.royalty_distribution_duration_epochs
+}
+
+public fun composition_publishing_fee(self: &Protocol): u64 {
+    self.composition_publishing_fee
+}
+
+public fun recording_publishing_fee(self: &Protocol): u64 {
+    self.recording_publishing_fee
+}
+
 public fun is_genesis_state(self: &Protocol): bool {
     match (&self.state) {
         ProtocolState::Genesis => true,
@@ -190,28 +227,16 @@ public fun is_deprecated_state(self: &Protocol): bool {
     }
 }
 
-public fun audio_creation_authority_types(self: &Protocol): &VecSet<TypeName> {
-    &self.audio_creation_authority_types
+//=== Package Functions ===
+
+public(package) fun uid_mut(self: &mut Protocol): &mut UID {
+    &mut self.id
 }
 
-public fun contributor_verification_authority_types(self: &Protocol): &VecSet<TypeName> {
-    &self.contributor_verification_authority_types
-}
+//=== Package View Functions ===
 
-public fun play_authority_types(self: &Protocol): &VecSet<TypeName> {
-    &self.play_authority_types
-}
-
-public fun royalty_distribution_duration_epochs(self: &Protocol): u64 {
-    self.royalty_distribution_duration_epochs
-}
-
-public fun composition_publishing_fee(self: &Protocol): u64 {
-    self.composition_publishing_fee
-}
-
-public fun recording_publishing_fee(self: &Protocol): u64 {
-    self.recording_publishing_fee
+public(package) fun uid(self: &Protocol): &UID {
+    &self.id
 }
 
 //=== Assert Functions ===

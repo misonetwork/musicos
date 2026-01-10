@@ -3,9 +3,11 @@
 
 module musicos::release;
 
-use interest_bps::bps::{Self, BPS};
+use musicos::bps::{Self, BPS};
+use musicos::cover_art::CoverArt;
 use musicos::disc::Disc;
-use musicos::key::{Self, RevenuePoolKey, RewardPoolKey};
+use musicos::key::{Self, RevenuePoolKey, revenue_pool_address};
+use musicos::protocol::Protocol;
 use musicos::track_sequence::{Self, TrackSequence};
 use revenue_pool::revenue_pool::{Self, RevenuePool};
 use reward_pool::reward_pool;
@@ -25,6 +27,7 @@ public struct Release has key {
     discs: vector<Disc>,
     track_sequence: TrackSequence,
     track_splits: vector<BPS>,
+    cover_art: CoverArt,
 }
 
 public struct ReleaseAdminCap has key, store {
@@ -73,8 +76,7 @@ const EInvalidReleaseForPromise: u64 = 4;
 const EInvalidTrackSplitsLength: u64 = 5;
 const EInvalidTrackSplitsSum: u64 = 6;
 const EMaxDiscsExceeded: u64 = 7;
-const EIncorrectRevenuePool: u64 = 8;
-const ENoRevenueToDistribute: u64 = 9;
+const ENoRevenueToDistribute: u64 = 8;
 
 //=== Public Functions ===
 
@@ -82,7 +84,7 @@ const ENoRevenueToDistribute: u64 = 9;
 public fun new(
     kind: ReleaseKind,
     title: String,
-    subtitle: Option<String>,
+    cover_art: CoverArt,
     discs: vector<Disc>,
     ctx: &mut TxContext,
 ): (Release, ReleaseAdminCap, ShareReleasePromise) {
@@ -96,10 +98,11 @@ public fun new(
         kind,
         state: ReleaseState::Initialized,
         title,
-        subtitle,
+        subtitle: option::none(),
         discs,
         track_sequence,
         track_splits: vector[],
+        cover_art,
     };
 
     let release_admin_cap = ReleaseAdminCap {
@@ -165,21 +168,31 @@ public fun set_track_splits(self: &mut Release, cap: &ReleaseAdminCap, track_spl
     }
 }
 
-// TODO: Integrate a RevenuePool.
 // Distribute funds from a release's revenue pool to the royalty pools of the release's compositions and recordings.
-public fun distribute_revenue<Currency>(self: &Release, revenue_pool: &mut RevenuePool<Currency>) {
+public fun distribute_revenue<Currency>(
+    self: &Release,
+    revenue_pool: &mut RevenuePool<Currency>,
+    protocol: &Protocol,
+) {
     match (self.state) {
         ReleaseState::Published(_) => {
             // Acquire a mutable reference to the revenue pool's balance.
+            // This will abort if the provided revenue pool is not the correct one for the release
+            // because revenue_pool.balance_mut() performs an authorization check internally.
             let revenue = revenue_pool.balance_mut<Currency, RevenuePoolKey<Currency>>(
                 &self.id,
                 key::new_revenue_pool_key(),
             );
 
-            // Store the value to distribute to the compositions and recordings.
-            let distribution_value = revenue.value();
+            assert!(revenue.value() > 0, ENoRevenueToDistribute);
 
-            assert!(distribution_value > 0, ENoRevenueToDistribute);
+            // Calculate the protocol commission and transfer it to the protocol's revenue pool.
+            let protocol_commission_value = protocol.commission_rate().calc(revenue.value());
+            let protocol_commission_balance = revenue.split(protocol_commission_value);
+            protocol_commission_balance.send_funds(revenue_pool_address<Currency>(protocol.id()));
+
+            // Store the distribution's principal value.
+            let distribution_value = revenue.value();
 
             let release_id = self.id();
 
@@ -196,19 +209,16 @@ public fun distribute_revenue<Currency>(self: &Release, revenue_pool: &mut Reven
 
                 if (track_split.value() > 0) {
                     let rec_split_value = track_split.calc(distribution_value);
-                    let mut rec_split_balance = revenue.split(rec_split_value);
+                    let mut rec_split = revenue.split(rec_split_value);
 
                     // Calculate the composition's revenue share, and split the value from the recording's revenue.
                     // Use rec_split_value directly since split() guarantees the exact amount requested.
                     let comp_split_value = track.composition_split().calc(rec_split_value);
-                    let comp_split_balance = rec_split_balance.split(comp_split_value);
-
-                    let comp_id = track.composition_id();
-                    let rec_id = track.recording_id();
+                    let comp_split = rec_split.split(comp_split_value);
 
                     // Transfer funds to the reward pools for the composition and recording.
-                    comp_split_balance.send_funds(key::reward_pool_address<Currency>(comp_id));
-                    rec_split_balance.send_funds(key::reward_pool_address<Currency>(rec_id));
+                    comp_split.send_funds(reward_pool_address<Currency>(track.composition_id()));
+                    rec_split.send_funds(reward_pool_address<Currency>(track.recording_id()));
                 };
             });
 

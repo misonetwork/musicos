@@ -4,16 +4,20 @@
 module musicos::composition;
 
 use currency_treasury::burn_facility::BurnFacility;
-use interest_bps::bps::BPS;
+use fee_pool::fee_pool::FeePool;
 use music::music::MUSIC;
+use musicos::artifact::Artifact;
+use musicos::bps::BPS;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
 use musicos::key::{Self, RewardPoolKey, RevenuePoolKey};
 use musicos::protocol::Protocol;
 use musicos::share;
+use musicos::snapshot::Snapshot;
 use revenue_pool::revenue_pool::{Self, RevenuePool};
 use reward_pool::reward_pool::{Self, RewardPool};
 use std::string::String;
+use std::type_name::{TypeName, with_defining_ids};
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
@@ -32,6 +36,7 @@ public struct Composition<phantom CompositionShare> has key {
     contributors: VecMap<ID, vector<CompositionContributorRole>>,
     split: BPS,
     share_metadata_cap: MetadataCap<CompositionShare>,
+    lyrics: Option<u256>,
 }
 
 public struct CompositionAdminCap has key, store {
@@ -117,6 +122,7 @@ public fun new<CompositionShare>(
         contributors: vec_map::empty(),
         split,
         share_metadata_cap,
+        lyrics: option::none(),
     };
 
     let composition_admin_cap = CompositionAdminCap {
@@ -166,19 +172,12 @@ public fun share<CompositionShare>(
 public fun publish<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    fee: Balance<MUSIC>,
-    burn_facility: &BurnFacility<MUSIC>,
-    protocol: &Protocol,
     clock: &Clock,
 ) {
     self.authorize(cap);
 
     match (self.state) {
         CompositionState::Created => {
-            // Assert the fee is correct.
-            assert!(fee.value() == protocol.composition_publishing_fee(), EInvalidCompositionFee);
-            fee.send_funds(burn_facility.id().to_address());
-
             // Assert the composition has at least one contributor.
             assert!(!self.contributors.is_empty(), ENoContributors);
 
@@ -253,6 +252,21 @@ public fun set_split<CompositionShare>(
         composition_id: self.id(),
         split: split,
     });
+}
+
+public fun set_lyrics<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    blob_id: u256,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        CompositionState::Created => {
+            self.lyrics.swap_or_fill(blob_id);
+        },
+        _ => abort ENotCreatedState,
+    }
 }
 
 // Add a contributor to a composition.
@@ -393,6 +407,15 @@ public fun contributors<CompositionShare>(
 
 public fun split<CompositionShare>(self: &Composition<CompositionShare>): BPS {
     self.split
+}
+
+// TODO: Check whether contain() distinguishes enum variants.
+public fun contributor_has_role<CompositionShare>(
+    self: &Composition<CompositionShare>,
+    contributor_id: ID,
+    role: CompositionContributorRole,
+): bool {
+    self.contributors.get(&contributor_id).contains(&role)
 }
 
 //=== Private Functions ===

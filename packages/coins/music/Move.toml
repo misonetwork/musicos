@@ -1,11 +1,11 @@
 [package]
-name = "Music"
+name = "music"
 edition = "2024.beta"
 license = "Apache 2.0"
-authors = ["Sona Labs, Pte Ltd (build@sonamusic.com)"]
+authors = ["Sona Labs, Inc (build@sonamusic.com)"]
 
 [dependencies]
-CurrencyTreasury = { local = "../../../../currency_treasury" }
+currency_treasury = { local = "../../../../currency_treasury" }
 
-[addresses]
-music = "0x0"
+[environments]
+mirainet = "dd32b170"

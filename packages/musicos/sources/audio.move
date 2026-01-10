@@ -13,6 +13,7 @@ public struct Audio has drop, store {
     bit_depth: u8,
     sample_rate_hz: u32,
     samples: u64,
+    blob_id: u256,
     digest: vector<u8>,
 }
 
@@ -37,6 +38,7 @@ public fun new<Authority: drop>(
     bit_depth: u8,
     sample_rate_hz: u32,
     samples: u64,
+    blob_id: u256,
     digest: vector<u8>,
     protocol: &Protocol,
 ): Audio {
@@ -54,6 +56,7 @@ public fun new<Authority: drop>(
         bit_depth,
         sample_rate_hz,
         samples,
+        blob_id,
         digest,
     }
 }
@@ -74,6 +77,10 @@ public fun sample_rate_hz(self: &Audio): u32 {
 
 public fun samples(self: &Audio): u64 {
     self.samples
+}
+
+public fun blob_id(self: &Audio): u256 {
+    self.blob_id
 }
 
 public fun digest(self: &Audio): &vector<u8> {

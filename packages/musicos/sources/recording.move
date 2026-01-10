@@ -4,9 +4,9 @@
 module musicos::recording;
 
 use currency_treasury::burn_facility::BurnFacility;
-use interest_bps::bps::BPS;
 use music::music::MUSIC;
 use musicos::audio::Audio;
+use musicos::bps::BPS;
 use musicos::composition::Composition;
 use musicos::contributor::Contributor;
 use musicos::genre::Genre;
@@ -43,8 +43,7 @@ public struct Recording<phantom RecordingShare> has key {
     language: Option<String>,
     is_explicit: bool,
     is_instrumental: bool,
-    p_line_year: u16,
-    p_line_text: Option<String>,
+    tempo_bpm: u16,
     share_metadata_cap: MetadataCap<RecordingShare>,
     artists: VecSet<ID>,
     featured_artists: VecSet<ID>,
@@ -102,6 +101,7 @@ public struct RecordingStemRemovedEvent has copy, drop {
 
 public enum RecordingState has copy, drop, store {
     Created,
+    // Timestamp of publication.
     Published(u64),
 }
 
@@ -128,6 +128,7 @@ public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     genre: &Genre,
     master: Audio,
+    tempo_bpm: u16,
     share_currency: &mut Currency<RecordingShare>,
     share_metadata_cap: MetadataCap<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
@@ -147,8 +148,7 @@ public fun new<RecordingShare, CompositionShare>(
         language: option::none(),
         is_explicit: false,
         is_instrumental: false,
-        p_line_year: 0,
-        p_line_text: option::none(),
+        tempo_bpm,
         contributors: vec_map::empty(),
         artists: vec_set::empty(),
         featured_artists: vec_set::empty(),
@@ -207,19 +207,12 @@ public fun share<RecordingShare>(
 public fun publish<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
-    fee: Balance<MUSIC>,
-    burn_facility: &BurnFacility<MUSIC>,
-    protocol: &Protocol,
     clock: &Clock,
 ) {
     self.authorize(cap);
 
     match (self.state) {
         RecordingState::Created => {
-            // Assert the fee is correct.
-            assert!(fee.value() == protocol.recording_publishing_fee(), EInvalidRecordingFee);
-            fee.send_funds(burn_facility.id().to_address());
-
             // Assert the recording has at least one contributor.
             assert!(!self.contributors.is_empty(), ENoContributors);
 
