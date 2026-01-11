@@ -4,15 +4,15 @@
 module musicos::composition;
 
 use musicos::artifact::Artifact;
-use musicos::composition_artifact_kind::CompositionArtifactKind;
 use musicos::bps::BPS;
+use musicos::composition_artifact_kind::CompositionArtifactKind;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
 use musicos::data::Data;
 use musicos::share;
 use musicos::snapshot::Snapshot;
-use revenue_pool::revenue_pool::{Self, RevenuePool};
-use reward_pool::reward_pool::{Self, RewardPool};
+use revenue_pool::revenue_pool;
+use reward_pool::reward_pool;
 use std::string::String;
 use std::type_name::{TypeName, with_defining_ids};
 use sui::balance::Balance;
@@ -26,14 +26,20 @@ use sui::vec_map::{Self, VecMap};
 //=== Structs ===
 
 public struct Composition<phantom CompositionShare> has key {
+    // System
     id: UID,
     state: CompositionState,
     share_metadata_cap: MetadataCap<CompositionShare>,
+    // Title
     title: String,
     alternate_titles: vector<String>,
+    // People
     contributors: VecMap<ID, vector<CompositionContributorRole>>,
+    // Financial
     split: BPS,
+    // Content
     lyrics: Option<Data>,
+    // Attachments
     artifacts: vector<Artifact<CompositionArtifactKind>>,
     snapshots: vector<Snapshot>,
 }
@@ -102,6 +108,8 @@ const EInvalidCompositionForPromise: u64 = 6;
 const ENoContributors: u64 = 7;
 
 //=== Public Functions ===
+
+// --- Lifecycle ---
 
 public fun new<CompositionShare>(
     title: String,
@@ -195,6 +203,8 @@ public fun publish<CompositionShare>(
     }
 }
 
+// --- Title ---
+
 // Set the title of a composition.
 // Required State: Created
 public fun set_title<CompositionShare>(
@@ -212,6 +222,8 @@ public fun set_title<CompositionShare>(
     }
 }
 
+// Add an alternate title to a composition.
+// Required State: Created
 public fun add_alternate_title<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
@@ -227,6 +239,8 @@ public fun add_alternate_title<CompositionShare>(
     }
 }
 
+// Remove an alternate title from a composition.
+// Required State: Created
 public fun remove_alternate_title<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
@@ -242,36 +256,7 @@ public fun remove_alternate_title<CompositionShare>(
     }
 }
 
-// Set the composition split of a composition.
-public fun set_split<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    split: BPS,
-) {
-    self.authorize(cap);
-
-    self.split = split;
-
-    emit(CompositionSplitSetEvent {
-        composition_id: self.id(),
-        split: split,
-    });
-}
-
-public fun set_lyrics<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    data: Data,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        CompositionState::Created => {
-            self.lyrics.swap_or_fill(data);
-        },
-        _ => abort ENotCreatedState,
-    }
-}
+// --- People ---
 
 // Add a contributor to a composition.
 // Required State: Created
@@ -365,6 +350,115 @@ public fun remove_role_from_contributor<CompositionShare>(
     }
 }
 
+// --- Financial ---
+
+// Set the composition split of a composition.
+public fun set_split<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    split: BPS,
+) {
+    self.authorize(cap);
+
+    self.split = split;
+
+    emit(CompositionSplitSetEvent {
+        composition_id: self.id(),
+        split: split,
+    });
+}
+
+// --- Content ---
+
+// Set the lyrics of a composition.
+// Required State: Created
+public fun set_lyrics<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    data: Data,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        CompositionState::Created => {
+            self.lyrics.swap_or_fill(data);
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+// --- Attachments ---
+
+// Add an artifact to a composition.
+// Required State: Created
+public fun add_artifact<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    artifact: Artifact<CompositionArtifactKind>,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        CompositionState::Created => {
+            self.artifacts.push_back(artifact);
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+// Remove an artifact from a composition.
+// Required State: Created
+public fun remove_artifact<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    artifact_idx: u64,
+): Artifact<CompositionArtifactKind> {
+    self.authorize(cap);
+
+    match (self.state) {
+        CompositionState::Created => {
+            self.artifacts.swap_remove(artifact_idx)
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+// Add a snapshot to a composition.
+// Required State: Created
+public fun add_snapshot<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    snapshot: Snapshot,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        CompositionState::Created => {
+            self.snapshots.push_back(snapshot);
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+// Remove a snapshot from a composition.
+// Required State: Created
+public fun remove_snapshot<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    snapshot_idx: u64,
+): Snapshot {
+    self.authorize(cap);
+
+    match (self.state) {
+        CompositionState::Created => {
+            self.snapshots.swap_remove(snapshot_idx)
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+// --- Pools ---
+
 public fun new_revenue_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
     let revenue_pool = revenue_pool::new<Currency>(&mut self.id);
     transfer::public_share_object(revenue_pool);
@@ -373,12 +467,6 @@ public fun new_revenue_pool<CompositionShare, Currency>(self: &mut Composition<C
 public fun new_reward_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
     let reward_pool = reward_pool::new<CompositionShare, Currency>(&mut self.id);
     transfer::public_share_object(reward_pool);
-}
-
-//=== Package Functions ===
-
-public(package) fun uid_mut<CompositionShare>(self: &mut Composition<CompositionShare>): &mut UID {
-    &mut self.id
 }
 
 //=== Public View Functions ===
@@ -395,15 +483,11 @@ public fun title<CompositionShare>(self: &Composition<CompositionShare>): &Strin
     &self.title
 }
 
-public fun alternate_titles<CompositionShare>(
-    self: &Composition<CompositionShare>,
-): &vector<String> {
+public fun alternate_titles<CompositionShare>(self: &Composition<CompositionShare>): &vector<String> {
     &self.alternate_titles
 }
 
-public fun contributors<CompositionShare>(
-    self: &Composition<CompositionShare>,
-): &VecMap<ID, vector<CompositionContributorRole>> {
+public fun contributors<CompositionShare>(self: &Composition<CompositionShare>): &VecMap<ID, vector<CompositionContributorRole>> {
     &self.contributors
 }
 
@@ -419,6 +503,10 @@ public fun artifacts<CompositionShare>(self: &Composition<CompositionShare>): &v
     &self.artifacts
 }
 
+public fun snapshots<CompositionShare>(self: &Composition<CompositionShare>): &vector<Snapshot> {
+    &self.snapshots
+}
+
 // TODO: Check whether contain() distinguishes enum variants.
 public fun contributor_has_role<CompositionShare>(
     self: &Composition<CompositionShare>,
@@ -428,7 +516,11 @@ public fun contributor_has_role<CompositionShare>(
     self.contributors.get(&contributor_id).contains(&role)
 }
 
-//=== Private Functions ===
+//=== Package Functions ===
+
+public(package) fun uid_mut<CompositionShare>(self: &mut Composition<CompositionShare>): &mut UID {
+    &mut self.id
+}
 
 public(package) fun authorize<CompositionShare>(
     self: &Composition<CompositionShare>,
