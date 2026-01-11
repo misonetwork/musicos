@@ -7,7 +7,7 @@
 ///
 /// Key features:
 /// - Validated audio format parameters (channels, bit depth, sample rate)
-/// - Content-addressed via digest for integrity verification
+/// - Content-addressed via pcm_digest for integrity verification
 /// - Authority-gated creation through protocol configuration
 ///
 /// Supported formats:
@@ -29,7 +29,7 @@ public struct Audio has drop, store {
     sample_rate_hz: u32,
     samples: u64,
     data: Data,
-    digest: vector<u8>,
+    pcm_digest: vector<u8>,
 }
 
 //=== Constants ===
@@ -61,7 +61,7 @@ public fun new<Authority: drop>(
     sample_rate_hz: u32,
     samples: u64,
     data: Data,
-    digest: vector<u8>,
+    pcm_digest: vector<u8>,
     protocol: &Protocol,
 ): Audio {
     assert!(
@@ -79,7 +79,7 @@ public fun new<Authority: drop>(
         sample_rate_hz,
         samples,
         data,
-        digest,
+        pcm_digest,
     }
 }
 
@@ -110,15 +110,17 @@ public fun data(self: &Audio): &Data {
     &self.data
 }
 
-/// Returns the content digest for integrity verification.
-public fun digest(self: &Audio): &vector<u8> {
-    &self.digest
+/// Returns the content pcm_digest for integrity verification.
+public fun pcm_digest(self: &Audio): &vector<u8> {
+    &self.pcm_digest
 }
 
 /// Returns the duration of the audio in seconds.
 public fun duration(self: &Audio): u64 {
     self.samples / (self.sample_rate_hz as u64)
 }
+
+//=== Public Macro Functions ===
 
 /// Returns the list of supported bit depths.
 public macro fun supported_bit_depths(): vector<u8> {

@@ -20,6 +20,7 @@ use musicos::audio::Audio;
 use musicos::bps::BPS;
 use musicos::composition::Composition;
 use musicos::contributor::Contributor;
+use musicos::cover_art::CoverArt;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
 use musicos::recording_artifact_kind::RecordingArtifactKind;
@@ -56,6 +57,8 @@ public struct Recording<phantom RecordingShare> has key {
     title: String,
     /// Version suffix (e.g., "Radio Edit", "Extended Mix").
     title_version: Option<String>,
+    /// Subtitle of the recording.
+    subtitle: Option<String>,
     /// ID of the underlying composition.
     composition_id: ID,
     /// Type of the composition's share token.
@@ -86,6 +89,8 @@ public struct Recording<phantom RecordingShare> has key {
     tempo_bpm: Option<u16>,
     /// The final mixed/mastered audio file.
     master: Audio,
+    /// Cover art for the recording.
+    cover_art: CoverArt,
     /// Individual audio stems (vocals, drums, etc.).
     stems: vector<Stem>,
     /// Attached artifacts (lyrics, liner notes, etc.).
@@ -230,9 +235,10 @@ const EExceedsMaxRoles: u64 = 6;
 public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     genre: &Genre,
-    master: Audio,
     is_explicit: bool,
     is_instrumental: bool,
+    master: Audio,
+    cover_art: CoverArt,
     share_currency: &mut Currency<RecordingShare>,
     share_metadata_cap: MetadataCap<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
@@ -241,11 +247,12 @@ public fun new<RecordingShare, CompositionShare>(
     let genre_id = genre.id();
 
     let mut recording = Recording<RecordingShare> {
-        id: claim(composition.uid_mut(), RecordingKey(*master.digest())),
+        id: claim(composition.uid_mut(), RecordingKey(*master.pcm_digest())),
         state: RecordingState::Created,
         share_metadata_cap,
         title: *composition.title(),
         title_version: option::none(),
+        subtitle: option::none(),
         composition_id,
         composition_share_type: with_defining_ids<CompositionShare>(),
         composition_split: composition.split(),
@@ -261,6 +268,7 @@ public fun new<RecordingShare, CompositionShare>(
         time_signature: option::none(),
         tempo_bpm: option::none(),
         master,
+        cover_art,
         stems: vector[],
         artifacts: vector[],
         snapshots: vector[],
@@ -368,6 +376,23 @@ public fun set_title_version<RecordingShare>(
     match (self.state) {
         RecordingState::Created => {
             self.title_version.swap_or_fill(title_version);
+        },
+        _ => abort ENotCreatedState,
+    }
+}
+
+/// Sets the subtitle of the recording.
+/// Required State: Created
+public fun set_subtitle<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap,
+    subtitle: String,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        RecordingState::Created => {
+            self.subtitle.swap_or_fill(subtitle);
         },
         _ => abort ENotCreatedState,
     }
@@ -667,7 +692,7 @@ public fun add_stem<RecordingShare>(
 
             emit(RecordingStemAddedEvent {
                 recording_id: self.id(),
-                audio_digest: *stem.audio().digest(),
+                audio_digest: *stem.audio().pcm_digest(),
             });
 
             self.stems.push_back(stem);
@@ -691,7 +716,7 @@ public fun remove_stem<RecordingShare>(
 
             emit(RecordingStemRemovedEvent {
                 recording_id: self.id(),
-                audio_digest: *stem.audio().digest(),
+                audio_digest: *stem.audio().pcm_digest(),
             });
 
             stem
@@ -808,6 +833,11 @@ public fun title_version<RecordingShare>(self: &Recording<RecordingShare>): &Opt
     &self.title_version
 }
 
+/// Returns the optional subtitle.
+public fun subtitle<RecordingShare>(self: &Recording<RecordingShare>): &Option<String> {
+    &self.subtitle
+}
+
 /// Returns the ID of the underlying composition.
 public fun composition_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
     self.composition_id
@@ -881,6 +911,11 @@ public fun tempo_bpm<RecordingShare>(self: &Recording<RecordingShare>): &Option<
 /// Returns a reference to the master audio file.
 public fun master<RecordingShare>(self: &Recording<RecordingShare>): &Audio {
     &self.master
+}
+
+/// Returns a reference to the cover art.
+public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverArt {
+    &self.cover_art
 }
 
 /// Returns a reference to the list of stems.

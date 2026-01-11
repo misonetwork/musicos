@@ -170,7 +170,7 @@ def calculate_dynamic_range(audio_data: np.ndarray, window_size: int = 2048) -> 
 def calculate_spectral_centroid_hz(audio_data: np.ndarray, sample_rate: int) -> int:
     """
     Calculate the spectral centroid (center of mass of the spectrum) in Hz.
-    Uses librosa.feature.spectral_centroid.
+    TODO: Implement using librosa.feature.spectral_centroid
 
     Args:
         audio_data: Shape (n_channels, n_samples)
@@ -179,22 +179,14 @@ def calculate_spectral_centroid_hz(audio_data: np.ndarray, sample_rate: int) -> 
     Returns:
         Spectral centroid in Hz as u16
     """
-    # Mix to mono by averaging channels
-    mono_audio = np.mean(audio_data, axis=0)
-
-    # Calculate spectral centroid
-    centroid = librosa.feature.spectral_centroid(y=mono_audio, sr=sample_rate)
-
-    # Take the mean across time frames
-    mean_centroid = np.mean(centroid)
-
-    return int(round(mean_centroid))
+    # Placeholder - return 0 for now
+    return 0
 
 
 def calculate_spectral_flatness(audio_data: np.ndarray) -> int:
     """
     Calculate spectral flatness (measure of how noise-like vs tone-like) in BPS.
-    Uses librosa.feature.spectral_flatness.
+    TODO: Implement using librosa.feature.spectral_flatness
 
     Args:
         audio_data: Shape (n_channels, n_samples)
@@ -202,23 +194,14 @@ def calculate_spectral_flatness(audio_data: np.ndarray) -> int:
     Returns:
         Spectral flatness in BPS (0-10000, where 10000 = perfectly flat/white noise)
     """
-    # Mix to mono by averaging channels
-    mono_audio = np.mean(audio_data, axis=0)
-
-    # Calculate spectral flatness (returns values between 0 and 1)
-    flatness = librosa.feature.spectral_flatness(y=mono_audio)
-
-    # Take the mean across time frames
-    mean_flatness = np.mean(flatness)
-
-    # Convert to BPS (0-10000)
-    return to_bps(mean_flatness)
+    # Placeholder - return 0 for now
+    return 0
 
 
 def calculate_tempo_bpm(audio_data: np.ndarray, sample_rate: int) -> int:
     """
     Calculate the tempo in beats per minute.
-    Uses librosa.feature.tempo.
+    TODO: Implement using librosa.beat.tempo
 
     Args:
         audio_data: Shape (n_channels, n_samples)
@@ -227,14 +210,8 @@ def calculate_tempo_bpm(audio_data: np.ndarray, sample_rate: int) -> int:
     Returns:
         Tempo in BPM as u16
     """
-    # Mix to mono by averaging channels
-    mono_audio = np.mean(audio_data, axis=0)
-
-    # Calculate tempo (returns an array, typically with one value)
-    tempo = librosa.feature.tempo(y=mono_audio, sr=sample_rate)
-
-    # Extract the first tempo value
-    return int(round(tempo[0]))
+    # Placeholder - return 0 for now
+    return 0
 
 
 class AudioStatistics(BaseModel):
