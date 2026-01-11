@@ -42,22 +42,26 @@ const ESequenceIndexOutOfBounds: u64 = 4;
 
 /// Creates a new track sequence from a vector of discs.
 /// Builds an ordered list of all track identifiers for navigation.
+/// Returns the track sequence and total duration in seconds (since we're looping through the tracks).
 /// Aborts if there are no discs or if total tracks exceed 255.
-public(package) fun new(discs: &vector<Disc>): TrackSequence {
+public(package) fun new(discs: &vector<Disc>): (TrackSequence, u64) {
     assert!(!discs.is_empty(), ENoDiscs);
 
     let mut tracks_per_disc: vector<u8> = vector[];
     let mut track_identifiers: vector<TrackIdentifier> = vector[];
+    let mut duration: u64 = 0;
 
     discs.length().do!(|disc_idx| {
         let disc = &discs[disc_idx];
-        let track_count = disc.tracks().length();
+        let tracks = disc.tracks();
 
-        track_count.do!(|track_idx| {
-            track_identifiers.push_back(track_identifier::new(disc_idx as u8, track_idx as u8));
+        tracks.length().do!(|track_idx| {
+            let track_identifier = track_identifier::new(disc_idx as u8, track_idx as u8);
+            track_identifiers.push_back(track_identifier);
+            duration = duration + tracks[track_idx].duration();
         });
 
-        tracks_per_disc.push_back(track_count as u8);
+        tracks_per_disc.push_back(tracks.length() as u8);
     });
 
     // Assert the length of the track sequence doesn't exceed the allowed maximum.
@@ -66,10 +70,12 @@ public(package) fun new(discs: &vector<Disc>): TrackSequence {
         EMaxSequenceLengthExceeded,
     );
 
-    TrackSequence {
+    let track_sequence = TrackSequence {
         tracks_per_disc,
         track_identifiers,
-    }
+    };
+
+    (track_sequence, duration)
 }
 
 //=== Public View Functions ===

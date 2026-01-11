@@ -41,6 +41,8 @@ public struct Release has key {
     title: String,
     /// Optional subtitle (e.g., "Deluxe Edition").
     subtitle: Option<String>,
+    /// Duration of the release in milliseconds.
+    duration: u64,
     /// Collection of discs containing tracks.
     discs: vector<Disc>,
     /// Navigation structure for track ordering.
@@ -191,7 +193,7 @@ public fun new(
     ctx: &mut TxContext,
 ): (Release, ReleaseAdminCap, ShareReleasePromise) {
     // Build a track sequence for the release based on the number of discs.
-    let track_sequence = track_sequence::new(&discs);
+    let (track_sequence, duration) = track_sequence::new(&discs);
 
     let release = Release {
         id: object::new(ctx),
@@ -199,6 +201,7 @@ public fun new(
         state: ReleaseState::Initialized,
         title,
         subtitle: option::none(),
+        duration,
         discs,
         track_sequence,
         track_splits: vector[],

@@ -35,8 +35,8 @@ public struct Track has drop, store {
     duration: u64,
     /// Genre of the recording.
     genre_id: ID,
-    /// Optional track-level artwork that overrides the release-level artwork.
-    cover_art: Option<CoverArt>,
+    /// Covert art for the track. Inherited from the recording by default.
+    cover_art: CoverArt,
 }
 
 //=== Public Functions ===
@@ -59,7 +59,7 @@ public fun new<RecordingShare>(
         recording_share_type: with_defining_ids<RecordingShare>(),
         duration: recording.master().duration(),
         genre_id: recording.genre_id(),
-        cover_art,
+        cover_art: cover_art.destroy_with_default(*recording.cover_art()),
     }
 }
 
@@ -100,7 +100,7 @@ public fun genre_id(self: &Track): ID {
     self.genre_id
 }
 
-/// Returns the optional track-specific cover art.
-public fun cover_art(self: &Track): &Option<CoverArt> {
+/// Returns the cover art for the track.
+public fun cover_art(self: &Track): &CoverArt {
     &self.cover_art
 }
