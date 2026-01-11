@@ -1,58 +1,94 @@
 // Copyright (c) Sona Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Defines the roles that contributors can hold on a recording.
+/// Recordings are audio performances of compositions, and these roles
+/// represent the various production and performance contributions.
+///
+/// Most roles support an optional level (Lead, Assistant, etc.) to
+/// indicate the contributor's seniority or prominence on the recording.
 module musicos::recording_contributor_role;
 
 use std::string::String;
 
 //=== Enums ===
 
+/// Represents a contributor's role on a recording.
+/// Most roles include an optional level to indicate seniority.
 public enum RecordingContributorRole has copy, drop, store {
+    /// Arranged the musical parts for the recording.
     Arranger(Option<RecordingContributorLevel>),
+    /// A&R representative who discovered or developed the artist.
     ArtistsAndRepertoire,
+    /// Hired and managed session musicians.
     Contractor(Option<RecordingContributorLevel>),
+    /// Prepared written music parts for performers.
     Copyist,
+    /// Played an instrument on the recording. Includes instrument name.
     Instrumentalist(String, Option<RecordingContributorLevel>),
+    /// Mastered the final audio for distribution.
     MasteringEngineer(Option<RecordingContributorLevel>),
+    /// Mixed the multitrack recording into stereo/surround.
     MixingEngineer(Option<RecordingContributorLevel>),
+    /// Directed the musical performance.
     MusicDirector(Option<RecordingContributorLevel>),
+    /// Oversaw music selection and licensing.
     MusicSupervisor(Option<RecordingContributorLevel>),
+    /// Created orchestral arrangements.
     Orchestrator(Option<RecordingContributorLevel>),
+    /// Oversaw the creative and technical aspects of the recording.
     Producer(Option<RecordingContributorLevel>),
+    /// Operated recording equipment during sessions.
     RecordingEngineer(Option<RecordingContributorLevel>),
+    /// Created sound effects or sonic textures.
     SoundDesigner(Option<RecordingContributorLevel>),
+    /// Provided vocals on the recording.
     Vocalist(Option<RecordingContributorLevel>),
 }
 
+/// Indicates the seniority or prominence level of a contributor.
 public enum RecordingContributorLevel has copy, drop, store {
+    /// Additional/supplementary contributor.
     Additional,
+    /// Assistant to the primary contributor.
     Assistant,
+    /// Associate-level contributor.
     Associate,
+    /// Backing/support role (e.g., backing vocals).
     Backing,
+    /// Executive-level oversight role.
     Executive,
+    /// Featured prominently on the recording.
     Featured,
+    /// Lead/primary contributor in this role.
     Lead,
+    /// Principal contributor with primary responsibility.
     Principal,
 }
 
 //=== Public Functions ===
 
+/// Creates a new Arranger role with optional level.
 public fun new_arranger_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
     RecordingContributorRole::Arranger(level)
 }
 
+/// Creates a new Artists & Repertoire role.
 public fun new_artists_and_repertoire_role(): RecordingContributorRole {
     RecordingContributorRole::ArtistsAndRepertoire
 }
 
+/// Creates a new Contractor role with optional level.
 public fun new_contractor_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
     RecordingContributorRole::Contractor(level)
 }
 
+/// Creates a new Copyist role.
 public fun new_copyist_role(): RecordingContributorRole {
     RecordingContributorRole::Copyist
 }
 
+/// Creates a new Instrumentalist role with instrument name and optional level.
 public fun new_instrumentalist_role(
     instrument: String,
     level: Option<RecordingContributorLevel>,
@@ -60,90 +96,108 @@ public fun new_instrumentalist_role(
     RecordingContributorRole::Instrumentalist(instrument, level)
 }
 
+/// Creates a new Mastering Engineer role with optional level.
 public fun new_mastering_engineer_role(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
     RecordingContributorRole::MasteringEngineer(level)
 }
 
+/// Creates a new Mixing Engineer role with optional level.
 public fun new_mixing_engineer_role(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
     RecordingContributorRole::MixingEngineer(level)
 }
 
+/// Creates a new Music Director role with optional level.
 public fun new_music_director_role(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
     RecordingContributorRole::MusicDirector(level)
 }
 
+/// Creates a new Music Supervisor role with optional level.
 public fun new_music_supervisor_role(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
     RecordingContributorRole::MusicSupervisor(level)
 }
 
+/// Creates a new Orchestrator role with optional level.
 public fun new_orchestrator_role(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
     RecordingContributorRole::Orchestrator(level)
 }
 
+/// Creates a new Producer role with optional level.
 public fun new_producer_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
     RecordingContributorRole::Producer(level)
 }
 
+/// Creates a new Recording Engineer role with optional level.
 public fun new_recording_engineer_role(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
     RecordingContributorRole::RecordingEngineer(level)
 }
 
+/// Creates a new Sound Designer role with optional level.
 public fun new_sound_designer_role(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
     RecordingContributorRole::SoundDesigner(level)
 }
 
+/// Creates a new Vocalist role with optional level.
 public fun new_vocalist_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
     RecordingContributorRole::Vocalist(level)
 }
 
+/// Creates an Additional level.
 public fun new_additional_level(): RecordingContributorLevel {
     RecordingContributorLevel::Additional
 }
 
+/// Creates an Assistant level.
 public fun new_assistant_level(): RecordingContributorLevel {
     RecordingContributorLevel::Assistant
 }
 
+/// Creates an Associate level.
 public fun new_associate_level(): RecordingContributorLevel {
     RecordingContributorLevel::Associate
 }
 
+/// Creates a Backing level.
 public fun new_backing_level(): RecordingContributorLevel {
     RecordingContributorLevel::Backing
 }
 
+/// Creates an Executive level.
 public fun new_executive_level(): RecordingContributorLevel {
     RecordingContributorLevel::Executive
 }
 
+/// Creates a Featured level.
 public fun new_featured_level(): RecordingContributorLevel {
     RecordingContributorLevel::Featured
 }
 
+/// Creates a Lead level.
 public fun new_lead_level(): RecordingContributorLevel {
     RecordingContributorLevel::Lead
 }
 
+/// Creates a Principal level.
 public fun new_principal_level(): RecordingContributorLevel {
     RecordingContributorLevel::Principal
 }
 
 //=== Public View Functions ===
 
+/// Returns the optional level associated with this role.
 public fun level(self: &RecordingContributorRole): Option<RecordingContributorLevel> {
     match (self) {
         RecordingContributorRole::Arranger(level) => *level,
@@ -163,6 +217,7 @@ public fun level(self: &RecordingContributorRole): Option<RecordingContributorLe
     }
 }
 
+/// Returns the human-readable name of the role.
 public fun name(self: &RecordingContributorRole): String {
     match (self) {
         RecordingContributorRole::Arranger(_) => "Arranger",

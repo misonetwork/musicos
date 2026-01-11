@@ -1,6 +1,17 @@
 // Copyright (c) Sona Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Represents an audio recording of a composition in the MusicOS protocol.
+/// Recordings are the audio performances that are distributed and played.
+/// Each recording has its own share token for ownership distribution.
+///
+/// Key features:
+/// - Share token initialization with fixed supply (100M tokens, 6 decimals)
+/// - Contributor management with role assignments (Producer, Vocalist, etc.)
+/// - State machine: Created -> Published (immutable after publish)
+/// - Audio management (master track and optional stems)
+/// - Musical metadata (key, tempo, time signature)
+/// - Deterministic addresses via derived object pattern
 module musicos::recording;
 
 use iso639_1::language_code::LanguageCode;
@@ -32,117 +43,190 @@ use sui::vec_set::{Self, VecSet};
 
 //=== Structs ===
 
+/// An audio recording of a composition.
+/// The phantom RecordingShare type parameter links to the share token.
 public struct Recording<phantom RecordingShare> has key {
-    // System
+    /// Unique identifier for this recording.
     id: UID,
+    /// Current lifecycle state.
     state: RecordingState,
+    /// Capability for updating share token metadata.
     share_metadata_cap: MetadataCap<RecordingShare>,
-    // Title
+    /// Primary title of the recording.
     title: String,
+    /// Version suffix (e.g., "Radio Edit", "Extended Mix").
     title_version: Option<String>,
-    // Composition
+    /// ID of the underlying composition.
     composition_id: ID,
+    /// Type of the composition's share token.
     composition_share_type: TypeName,
+    /// Revenue split for the composition (captured at creation time).
     composition_split: BPS,
-    // People
+    /// Primary artists credited on the recording.
     artists: VecSet<ID>,
+    /// Featured artists credited on the recording.
     featured_artists: VecSet<ID>,
+    /// Map of contributor IDs to their roles on this recording.
     contributors: VecMap<ID, vector<RecordingContributorRole>>,
-    // Classification
+    /// Primary genre of the recording.
     genre_id: ID,
+    /// Additional genres for the recording.
     secondary_genre_ids: VecSet<ID>,
+    /// Language of the vocals (if any).
     language: Option<LanguageCode>,
+    /// Whether the recording contains explicit content.
     is_explicit: bool,
+    /// Whether the recording is instrumental (no vocals).
     is_instrumental: bool,
-    // Musical Properties
+    /// Musical key of the recording.
     musical_key: Option<MusicalKey>,
+    /// Time signature of the recording.
     time_signature: Option<TimeSignature>,
+    /// Tempo in beats per minute.
     tempo_bpm: Option<u16>,
-    // Audio
+    /// The final mixed/mastered audio file.
     master: Audio,
+    /// Individual audio stems (vocals, drums, etc.).
     stems: vector<Stem>,
-    // Attachments
+    /// Attached artifacts (lyrics, liner notes, etc.).
     artifacts: vector<Artifact<RecordingArtifactKind>>,
+    /// Point-in-time content snapshots.
     snapshots: vector<Snapshot>,
 }
 
+/// Capability that authorizes modifications to a specific recording.
+/// Created when a recording is registered and transferred to the owner.
 public struct RecordingAdminCap has key, store {
+    /// Unique identifier for this capability.
     id: UID,
+    /// ID of the recording this capability controls.
     recording_id: ID,
 }
 
-public struct ShareRecordingPromise(ID)
+/// Promise that ensures a recording is shared after creation.
+/// Must be consumed by calling `share()`.
+public struct ShareRecordingPromise(
+    /// ID of the recording to be shared.
+    ID,
+)
 
 //=== Derivation Keys ===
 
+/// Key for deriving the admin capability's deterministic address.
 public struct RecordingAdminCapKey() has copy, drop, store;
-public struct RecordingKey(vector<u8>) has copy, drop, store;
+
+/// Key for deriving the recording's address from the composition.
+public struct RecordingKey(
+    /// Digest of the master audio file.
+    vector<u8>,
+) has copy, drop, store;
 
 //=== Fees ===
 
+/// Marker type for publish recording fee payments.
 public struct PublishRecordingFee() has drop;
 
 //=== Events ===
 
+/// Emitted when a new recording is created.
 public struct RecordingCreatedEvent has copy, drop {
+    /// ID of the created recording.
     recording_id: ID,
+    /// Type of the recording's share token.
     share_type: TypeName,
+    /// ID of the underlying composition.
     composition_id: ID,
+    /// ID of the recording's genre.
     genre_id: ID,
 }
 
+/// Emitted when a recording is published.
 public struct RecordingPublishedEvent has copy, drop {
+    /// ID of the published recording.
     recording_id: ID,
 }
 
+/// Emitted when a contributor is added to a recording.
 public struct RecordingContributorAddedEvent has copy, drop {
+    /// ID of the recording.
     recording_id: ID,
+    /// ID of the added contributor.
     contributor_id: ID,
 }
 
+/// Emitted when a contributor is removed from a recording.
 public struct RecordingContributorRemovedEvent has copy, drop {
+    /// ID of the recording.
     recording_id: ID,
+    /// ID of the removed contributor.
     contributor_id: ID,
 }
 
+/// Emitted when a stem is added to a recording.
 public struct RecordingStemAddedEvent has copy, drop {
+    /// ID of the recording.
     recording_id: ID,
+    /// Digest of the added audio file.
     audio_digest: vector<u8>,
 }
 
+/// Emitted when a stem is removed from a recording.
 public struct RecordingStemRemovedEvent has copy, drop {
+    /// ID of the recording.
     recording_id: ID,
+    /// Digest of the removed audio file.
     audio_digest: vector<u8>,
 }
 
 //=== Enums ===
 
+/// Lifecycle state of a recording.
 public enum RecordingState has copy, drop, store {
+    /// Recording is being set up and can be modified.
     Created,
-    // Timestamp of publication.
-    Published(u64),
+    /// Recording is published and immutable. Includes publication timestamp.
+    Published(
+        /// Timestamp (ms) when published.
+        u64,
+    ),
 }
 
 //=== Constants ===
 
+/// Minimum number of roles a contributor must have.
 const MIN_ROLES_PER_CONTRIBUTOR: u64 = 1;
+/// Maximum number of roles a contributor can have.
 const MAX_ROLES_PER_CONTRIBUTOR: u64 = 20;
+/// Maximum number of stems allowed per recording.
 const MAX_STEMS_PER_RECORDING: u8 = 10;
 
 //=== Errors ===
 
+/// The provided admin capability does not match this recording.
 const EUnauthorized: u64 = 0;
+/// Operation requires Created state but recording is published.
 const ENotCreatedState: u64 = 1;
+/// Recording has reached the maximum number of stems (10).
 const EMaxStemsExceeded: u64 = 2;
+/// Promise does not match this recording's ID.
 const EInvalidRecordingForPromise: u64 = 3;
+/// Recording must have at least one contributor to publish.
 const ENoContributors: u64 = 4;
+/// Contributor must have at least one role.
 const EMinRolesNotMet: u64 = 5;
+/// Contributor has too many roles.
 const EExceedsMaxRoles: u64 = 6;
 
 //=== Public Functions ===
 
 // --- Lifecycle ---
 
+/// Creates a new recording for a composition.
+/// Initializes share tokens (100M supply, 6 decimals) and returns:
+/// - The recording object
+/// - Admin capability for the owner
+/// - Initial share token balance
+/// - Promise that must be consumed by calling `share()`
 public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     genre: &Genre,
@@ -211,8 +295,9 @@ public fun new<RecordingShare, CompositionShare>(
     (recording, recording_admin_cap, recording_shares, share_recording_promise)
 }
 
-// Share a recording.
-// Required State: Created
+/// Converts the recording into a shared object.
+/// Consumes the promise returned by `new()`.
+/// Required State: Created
 public fun share<RecordingShare>(
     self: Recording<RecordingShare>,
     share_recording_promise: ShareRecordingPromise,
@@ -227,8 +312,9 @@ public fun share<RecordingShare>(
     }
 }
 
-// Publish a recording.
-// Required State: Created
+/// Publishes the recording, making it immutable.
+/// Requires at least one contributor to be assigned.
+/// Required State: Created
 public fun publish<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -253,8 +339,8 @@ public fun publish<RecordingShare>(
 
 // --- Title ---
 
-// Set the title of a recording.
-// Required State: Created
+/// Sets the primary title of the recording.
+/// Required State: Created
 public fun set_title<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -270,8 +356,8 @@ public fun set_title<RecordingShare>(
     }
 }
 
-// Set the title version of a recording.
-// Required State: Created
+/// Sets the title version (e.g., "Radio Edit", "Extended Mix").
+/// Required State: Created
 public fun set_title_version<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -289,8 +375,8 @@ public fun set_title_version<RecordingShare>(
 
 // --- People ---
 
-// Add an artist to a recording.
-// Required State: Created
+/// Adds a primary artist to the recording.
+/// Required State: Created
 public fun add_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -306,8 +392,8 @@ public fun add_artist<RecordingShare>(
     }
 }
 
-// Remove an artist from a recording.
-// Required State: Created
+/// Removes a primary artist from the recording.
+/// Required State: Created
 public fun remove_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -323,8 +409,8 @@ public fun remove_artist<RecordingShare>(
     }
 }
 
-// Add a featured artist to a recording.
-// Required State: Created
+/// Adds a featured artist to the recording.
+/// Required State: Created
 public fun add_featured_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -340,8 +426,8 @@ public fun add_featured_artist<RecordingShare>(
     }
 }
 
-// Remove a featured artist from a recording.
-// Required State: Created
+/// Removes a featured artist from the recording.
+/// Required State: Created
 public fun remove_featured_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -357,8 +443,9 @@ public fun remove_featured_artist<RecordingShare>(
     }
 }
 
-// Add a contributor to a recording.
-// Required State: Created
+/// Adds a contributor to the recording with specified roles.
+/// Each contributor must have 1-20 roles.
+/// Required State: Created
 public fun add_contributor<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -383,8 +470,8 @@ public fun add_contributor<RecordingShare>(
     }
 }
 
-// Remove a contributor from a recording.
-// Required State: Created
+/// Removes a contributor from the recording.
+/// Required State: Created
 public fun remove_contributor<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -407,8 +494,8 @@ public fun remove_contributor<RecordingShare>(
 
 // --- Classification ---
 
-// Set the genre of a recording.
-// Required State: Created
+/// Sets the primary genre of the recording.
+/// Required State: Created
 public fun set_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -424,8 +511,8 @@ public fun set_genre<RecordingShare>(
     }
 }
 
-// Add a secondary genre to a recording.
-// Required State: Created
+/// Adds a secondary genre to the recording.
+/// Required State: Created
 public fun add_secondary_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -441,8 +528,8 @@ public fun add_secondary_genre<RecordingShare>(
     }
 }
 
-// Remove a secondary genre from a recording.
-// Required State: Created
+/// Removes a secondary genre from the recording.
+/// Required State: Created
 public fun remove_secondary_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -458,8 +545,8 @@ public fun remove_secondary_genre<RecordingShare>(
     }
 }
 
-// Set the language of a recording.
-// Required State: Created
+/// Sets the language of the recording's vocals.
+/// Required State: Created
 public fun set_language<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -475,8 +562,8 @@ public fun set_language<RecordingShare>(
     }
 }
 
-// Set the explicit flag of a recording.
-// Required State: Created
+/// Sets whether the recording contains explicit content.
+/// Required State: Created
 public fun set_is_explicit<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -492,8 +579,8 @@ public fun set_is_explicit<RecordingShare>(
     }
 }
 
-// Set the instrumental flag of a recording.
-// Required State: Created
+/// Sets whether the recording is instrumental (no vocals).
+/// Required State: Created
 public fun set_is_instrumental<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -511,8 +598,8 @@ public fun set_is_instrumental<RecordingShare>(
 
 // --- Musical Properties ---
 
-// Set the musical key of a recording.
-// Required State: Created
+/// Sets the musical key of the recording.
+/// Required State: Created
 public fun set_musical_key<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -528,8 +615,8 @@ public fun set_musical_key<RecordingShare>(
     }
 }
 
-// Set the time signature of a recording.
-// Required State: Created
+/// Sets the time signature of the recording.
+/// Required State: Created
 public fun set_time_signature<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -545,8 +632,8 @@ public fun set_time_signature<RecordingShare>(
     }
 }
 
-// Set the tempo BPM of a recording.
-// Required State: Created
+/// Sets the tempo in beats per minute.
+/// Required State: Created
 public fun set_tempo_bpm<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -564,8 +651,9 @@ public fun set_tempo_bpm<RecordingShare>(
 
 // --- Audio ---
 
-// Adds a stem to a recording.
-// Required State: Created
+/// Adds a stem (isolated audio track) to the recording.
+/// Maximum of 10 stems per recording.
+/// Required State: Created
 public fun add_stem<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -588,8 +676,8 @@ public fun add_stem<RecordingShare>(
     }
 }
 
-// Removes a stem from a recording.
-// Required State: Created
+/// Removes a stem by index and returns it.
+/// Required State: Created
 public fun remove_stem<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -614,8 +702,8 @@ public fun remove_stem<RecordingShare>(
 
 // --- Attachments ---
 
-// Add an artifact to a recording.
-// Required State: Created
+/// Adds an artifact to the recording.
+/// Required State: Created
 public fun add_artifact<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -631,8 +719,8 @@ public fun add_artifact<RecordingShare>(
     }
 }
 
-// Remove an artifact from a recording.
-// Required State: Created
+/// Removes an artifact by index and returns it.
+/// Required State: Created
 public fun remove_artifact<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -648,8 +736,8 @@ public fun remove_artifact<RecordingShare>(
     }
 }
 
-// Add a snapshot to a recording.
-// Required State: Created
+/// Adds a snapshot to the recording.
+/// Required State: Created
 public fun add_snapshot<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -665,8 +753,8 @@ public fun add_snapshot<RecordingShare>(
     }
 }
 
-// Remove a snapshot from a recording.
-// Required State: Created
+/// Removes a snapshot by index and returns it.
+/// Required State: Created
 public fun remove_snapshot<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -684,11 +772,15 @@ public fun remove_snapshot<RecordingShare>(
 
 // --- Pools ---
 
+/// Creates a new revenue pool for this recording.
+/// Revenue pools receive incoming payments before distribution.
 public fun new_revenue_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
     let revenue_pool = revenue_pool::new<Currency>(&mut self.id);
     transfer::public_share_object(revenue_pool);
 }
 
+/// Creates a new reward pool for this recording.
+/// Reward pools distribute revenue to share token holders.
 public fun new_reward_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
     let reward_pool = reward_pool::new<RecordingShare, Currency>(&mut self.id);
     transfer::public_share_object(reward_pool);
@@ -696,96 +788,120 @@ public fun new_reward_pool<RecordingShare, Currency>(self: &mut Recording<Record
 
 //=== Public View Functions ===
 
+/// Returns the recording's object ID.
 public fun id<RecordingShare>(self: &Recording<RecordingShare>): ID {
     self.id.to_inner()
 }
 
+/// Returns the current lifecycle state.
 public fun state<RecordingShare>(self: &Recording<RecordingShare>): RecordingState {
     self.state
 }
 
+/// Returns the primary title.
 public fun title<RecordingShare>(self: &Recording<RecordingShare>): &String {
     &self.title
 }
 
+/// Returns the optional title version.
 public fun title_version<RecordingShare>(self: &Recording<RecordingShare>): &Option<String> {
     &self.title_version
 }
 
+/// Returns the ID of the underlying composition.
 public fun composition_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
     self.composition_id
 }
 
+/// Returns the type of the composition's share token.
 public fun composition_share_type<RecordingShare>(self: &Recording<RecordingShare>): &TypeName {
     &self.composition_share_type
 }
 
+/// Returns the composition's revenue split in basis points.
 public fun composition_split<RecordingShare>(self: &Recording<RecordingShare>): &BPS {
     &self.composition_split
 }
 
+/// Returns the set of primary artist IDs.
 public fun artists<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
     &self.artists
 }
 
+/// Returns the set of featured artist IDs.
 public fun featured_artists<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
     &self.featured_artists
 }
 
+/// Returns the contributor-to-roles mapping.
 public fun contributors<RecordingShare>(self: &Recording<RecordingShare>): &VecMap<ID, vector<RecordingContributorRole>> {
     &self.contributors
 }
 
+/// Returns the primary genre ID.
 public fun genre_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
     self.genre_id
 }
 
+/// Returns the set of secondary genre IDs.
 public fun secondary_genre_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
     &self.secondary_genre_ids
 }
 
+/// Returns the optional language code.
 public fun language<RecordingShare>(self: &Recording<RecordingShare>): &Option<LanguageCode> {
     &self.language
 }
 
+/// Returns whether the recording contains explicit content.
 public fun is_explicit<RecordingShare>(self: &Recording<RecordingShare>): bool {
     self.is_explicit
 }
 
+/// Returns whether the recording is instrumental.
 public fun is_instrumental<RecordingShare>(self: &Recording<RecordingShare>): bool {
     self.is_instrumental
 }
 
+/// Returns the optional musical key.
 public fun musical_key<RecordingShare>(self: &Recording<RecordingShare>): &Option<MusicalKey> {
     &self.musical_key
 }
 
+/// Returns the optional time signature.
 public fun time_signature<RecordingShare>(self: &Recording<RecordingShare>): &Option<TimeSignature> {
     &self.time_signature
 }
 
+/// Returns the optional tempo in BPM.
 public fun tempo_bpm<RecordingShare>(self: &Recording<RecordingShare>): &Option<u16> {
     &self.tempo_bpm
 }
 
+/// Returns a reference to the master audio file.
 public fun master<RecordingShare>(self: &Recording<RecordingShare>): &Audio {
     &self.master
 }
 
+/// Returns a reference to the list of stems.
 public fun stems<RecordingShare>(self: &Recording<RecordingShare>): &vector<Stem> {
     &self.stems
 }
 
+/// Returns the list of attached artifacts.
 public fun artifacts<RecordingShare>(self: &Recording<RecordingShare>): &vector<Artifact<RecordingArtifactKind>> {
     &self.artifacts
 }
 
+/// Returns the list of snapshots.
 public fun snapshots<RecordingShare>(self: &Recording<RecordingShare>): &vector<Snapshot> {
     &self.snapshots
 }
 
 //=== Package Functions ===
 
+/// Verifies that the admin capability matches this recording.
+/// Aborts with EUnauthorized if the capability doesn't match.
 public(package) fun authorize<RecordingShare>(
     self: &Recording<RecordingShare>,
     cap: &RecordingAdminCap,

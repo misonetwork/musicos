@@ -1,12 +1,26 @@
+// Copyright (c) Sona Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+/// Represents cover artwork for releases and tracks in MusicOS.
+/// Supports both static images and optional animated artwork (GIFs, videos).
+///
+/// Key features:
+/// - Required static image for all cover art
+/// - Optional animated version for enhanced presentation
+/// - References external storage via Data type
 module musicos::cover_art;
 
 use musicos::data::Data;
 
+/// Cover artwork with required static image and optional animation.
 public struct CoverArt has copy, drop, store {
     static: Data,
     animated: Option<Data>,
 }
 
+/// Creates new cover art with a static image and optional animated version.
+/// `static` - Required static image data reference.
+/// `animated` - Optional animated image/video data reference.
 public fun new(static: Data, animated: Option<Data>): CoverArt {
     CoverArt {
         static,
@@ -14,10 +28,12 @@ public fun new(static: Data, animated: Option<Data>): CoverArt {
     }
 }
 
+/// Returns a reference to the static image data.
 public fun static(self: &CoverArt): &Data {
     &self.static
 }
 
+/// Returns a reference to the optional animated artwork data.
 public fun animated(self: &CoverArt): &Option<Data> {
     &self.animated
 }

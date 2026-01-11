@@ -1,6 +1,9 @@
 // Copyright (c) Sona Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Manages the playback order of tracks across multiple discs in a release.
+/// Provides navigation functions for moving between tracks sequentially,
+/// wrapping around from the last track to the first and vice versa.
 module musicos::track_sequence;
 
 use musicos::disc::Disc;
@@ -8,27 +11,38 @@ use musicos::track_identifier::{Self, TrackIdentifier};
 
 //=== Structs ===
 
+/// Represents the complete track ordering for a release.
+/// Supports efficient navigation between tracks across multiple discs.
 public struct TrackSequence has drop, store {
-    // Number of tracks on each disc.
+    /// Number of tracks on each disc, indexed by disc number.
     tracks_per_disc: vector<u8>,
+    /// Flattened list of all track identifiers in playback order.
     track_identifiers: vector<TrackIdentifier>,
 }
 
 //=== Constants ===
 
+/// Maximum number of tracks allowed in a single release.
 const MAX_TRACK_SEQUENCE_LENGTH: u8 = 255;
 
 //=== Errors ===
 
+/// Release must contain at least one disc.
 const ENoDiscs: u64 = 0;
+/// Disc index exceeds the number of discs in the release.
 const EDiscIndexOutOfBounds: u64 = 1;
+/// Track index exceeds the number of tracks on the disc.
 const ETrackIndexOutOfBounds: u64 = 2;
+/// Total track count exceeds the maximum allowed (255).
 const EMaxSequenceLengthExceeded: u64 = 3;
+/// Sequence index exceeds the total number of tracks.
 const ESequenceIndexOutOfBounds: u64 = 4;
 
 //=== Package Functions ===
 
-// Create a new track sequence.
+/// Creates a new track sequence from a vector of discs.
+/// Builds an ordered list of all track identifiers for navigation.
+/// Aborts if there are no discs or if total tracks exceed 255.
 public(package) fun new(discs: &vector<Disc>): TrackSequence {
     assert!(!discs.is_empty(), ENoDiscs);
 
@@ -60,7 +74,10 @@ public(package) fun new(discs: &vector<Disc>): TrackSequence {
 
 //=== Public View Functions ===
 
-// Get the next disc and track indexes given the current disc and track indexes.
+/// Returns the identifier of the next track in sequence.
+/// Advances to the next track on the current disc, or to the first track
+/// of the next disc if at the end of a disc. Wraps to the first track
+/// of the first disc when reaching the end of the release.
 public fun next(self: &TrackSequence, disc_idx: u8, track_idx: u8): TrackIdentifier {
     let disc_idx_u64 = disc_idx as u64;
 
@@ -79,7 +96,10 @@ public fun next(self: &TrackSequence, disc_idx: u8, track_idx: u8): TrackIdentif
     }
 }
 
-// Get the previous disc and track indexes given the current disc and track indexes.
+/// Returns the identifier of the previous track in sequence.
+/// Moves to the previous track on the current disc, or to the last track
+/// of the previous disc if at the start of a disc. Wraps to the last track
+/// of the last disc when at the beginning of the release.
 public fun previous(self: &TrackSequence, disc_idx: u8, track_idx: u8): TrackIdentifier {
     let disc_idx_u64 = disc_idx as u64;
 
@@ -102,23 +122,25 @@ public fun previous(self: &TrackSequence, disc_idx: u8, track_idx: u8): TrackIde
     }
 }
 
-// Length of the track sequence.
+/// Returns the total number of tracks across all discs.
 public fun length(self: &TrackSequence): u8 {
     self.track_identifiers.length() as u8
 }
 
-// Get the disc and track indexes for a given sequence index.
+/// Returns the track identifier at the given sequence index.
+/// The sequence index is a flattened position across all discs.
 public fun track_identifier(self: &TrackSequence, track_sequence_idx: u8): &TrackIdentifier {
     let track_sequence_idx = track_sequence_idx as u64;
     assert!(track_sequence_idx < self.track_identifiers.length(), ESequenceIndexOutOfBounds);
     &self.track_identifiers[track_sequence_idx]
 }
 
+/// Returns a reference to all track identifiers in sequence order.
 public fun track_identifiers(self: &TrackSequence): &vector<TrackIdentifier> {
     &self.track_identifiers
 }
 
-// Number of tracks on each disc.
+/// Returns the number of tracks on each disc.
 public fun tracks_per_disc(self: &TrackSequence): &vector<u8> {
     &self.tracks_per_disc
 }
