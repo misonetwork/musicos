@@ -11,12 +11,12 @@ use musicos::track_identifier::{Self, TrackIdentifier};
 public struct TrackSequence has drop, store {
     // Number of tracks on each disc.
     tracks_per_disc: vector<u8>,
-    lookup: vector<TrackIdentifier>,
+    track_identifiers: vector<TrackIdentifier>,
 }
 
 //=== Constants ===
 
-const MAX_TRACK_SEQUENCE_LENGTH: u8 = 150;
+const MAX_TRACK_SEQUENCE_LENGTH: u8 = 255;
 
 //=== Errors ===
 
@@ -33,25 +33,28 @@ public(package) fun new(discs: &vector<Disc>): TrackSequence {
     assert!(!discs.is_empty(), ENoDiscs);
 
     let mut tracks_per_disc: vector<u8> = vector[];
-    let mut lookup: vector<TrackIdentifier> = vector[];
+    let mut track_identifiers: vector<TrackIdentifier> = vector[];
 
     discs.length().do!(|disc_idx| {
         let disc = &discs[disc_idx];
         let track_count = disc.tracks().length();
 
         track_count.do!(|track_idx| {
-            lookup.push_back(track_identifier::new(disc_idx as u8, track_idx as u8));
+            track_identifiers.push_back(track_identifier::new(disc_idx as u8, track_idx as u8));
         });
 
         tracks_per_disc.push_back(track_count as u8);
     });
 
     // Assert the length of the track sequence doesn't exceed the allowed maximum.
-    assert!(lookup.length() <= MAX_TRACK_SEQUENCE_LENGTH as u64, EMaxSequenceLengthExceeded);
+    assert!(
+        track_identifiers.length() <= MAX_TRACK_SEQUENCE_LENGTH as u64,
+        EMaxSequenceLengthExceeded,
+    );
 
     TrackSequence {
         tracks_per_disc,
-        lookup,
+        track_identifiers,
     }
 }
 
@@ -101,14 +104,18 @@ public fun previous(self: &TrackSequence, disc_idx: u8, track_idx: u8): TrackIde
 
 // Length of the track sequence.
 public fun length(self: &TrackSequence): u8 {
-    self.lookup.length() as u8
+    self.track_identifiers.length() as u8
 }
 
 // Get the disc and track indexes for a given sequence index.
-public fun track_identifier(self: &TrackSequence, sequence_idx: u8): &TrackIdentifier {
-    let sequence_idx_u64 = sequence_idx as u64;
-    assert!(sequence_idx_u64 < self.lookup.length(), ESequenceIndexOutOfBounds);
-    &self.lookup[sequence_idx_u64]
+public fun track_identifier(self: &TrackSequence, track_sequence_idx: u8): &TrackIdentifier {
+    let track_sequence_idx = track_sequence_idx as u64;
+    assert!(track_sequence_idx < self.track_identifiers.length(), ESequenceIndexOutOfBounds);
+    &self.track_identifiers[track_sequence_idx]
+}
+
+public fun track_identifiers(self: &TrackSequence): &vector<TrackIdentifier> {
+    &self.track_identifiers
 }
 
 // Number of tracks on each disc.

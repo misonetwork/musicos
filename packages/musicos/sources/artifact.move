@@ -3,10 +3,20 @@
 
 module musicos::artifact;
 
-use musicos::contributor::Contributor;
+use musicos::data::Data;
 use std::string::String;
 
-public struct Artifact<phantom ArtifactKind> has drop, store {
-    blob_id: String,
+public struct Artifact<phantom ArtifactKind: copy + drop + store> has copy, drop, store {
+    data: Data,
     description: Option<String>,
+}
+
+public fun data<ArtifactKind: copy + drop + store>(self: &Artifact<ArtifactKind>): &Data {
+    &self.data
+}
+
+public fun description<ArtifactKind: copy + drop + store>(
+    self: &Artifact<ArtifactKind>,
+): &Option<String> {
+    &self.description
 }

@@ -6,15 +6,17 @@ module musicos::release;
 use musicos::bps::{Self, BPS};
 use musicos::cover_art::CoverArt;
 use musicos::disc::Disc;
-use musicos::key::{Self, RevenuePoolKey, revenue_pool_address};
 use musicos::protocol::Protocol;
+use musicos::track_identifier::TrackIdentifier;
 use musicos::track_sequence::{Self, TrackSequence};
 use revenue_pool::revenue_pool::{Self, RevenuePool};
-use reward_pool::reward_pool;
+use reward_pool::reward_pool::{Self, RewardPool};
 use std::string::String;
+use std::type_name::{TypeName, with_defining_ids};
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::event::emit;
+use sui::vec_map::{Self, VecMap};
 
 //=== Structs ===
 
@@ -37,6 +39,23 @@ public struct ReleaseAdminCap has key, store {
 
 public struct ShareReleasePromise(ID)
 
+public struct ReleaseRevenueDistributionManifest<phantom Currency> {
+    release_id: ID,
+    distribution_balance: Balance<Currency>,
+    distribution_value: u64,
+    track_splits: vector<TrackSplit>,
+}
+
+public struct TrackSplit has copy, drop, store {
+    track_identifier: TrackIdentifier,
+    composition_id: ID,
+    composition_share_type: TypeName,
+    composition_split_value: u64,
+    recording_id: ID,
+    recording_share_type: TypeName,
+    recording_split_value: u64,
+}
+
 //=== Events ===
 
 public struct ReleaseCreatedEvent has copy, drop {
@@ -45,12 +64,20 @@ public struct ReleaseCreatedEvent has copy, drop {
 
 public struct ReleaseRevenueDistributedEvent<phantom Currency> has copy, drop {
     release_id: ID,
-    distribution_value: u64,
+    composition_id: ID,
+    composition_split_value: u64,
+    recording_id: ID,
+    recording_split_value: u64,
 }
 
-//=== Constants ===
-
-const MAX_DISCS_PER_RELEASE: u8 = 10;
+public struct ReleaseTrackPaidEvent<
+    phantom Currency,
+    phantom CompShare,
+    phantom RecShare,
+> has copy, drop {
+    release_id: ID,
+    distribution_value: u64,
+}
 
 //=== Enums ===
 
@@ -77,6 +104,10 @@ const EInvalidTrackSplitsLength: u64 = 5;
 const EInvalidTrackSplitsSum: u64 = 6;
 const EMaxDiscsExceeded: u64 = 7;
 const ENoRevenueToDistribute: u64 = 8;
+const EInvalidReleaseForManifest: u64 = 9;
+const EIncompleteDistribution: u64 = 10;
+const EInvalidCompositionShareType: u64 = 11;
+const EInvalidRecordingShareType: u64 = 12;
 
 //=== Public Functions ===
 
@@ -88,8 +119,6 @@ public fun new(
     discs: vector<Disc>,
     ctx: &mut TxContext,
 ): (Release, ReleaseAdminCap, ShareReleasePromise) {
-    assert!(discs.length() <= MAX_DISCS_PER_RELEASE as u64, EMaxDiscsExceeded);
-
     // Build a track sequence for the release based on the number of discs.
     let track_sequence = track_sequence::new(&discs);
 
@@ -179,22 +208,20 @@ public fun distribute_revenue<Currency>(
             // Acquire a mutable reference to the revenue pool's balance.
             // This will abort if the provided revenue pool is not the correct one for the release
             // because revenue_pool.balance_mut() performs an authorization check internally.
-            let revenue = revenue_pool.balance_mut<Currency, RevenuePoolKey<Currency>>(
-                &self.id,
-                key::new_revenue_pool_key(),
-            );
+            let revenue = revenue_pool.balance_mut<Currency>(&self.id);
 
             assert!(revenue.value() > 0, ENoRevenueToDistribute);
 
             // Calculate the protocol commission and transfer it to the protocol's revenue pool.
             let protocol_commission_value = protocol.commission_rate().calc(revenue.value());
-            let protocol_commission_balance = revenue.split(protocol_commission_value);
-            protocol_commission_balance.send_funds(revenue_pool_address<Currency>(protocol.id()));
+            let protocol_commission = revenue.split(protocol_commission_value);
+            protocol_commission.send_funds(revenue_pool::derived_address<Currency>(protocol.id()));
 
             // Store the distribution's principal value.
             let distribution_value = revenue.value();
 
             let release_id = self.id();
+            let currency_type = with_defining_ids<Currency>();
 
             self.track_sequence.length().do!(|i| {
                 // Derive the track identifier for the given track sequence index.
@@ -205,26 +232,44 @@ public fun distribute_revenue<Currency>(
                 let track = &disc.tracks()[track_identifier.track_idx() as u64];
 
                 // Fetch the track split rate for the given track sequence index.
-                let track_split = self.track_splits[i as u64];
+                let track_split = &self.track_splits[i as u64];
 
                 if (track_split.value() > 0) {
                     let rec_split_value = track_split.calc(distribution_value);
-                    let mut rec_split = revenue.split(rec_split_value);
+                    let mut rec_split_balance = revenue.split(rec_split_value);
 
                     // Calculate the composition's revenue share, and split the value from the recording's revenue.
                     // Use rec_split_value directly since split() guarantees the exact amount requested.
                     let comp_split_value = track.composition_split().calc(rec_split_value);
-                    let comp_split = rec_split.split(comp_split_value);
+                    let comp_split_balance = rec_split_balance.split(comp_split_value);
+
+                    let composition_id = track.composition_id();
+                    let recording_id = track.recording_id();
 
                     // Transfer funds to the reward pools for the composition and recording.
-                    comp_split.send_funds(reward_pool_address<Currency>(track.composition_id()));
-                    rec_split.send_funds(reward_pool_address<Currency>(track.recording_id()));
-                };
-            });
+                    let composition_reward_pool_address = reward_pool::derived_address(
+                        composition_id,
+                        *track.composition_share_type(),
+                        currency_type,
+                    );
 
-            emit(ReleaseRevenueDistributedEvent<Currency> {
-                release_id,
-                distribution_value,
+                    let recording_reward_pool_address = reward_pool::derived_address(
+                        recording_id,
+                        *track.recording_share_type(),
+                        currency_type,
+                    );
+
+                    emit(ReleaseRevenueDistributedEvent<Currency> {
+                        release_id,
+                        composition_id,
+                        composition_split_value: comp_split_balance.value(),
+                        recording_id,
+                        recording_split_value: rec_split_balance.value(),
+                    });
+
+                    comp_split_balance.send_funds(composition_reward_pool_address);
+                    rec_split_balance.send_funds(recording_reward_pool_address);
+                };
             });
         },
         _ => abort ENotPublishedState,

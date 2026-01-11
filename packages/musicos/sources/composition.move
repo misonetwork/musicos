@@ -3,15 +3,12 @@
 
 module musicos::composition;
 
-use currency_treasury::burn_facility::BurnFacility;
-use fee_pool::fee_pool::FeePool;
-use music::music::MUSIC;
 use musicos::artifact::Artifact;
+use musicos::composition_artifact_kind::CompositionArtifactKind;
 use musicos::bps::BPS;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
-use musicos::key::{Self, RewardPoolKey, RevenuePoolKey};
-use musicos::protocol::Protocol;
+use musicos::data::Data;
 use musicos::share;
 use musicos::snapshot::Snapshot;
 use revenue_pool::revenue_pool::{Self, RevenuePool};
@@ -31,12 +28,14 @@ use sui::vec_map::{Self, VecMap};
 public struct Composition<phantom CompositionShare> has key {
     id: UID,
     state: CompositionState,
+    share_metadata_cap: MetadataCap<CompositionShare>,
     title: String,
     alternate_titles: vector<String>,
     contributors: VecMap<ID, vector<CompositionContributorRole>>,
     split: BPS,
-    share_metadata_cap: MetadataCap<CompositionShare>,
-    lyrics: Option<u256>,
+    lyrics: Option<Data>,
+    artifacts: vector<Artifact<CompositionArtifactKind>>,
+    snapshots: vector<Snapshot>,
 }
 
 public struct CompositionAdminCap has key, store {
@@ -49,6 +48,10 @@ public struct ShareCompositionPromise(ID)
 //=== Derivation Keys ===
 
 public struct CompositionAdminCapKey() has copy, drop, store;
+
+//=== Fees ===
+
+public struct PublishCompositionFee() has drop;
 
 //=== Events ===
 
@@ -97,7 +100,6 @@ const EMinRolesNotMet: u64 = 4;
 const EExceedsMaxRoles: u64 = 5;
 const EInvalidCompositionForPromise: u64 = 6;
 const ENoContributors: u64 = 7;
-const EInvalidCompositionFee: u64 = 8;
 
 //=== Public Functions ===
 
@@ -117,12 +119,14 @@ public fun new<CompositionShare>(
     let mut composition = Composition {
         id: object::new(ctx),
         state: CompositionState::Created,
+        share_metadata_cap,
         title,
         alternate_titles: vector[],
         contributors: vec_map::empty(),
         split,
-        share_metadata_cap,
         lyrics: option::none(),
+        artifacts: vector[],
+        snapshots: vector[],
     };
 
     let composition_admin_cap = CompositionAdminCap {
@@ -130,12 +134,12 @@ public fun new<CompositionShare>(
         composition_id: composition.id(),
     };
 
-    let mut description = b"MusicOS Composition Shares for 0x".to_string();
+    let mut description: String = "MusicOS Composition Shares for 0x";
     description.append(composition.id().to_address().to_string());
-    description.append(b".".to_string());
+    description.append(".");
 
     let composition_shares = share::intialize<CompositionShare>(
-        b"MusicOS Composition Share".to_string(),
+        "MusicOS Composition Share",
         description,
         share_currency,
         &composition.share_metadata_cap,
@@ -257,13 +261,13 @@ public fun set_split<CompositionShare>(
 public fun set_lyrics<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    blob_id: u256,
+    data: Data,
 ) {
     self.authorize(cap);
 
     match (self.state) {
         CompositionState::Created => {
-            self.lyrics.swap_or_fill(blob_id);
+            self.lyrics.swap_or_fill(data);
         },
         _ => abort ENotCreatedState,
     }
@@ -362,18 +366,12 @@ public fun remove_role_from_contributor<CompositionShare>(
 }
 
 public fun new_revenue_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
-    let revenue_pool = revenue_pool::new<Currency, RevenuePoolKey<Currency>>(
-        &mut self.id,
-        key::new_revenue_pool_key<Currency>(),
-    );
+    let revenue_pool = revenue_pool::new<Currency>(&mut self.id);
     transfer::public_share_object(revenue_pool);
 }
 
 public fun new_reward_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
-    let reward_pool = reward_pool::new<CompositionShare, Currency, RewardPoolKey<Currency>>(
-        &mut self.id,
-        key::new_reward_pool_key<Currency>(),
-    );
+    let reward_pool = reward_pool::new<CompositionShare, Currency>(&mut self.id);
     transfer::public_share_object(reward_pool);
 }
 
@@ -387,6 +385,10 @@ public(package) fun uid_mut<CompositionShare>(self: &mut Composition<Composition
 
 public fun id<CompositionShare>(self: &Composition<CompositionShare>): ID {
     self.id.to_inner()
+}
+
+public fun state<CompositionShare>(self: &Composition<CompositionShare>): CompositionState {
+    self.state
 }
 
 public fun title<CompositionShare>(self: &Composition<CompositionShare>): &String {
@@ -407,6 +409,14 @@ public fun contributors<CompositionShare>(
 
 public fun split<CompositionShare>(self: &Composition<CompositionShare>): BPS {
     self.split
+}
+
+public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &Option<Data> {
+    &self.lyrics
+}
+
+public fun artifacts<CompositionShare>(self: &Composition<CompositionShare>): &vector<Artifact<CompositionArtifactKind>> {
+    &self.artifacts
 }
 
 // TODO: Check whether contain() distinguishes enum variants.

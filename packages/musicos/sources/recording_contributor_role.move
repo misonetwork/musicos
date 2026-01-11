@@ -165,19 +165,19 @@ public fun level(self: &RecordingContributorRole): Option<RecordingContributorLe
 
 public fun name(self: &RecordingContributorRole): String {
     match (self) {
-        RecordingContributorRole::Arranger(_) => b"Arranger".to_string(),
-        RecordingContributorRole::ArtistsAndRepertoire => b"Artists & Repertoire".to_string(),
-        RecordingContributorRole::Contractor(_) => b"Contractor".to_string(),
-        RecordingContributorRole::Copyist => b"Copyist".to_string(),
-        RecordingContributorRole::Instrumentalist(..) => b"Instrumentalist".to_string(),
-        RecordingContributorRole::MasteringEngineer(_) => b"Mastering Engineer".to_string(),
-        RecordingContributorRole::MixingEngineer(_) => b"Mixing Engineer".to_string(),
-        RecordingContributorRole::MusicDirector(_) => b"Music Director".to_string(),
-        RecordingContributorRole::MusicSupervisor(_) => b"Music Supervisor".to_string(),
-        RecordingContributorRole::Orchestrator(_) => b"Orchestrator".to_string(),
-        RecordingContributorRole::Producer(_) => b"Producer".to_string(),
-        RecordingContributorRole::RecordingEngineer(_) => b"Recording Engineer".to_string(),
-        RecordingContributorRole::SoundDesigner(_) => b"Sound Designer".to_string(),
-        RecordingContributorRole::Vocalist(_) => b"Vocalist".to_string(),
+        RecordingContributorRole::Arranger(_) => "Arranger",
+        RecordingContributorRole::ArtistsAndRepertoire => "Artists & Repertoire",
+        RecordingContributorRole::Contractor(_) => "Contractor",
+        RecordingContributorRole::Copyist => "Copyist",
+        RecordingContributorRole::Instrumentalist(..) => "Instrumentalist",
+        RecordingContributorRole::MasteringEngineer(_) => "Mastering Engineer",
+        RecordingContributorRole::MixingEngineer(_) => "Mixing Engineer",
+        RecordingContributorRole::MusicDirector(_) => "Music Director",
+        RecordingContributorRole::MusicSupervisor(_) => "Music Supervisor",
+        RecordingContributorRole::Orchestrator(_) => "Orchestrator",
+        RecordingContributorRole::Producer(_) => "Producer",
+        RecordingContributorRole::RecordingEngineer(_) => "Recording Engineer",
+        RecordingContributorRole::SoundDesigner(_) => "Sound Designer",
+        RecordingContributorRole::Vocalist(_) => "Vocalist",
     }
 }

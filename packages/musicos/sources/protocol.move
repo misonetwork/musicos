@@ -3,6 +3,7 @@
 
 module musicos::protocol;
 
+use music::music::MUSIC;
 use musicos::admin::AdminCap;
 use musicos::bps::{Self, BPS};
 use revenue_pool::revenue_pool::RevenuePool;
@@ -23,8 +24,6 @@ public struct Protocol has key, store {
     contributor_verification_authority_types: VecSet<TypeName>,
     play_authority_types: VecSet<TypeName>,
     royalty_distribution_duration_epochs: u64,
-    composition_publishing_fee: u64,
-    recording_publishing_fee: u64,
 }
 
 //=== Enums ===
@@ -64,8 +63,6 @@ fun init(_otw: PROTOCOL, ctx: &mut TxContext) {
         contributor_verification_authority_types: vec_set::empty(),
         play_authority_types: vec_set::empty(),
         royalty_distribution_duration_epochs: DEFAULT_ROYALTY_DISTRIBUTION_DURATION_EPOCHS,
-        composition_publishing_fee: 0,
-        recording_publishing_fee: 0,
         commission_rate: bps::new(DEFAULT_COMMISSION_RATE_VALUE),
     };
 
@@ -150,14 +147,6 @@ public fun set_royalty_distribution_duration_epochs(
     self.royalty_distribution_duration_epochs = duration;
 }
 
-public fun set_composition_publishing_fee(self: &mut Protocol, _: &AdminCap, fee: u64) {
-    self.composition_publishing_fee = fee;
-}
-
-public fun set_recording_publishing_fee(self: &mut Protocol, _: &AdminCap, fee: u64) {
-    self.recording_publishing_fee = fee;
-}
-
 //=== Public View Functions ===
 
 public fun id(self: &Protocol): ID {
@@ -182,14 +171,6 @@ public fun play_authority_types(self: &Protocol): &VecSet<TypeName> {
 
 public fun royalty_distribution_duration_epochs(self: &Protocol): u64 {
     self.royalty_distribution_duration_epochs
-}
-
-public fun composition_publishing_fee(self: &Protocol): u64 {
-    self.composition_publishing_fee
-}
-
-public fun recording_publishing_fee(self: &Protocol): u64 {
-    self.recording_publishing_fee
 }
 
 public fun is_genesis_state(self: &Protocol): bool {

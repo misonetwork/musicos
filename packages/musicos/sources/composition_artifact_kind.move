@@ -1,5 +1,5 @@
-module musicos::composition_artifact_variant;
+module musicos::composition_artifact_kind;
 
-public enum CompositionArtifactVariant has drop, store {
+public enum CompositionArtifactKind has copy, drop, store {
     Lyrics,
 }

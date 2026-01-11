@@ -62,6 +62,6 @@ public fun id(self: &Genre): ID {
     self.id.to_inner()
 }
 
-public fun name(self: &Genre): String {
-    self.name
+public fun name(self: &Genre): &String {
+    &self.name
 }

@@ -3,22 +3,24 @@
 
 module musicos::recording;
 
-use currency_treasury::burn_facility::BurnFacility;
-use music::music::MUSIC;
+use iso639_1::language_code::LanguageCode;
 use musicos::audio::Audio;
+use musicos::artifact::Artifact;
+use musicos::recording_artifact_kind::RecordingArtifactKind;
 use musicos::bps::BPS;
 use musicos::composition::Composition;
 use musicos::contributor::Contributor;
 use musicos::genre::Genre;
-use musicos::key::{Self, RevenuePoolKey, RewardPoolKey};
-use musicos::protocol::Protocol;
+use musicos::musical_key::MusicalKey;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share;
+use musicos::snapshot::Snapshot;
 use musicos::stem::Stem;
+use musicos::time_signature::TimeSignature;
 use revenue_pool::revenue_pool;
 use reward_pool::reward_pool;
 use std::string::String;
-use std::type_name::{Self, TypeName};
+use std::type_name::{Self, TypeName, with_defining_ids};
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
@@ -34,21 +36,26 @@ public struct Recording<phantom RecordingShare> has key {
     // System
     id: UID,
     state: RecordingState,
+    share_metadata_cap: MetadataCap<RecordingShare>,
     title: String,
     title_version: Option<String>,
     composition_id: ID,
+    composition_share_type: TypeName,
     composition_split: BPS,
     genre_id: ID,
     secondary_genre_ids: VecSet<ID>,
-    language: Option<String>,
+    language: Option<LanguageCode>,
     is_explicit: bool,
     is_instrumental: bool,
-    tempo_bpm: u16,
-    share_metadata_cap: MetadataCap<RecordingShare>,
+    musical_key: Option<MusicalKey>,
+    time_signature: Option<TimeSignature>,
+    tempo_bpm: Option<u16>,
     artists: VecSet<ID>,
     featured_artists: VecSet<ID>,
     contributors: VecMap<ID, vector<RecordingContributorRole>>,
     master: Audio,
+    artifacts: vector<Artifact<RecordingArtifactKind>>,
+    snapshots: vector<Snapshot>,
     stems: vector<Stem>,
 }
 
@@ -63,6 +70,10 @@ public struct ShareRecordingPromise(ID)
 
 public struct RecordingAdminCapKey() has copy, drop, store;
 public struct RecordingKey(vector<u8>) has copy, drop, store;
+
+//=== Fees ===
+
+public struct PublishRecordingFee() has drop;
 
 //=== Events ===
 
@@ -118,9 +129,8 @@ const ENotCreatedState: u64 = 1;
 const EMaxStemsExceeded: u64 = 2;
 const EInvalidRecordingForPromise: u64 = 3;
 const ENoContributors: u64 = 4;
-const EInvalidRecordingFee: u64 = 5;
-const EMinRolesNotMet: u64 = 6;
-const EExceedsMaxRoles: u64 = 7;
+const EMinRolesNotMet: u64 = 5;
+const EExceedsMaxRoles: u64 = 6;
 
 //=== Public Functions ===
 
@@ -128,7 +138,8 @@ public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     genre: &Genre,
     master: Audio,
-    tempo_bpm: u16,
+    is_explicit: bool,
+    is_instrumental: bool,
     share_currency: &mut Currency<RecordingShare>,
     share_metadata_cap: MetadataCap<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
@@ -139,22 +150,27 @@ public fun new<RecordingShare, CompositionShare>(
     let mut recording = Recording<RecordingShare> {
         id: claim(composition.uid_mut(), RecordingKey(*master.digest())),
         state: RecordingState::Created,
+        share_metadata_cap,
         composition_id,
+        composition_share_type: with_defining_ids<CompositionShare>(),
         composition_split: composition.split(),
         title: *composition.title(),
         title_version: option::none(),
         genre_id,
         secondary_genre_ids: vec_set::empty(),
         language: option::none(),
-        is_explicit: false,
-        is_instrumental: false,
-        tempo_bpm,
+        is_explicit,
+        is_instrumental,
+        musical_key: option::none(),
+        time_signature: option::none(),
+        tempo_bpm: option::none(),
         contributors: vec_map::empty(),
         artists: vec_set::empty(),
         featured_artists: vec_set::empty(),
         master,
+        artifacts: vector[],
+        snapshots: vector[],
         stems: vector[],
-        share_metadata_cap,
     };
 
     let recording_admin_cap = RecordingAdminCap {
@@ -162,12 +178,12 @@ public fun new<RecordingShare, CompositionShare>(
         recording_id: recording.id(),
     };
 
-    let mut description = b"MusicOS Recording Shares for 0x".to_string();
+    let mut description: String = "MusicOS Recording Shares for 0x";
     description.append(recording.id().to_address().to_string());
-    description.append(b".".to_string());
+    description.append(".");
 
     let recording_shares = share::intialize<RecordingShare>(
-        b"MusicOS Recording Share".to_string(),
+        "MusicOS Recording Share",
         description,
         share_currency,
         &recording.share_metadata_cap,
@@ -212,7 +228,7 @@ public fun publish<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Created => { 
             // Assert the recording has at least one contributor.
             assert!(!self.contributors.is_empty(), ENoContributors);
 
@@ -321,18 +337,12 @@ public fun remove_stem<RecordingShare>(
 }
 
 public fun new_revenue_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
-    let revenue_pool = revenue_pool::new<Currency, RevenuePoolKey<Currency>>(
-        &mut self.id,
-        key::new_revenue_pool_key<Currency>(),
-    );
+    let revenue_pool = revenue_pool::new<Currency>(&mut self.id);
     transfer::public_share_object(revenue_pool);
 }
 
 public fun new_reward_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
-    let reward_pool = reward_pool::new<RecordingShare, Currency, RewardPoolKey<Currency>>(
-        &mut self.id,
-        key::new_reward_pool_key<Currency>(),
-    );
+    let reward_pool = reward_pool::new<RecordingShare, Currency>(&mut self.id);
     transfer::public_share_object(reward_pool);
 }
 
@@ -342,16 +352,72 @@ public fun id<RecordingShare>(recording: &Recording<RecordingShare>): ID {
     recording.id.to_inner()
 }
 
+public fun state<RecordingShare>(recording: &Recording<RecordingShare>): RecordingState {
+    recording.state
+}
+
+public fun title<RecordingShare>(recording: &Recording<RecordingShare>): &String {
+    &recording.title
+}
+
+public fun title_version<RecordingShare>(recording: &Recording<RecordingShare>): &Option<String> {
+    &recording.title_version
+}
+
 public fun composition_id<RecordingShare>(recording: &Recording<RecordingShare>): ID {
     recording.composition_id
 }
 
-public fun composition_split<RecordingShare>(recording: &Recording<RecordingShare>): BPS {
-    recording.composition_split
+public fun composition_share_type<RecordingShare>(recording: &Recording<RecordingShare>): &TypeName {
+    &recording.composition_share_type
+}
+
+public fun composition_split<RecordingShare>(recording: &Recording<RecordingShare>): &BPS {
+    &recording.composition_split
 }
 
 public fun genre_id<RecordingShare>(recording: &Recording<RecordingShare>): ID {
     recording.genre_id
+}
+
+public fun secondary_genre_ids<RecordingShare>(recording: &Recording<RecordingShare>): &VecSet<ID> {
+    &recording.secondary_genre_ids
+}
+
+public fun language<RecordingShare>(recording: &Recording<RecordingShare>): &Option<LanguageCode> {
+    &recording.language
+}
+
+public fun is_explicit<RecordingShare>(recording: &Recording<RecordingShare>): bool {
+    recording.is_explicit
+}
+
+public fun is_instrumental<RecordingShare>(recording: &Recording<RecordingShare>): bool {
+    recording.is_instrumental
+}
+
+public fun musical_key<RecordingShare>(recording: &Recording<RecordingShare>): &Option<MusicalKey> {
+    &recording.musical_key
+}
+
+public fun time_signature<RecordingShare>(recording: &Recording<RecordingShare>): &Option<TimeSignature> {
+    &recording.time_signature
+}
+
+public fun tempo_bpm<RecordingShare>(recording: &Recording<RecordingShare>): &Option<u16> {
+    &recording.tempo_bpm
+}
+
+public fun artists<RecordingShare>(recording: &Recording<RecordingShare>): &VecSet<ID> {
+    &recording.artists
+}
+
+public fun featured_artists<RecordingShare>(recording: &Recording<RecordingShare>): &VecSet<ID> {
+    &recording.featured_artists
+}
+
+public fun contributors<RecordingShare>(recording: &Recording<RecordingShare>): &VecMap<ID, vector<RecordingContributorRole>> {
+    &recording.contributors
 }
 
 public fun master<RecordingShare>(recording: &Recording<RecordingShare>): &Audio {
@@ -360,6 +426,14 @@ public fun master<RecordingShare>(recording: &Recording<RecordingShare>): &Audio
 
 public fun stems<RecordingShare>(recording: &Recording<RecordingShare>): &vector<Stem> {
     &recording.stems
+}
+
+public fun artifacts<RecordingShare>(recording: &Recording<RecordingShare>): &vector<Artifact<RecordingArtifactKind>> {
+    &recording.artifacts
+}
+
+public fun snapshots<RecordingShare>(recording: &Recording<RecordingShare>): &vector<Snapshot> {
+    &recording.snapshots
 }
 
 //=== Private Functions ===
