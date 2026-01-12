@@ -12,9 +12,11 @@
 /// - Groups can contain multiple individual contributors
 module musicos::contributor;
 
+use musicos::plugin::PluginCap;
+use musicos::protocol::Protocol;
 use std::string::String;
+use std::type_name::with_defining_ids;
 use sui::derived_object::claim;
-use sui::dynamic_field as df;
 use sui::vec_set::{Self, VecSet};
 
 //=== Structs ===
@@ -44,8 +46,8 @@ public struct ContributorAdminCap has key, store {
     contributor_id: ID,
 }
 
-/// Type-safe key for storing metadata on a contributor via dynamic fields.
-public struct ContributorMetadataKey<phantom Metadata: drop + store>() has copy, drop, store;
+/// Witness type sourced from the contributor module.
+public struct ContributorWitness() has drop;
 
 //=== Derivation Keys ===
 
@@ -86,6 +88,8 @@ const ENotIndividualKind: u64 = 1;
 const ENotGroupKind: u64 = 2;
 /// Attempted to add a contributor that is already a member of the group.
 const EDuplicateContributor: u64 = 3;
+/// The provided plugin type is not allowed for this contributor.
+const ENotContributorPluginType: u64 = 4;
 
 //=== Public Functions ===
 
@@ -165,65 +169,6 @@ public fun destroy(self: Contributor, cap: ContributorAdminCap) {
     id.delete();
 }
 
-/// Adds typed metadata to a contributor via dynamic fields.
-/// Requires the admin capability.
-public fun add_metadata<Metadata: drop + store>(
-    self: &mut Contributor,
-    cap: &ContributorAdminCap,
-    metadata: Metadata,
-) {
-    self.authorize(cap);
-
-    df::add(&mut self.id, ContributorMetadataKey<Metadata>(), metadata)
-}
-
-/// Removes and returns typed metadata from a contributor.
-/// Requires the admin capability.
-public fun remove_metadata<Metadata: drop + store>(
-    self: &mut Contributor,
-    cap: &ContributorAdminCap,
-): Metadata {
-    self.authorize(cap);
-
-    df::remove<ContributorMetadataKey<Metadata>, Metadata>(
-        &mut self.id,
-        ContributorMetadataKey<Metadata>(),
-    )
-}
-
-/// Sets typed metadata on a contributor, replacing any existing value.
-/// Requires the admin capability.
-public fun set_metadata<Metadata: drop + store>(
-    self: &mut Contributor,
-    cap: &ContributorAdminCap,
-    metadata: Metadata,
-) {
-    self.authorize(cap);
-
-    df::remove_if_exists<ContributorMetadataKey<Metadata>, Metadata>(
-        &mut self.id,
-        ContributorMetadataKey<Metadata>(),
-    );
-
-    df::add(&mut self.id, ContributorMetadataKey<Metadata>(), metadata)
-}
-
-/// Returns a reference to typed metadata attached to a contributor.
-public fun borrow_metadata<Metadata: drop + store>(self: &Contributor): &Metadata {
-    df::borrow<ContributorMetadataKey<Metadata>, Metadata>(
-        &self.id,
-        ContributorMetadataKey<Metadata>(),
-    )
-}
-
-/// Checks if a contributor has the specified metadata type attached.
-public fun has_metadata<Metadata: drop + store>(self: &Contributor): bool {
-    df::exists_with_type<ContributorMetadataKey<Metadata>, Metadata>(
-        &self.id,
-        ContributorMetadataKey<Metadata>(),
-    )
-}
-
 /// Creates a new individual contributor kind.
 public fun new_individual_kind(): ContributorKind {
     ContributorKind::Individual
@@ -267,9 +212,29 @@ public fun assert_is_group_kind(contributor: &Contributor) {
     assert!(is_group_kind(contributor), ENotGroupKind);
 }
 
+//=== UID Functions ===
+
+public fun uid_with_plugin<PluginWitness: drop>(
+    self: &Contributor,
+    cap: &ContributorAdminCap,
+    _plugin_cap: PluginCap<ContributorWitness, PluginWitness>,
+): &UID {
+    self.authorize(cap);
+    &self.id
+}
+
+public fun uid_mut_with_plugin<PluginWitness: drop>(
+    self: &mut Contributor,
+    cap: &ContributorAdminCap,
+    _plugin_cap: PluginCap<ContributorWitness, PluginWitness>,
+): &mut UID {
+    self.authorize(cap);
+    &mut self.id
+}
+
 //=== Private Functions ===
 
 /// Verifies that the admin capability matches this contributor.
-fun authorize(self: &Contributor, cap: &ContributorAdminCap) {
+public fun authorize(self: &Contributor, cap: &ContributorAdminCap) {
     assert!(cap.contributor_id == self.id(), EUnauthorized);
 }

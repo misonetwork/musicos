@@ -19,11 +19,14 @@ use musicos::composition_artifact_kind::CompositionArtifactKind;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
 use musicos::data::Data;
+use musicos::plugin::PluginCap;
+use musicos::protocol::Protocol;
 use musicos::share;
 use musicos::snapshot::Snapshot;
 use revenue_pool::revenue_pool;
 use reward_pool::reward_pool;
 use std::string::String;
+use std::type_name::with_defining_ids;
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
@@ -67,6 +70,9 @@ public struct CompositionAdminCap has key, store {
     /// ID of the composition this capability controls.
     composition_id: ID,
 }
+
+/// Witness type sourced from the composition module.
+public struct CompositionWitness() has drop;
 
 //=== Derivation Keys ===
 
@@ -156,6 +162,8 @@ const EMinRolesNotMet: u64 = 4;
 const EExceedsMaxRoles: u64 = 5;
 /// Composition must have at least one contributor to publish.
 const ENoContributors: u64 = 7;
+/// The provided plugin type is not allowed for this composition.
+const ENotCompositionPluginType: u64 = 8;
 
 //=== Public Functions ===
 
@@ -593,12 +601,6 @@ public fun contributor_has_role<CompositionShare>(
 
 //=== Package Functions ===
 
-/// Returns a mutable reference to the composition's UID.
-/// Package-internal use only.
-public(package) fun uid_mut<CompositionShare>(self: &mut Composition<CompositionShare>): &mut UID {
-    &mut self.id
-}
-
 /// Verifies that the admin capability matches this composition.
 /// Aborts with EUnauthorized if the capability doesn't match.
 public(package) fun authorize<CompositionShare>(
@@ -606,4 +608,20 @@ public(package) fun authorize<CompositionShare>(
     cap: &CompositionAdminCap,
 ) {
     assert!(self.id() == cap.composition_id, EUnauthorized);
+}
+
+//=== UID Functions ===
+
+public fun uid_with_plugin<CompositionShare, PluginWitness: drop>(self: &Composition<CompositionShare>, cap: &CompositionAdminCap, _plugin_cap: PluginCap<CompositionWitness, PluginWitness>): &UID {
+    self.authorize(cap);
+    &self.id
+}
+
+public fun uid_mut_with_plugin<CompositionShare, PluginWitness: drop>(self: &mut Composition<CompositionShare>, cap: &CompositionAdminCap, _plugin_cap: PluginCap<CompositionWitness, PluginWitness>): &mut UID {
+    self.authorize(cap);
+    &mut self.id
+}
+
+public(package) fun uid_mut_internal<CompositionShare>(self: &mut Composition<CompositionShare>): &mut UID {
+    &mut self.id
 }

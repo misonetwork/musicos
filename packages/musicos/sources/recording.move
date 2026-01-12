@@ -23,6 +23,8 @@ use musicos::contributor::Contributor;
 use musicos::cover_art::CoverArt;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
+use musicos::plugin::PluginCap;
+use musicos::protocol::Protocol;
 use musicos::recording_artifact_kind::RecordingArtifactKind;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share;
@@ -32,7 +34,7 @@ use musicos::time_signature::TimeSignature;
 use revenue_pool::revenue_pool;
 use reward_pool::reward_pool;
 use std::string::String;
-use std::type_name::{Self, TypeName, with_defining_ids};
+use std::type_name::{TypeName, with_defining_ids};
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
@@ -107,6 +109,9 @@ public struct RecordingAdminCap has key, store {
     /// ID of the recording this capability controls.
     recording_id: ID,
 }
+
+/// Witness type sourced from the recording module.
+public struct RecordingWitness() has drop;
 
 //=== Derivation Keys ===
 
@@ -207,17 +212,17 @@ const EUnauthorized: u64 = 0;
 /// Operation requires Initialized state but recording is created.
 const ENotInitializedState: u64 = 1;
 /// Operation requires Created state but recording is published.
-const ENotCreatedState: u64 = 1;
+const ENotCreatedState: u64 = 2;
 /// Recording has reached the maximum number of stems (10).
-const EMaxStemsExceeded: u64 = 2;
-/// Promise does not match this recording's ID.
-const EInvalidRecordingForPromise: u64 = 3;
+const EMaxStemsExceeded: u64 = 3;
 /// Recording must have at least one contributor to publish.
 const ENoContributors: u64 = 4;
 /// Contributor must have at least one role.
 const EMinRolesNotMet: u64 = 5;
 /// Contributor has too many roles.
 const EExceedsMaxRoles: u64 = 6;
+/// The provided plugin type is not allowed for this recording.
+const ENotRecordingPluginType: u64 = 7;
 
 //=== Public Functions ===
 
@@ -244,7 +249,7 @@ public fun new<RecordingShare, CompositionShare>(
     let genre_id = genre.id();
 
     let mut recording = Recording<RecordingShare> {
-        id: claim(composition.uid_mut(), RecordingKey(*master.pcm_digest())),
+        id: claim(composition.uid_mut_internal(), RecordingKey(*master.pcm_digest())),
         state: RecordingState::Initialized,
         share_metadata_cap,
         title: *composition.title(),
@@ -290,7 +295,7 @@ public fun new<RecordingShare, CompositionShare>(
 
     emit(RecordingCreatedEvent {
         recording_id: recording.id(),
-        share_type: type_name::with_defining_ids<RecordingShare>(),
+        recording_share_type: with_defining_ids<RecordingShare>(),
         composition_id,
         genre_id,
     });
@@ -302,7 +307,7 @@ public fun new<RecordingShare, CompositionShare>(
 /// Consumes the promise returned by `new()`.
 /// Required State: Initialized
 public fun share<RecordingShare>(
-    self: Recording<RecordingShare>,
+    mut self: Recording<RecordingShare>,
     cap: &RecordingAdminCap,
 ) {
     self.authorize(cap);
@@ -946,4 +951,20 @@ public(package) fun authorize<RecordingShare>(
     cap: &RecordingAdminCap,
 ) {
     assert!(self.id() == cap.recording_id, EUnauthorized);
+}
+
+//=== UID Functions ===
+
+public fun uid_with_plugin<RecordingShare, PluginWitness: drop>(self: &Recording<RecordingShare>, cap: &RecordingAdminCap, _plugin_cap: PluginCap<RecordingWitness, PluginWitness>): &UID {
+    self.authorize(cap);
+    &self.id
+}
+
+public fun uid_mut_with_plugin<RecordingShare, PluginWitness: drop>(self: &mut Recording<RecordingShare>, cap: &RecordingAdminCap, _plugin_cap: PluginCap<RecordingWitness, PluginWitness>): &mut UID {
+    self.authorize(cap);
+    &mut self.id
+}
+
+public(package) fun uid_mut_internal<RecordingShare>(self: &mut Recording<RecordingShare>): &mut UID {
+    &mut self.id
 }

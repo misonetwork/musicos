@@ -16,6 +16,7 @@ module musicos::release;
 use musicos::bps::{Self, BPS};
 use musicos::cover_art::CoverArt;
 use musicos::disc::Disc;
+use musicos::plugin::PluginCap;
 use musicos::protocol::Protocol;
 use musicos::track_position::TrackPosition;
 use musicos::track_sequence::{Self, TrackSequence};
@@ -62,6 +63,9 @@ public struct ReleaseAdminCap has key, store {
     /// ID of the release this capability controls.
     release_id: ID,
 }
+
+/// Witness type sourced from the release module.
+public struct ReleaseWitness() has drop;
 
 // Derivation key for ReleaseAdminCap.
 public struct RelaseAdminCapKey() has copy, drop, store;
@@ -187,16 +191,14 @@ const ENotInitializedState: u64 = 1;
 const ENotCreatedState: u64 = 1;
 /// Operation requires Published state.
 const ENotPublishedState: u64 = 2;
-/// Promise does not match this release's ID.
-const EInvalidReleaseForPromise: u64 = 3;
 /// Track splits count doesn't match track count.
-const EInvalidTrackSplitsLength: u64 = 4;
+const EInvalidTrackSplitsLength: u64 = 3;
 /// Track splits don't sum to 100% (10,000 BPS).
-const EInvalidTrackSplitsSum: u64 = 5;
+const EInvalidTrackSplitsSum: u64 = 4;
 /// Revenue pool has no funds to distribute.
-const ENoRevenueToDistribute: u64 = 6;
+const ENoRevenueToDistribute: u64 = 5;
 /// Too many discs in release.
-const EMaxDiscsReached: u64 = 7;
+const EMaxDiscsReached: u64 = 6;
 
 //=== Public Functions ===
 
@@ -448,6 +450,18 @@ public fun track_sequence(self: &Release): &TrackSequence {
 /// Returns a reference to the track splits.
 public fun track_splits(self: &Release): &vector<BPS> {
     &self.track_splits
+}
+
+//=== UID Functions ===
+
+public fun uid_with_plugin<PluginWitness: drop>(self: &Release, cap: &ReleaseAdminCap, _plugin_cap: PluginCap<ReleaseWitness, PluginWitness>): &UID {
+    self.authorize(cap);
+    &self.id
+}
+
+public fun uid_mut_with_plugin<PluginWitness: drop>(self: &mut Release, cap: &ReleaseAdminCap, _plugin_cap: PluginCap<ReleaseWitness, PluginWitness>): &mut UID {
+    self.authorize(cap);
+    &mut self.id
 }
 
 //=== Private Functions ===
