@@ -80,12 +80,12 @@ public enum ContributorState has copy, drop, store {
 
 /// The provided admin capability does not match this contributor.
 const EUnauthorized: u64 = 0;
-/// Operation requires an individual contributor, but a group was provided.
-const ENotIndividualKind: u64 = 1;
-/// Operation requires a group contributor, but an individual was provided.
-const ENotGroupKind: u64 = 2;
 /// Attempted to add a contributor that is already a member of the group.
-const EDuplicateContributor: u64 = 3;
+const EDuplicateContributor: u64 = 30;
+/// Operation requires an individual contributor, but a group was provided.
+const ENotIndividualKind: u64 = 31;
+/// Operation requires a group contributor, but an individual was provided.
+const ENotGroupKind: u64 = 32;
 
 //=== Public Functions ===
 

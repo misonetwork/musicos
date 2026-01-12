@@ -173,17 +173,17 @@ const EUnauthorized: u64 = 0;
 /// Operation requires Initialized state.
 const ENotInitializedState: u64 = 1;
 /// Operation requires Created state.
-const ENotCreatedState: u64 = 1;
+const ENotCreatedState: u64 = 2;
 /// Operation requires Published state.
-const ENotPublishedState: u64 = 2;
-/// Track splits count doesn't match track count.
-const EInvalidTrackSplitsLength: u64 = 3;
-/// Track splits don't sum to 100% (10,000 BPS).
-const EInvalidTrackSplitsSum: u64 = 4;
-/// Revenue pool has no funds to distribute.
-const ENoRevenueToDistribute: u64 = 5;
+const ENotPublishedState: u64 = 4;
 /// Too many discs in release.
-const EMaxDiscsReached: u64 = 6;
+const EMaxDiscsReached: u64 = 10;
+/// Track splits count doesn't match track count.
+const EInvalidTrackSplitsLength: u64 = 20;
+/// Track splits don't sum to 100% (10,000 BPS).
+const EInvalidTrackSplitsSum: u64 = 21;
+/// Revenue pool has no funds to distribute.
+const ENoRevenueToDistribute: u64 = 22;
 
 //=== Public Functions ===
 

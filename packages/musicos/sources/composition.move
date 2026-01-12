@@ -146,20 +146,20 @@ const MAX_ROLES_PER_CONTRIBUTOR: u64 = 20;
 
 /// The provided admin capability does not match this composition.
 const EUnauthorized: u64 = 0;
-/// Operation requires Created state but composition is published.
-const ENotCreatedState: u64 = 1;
 /// Operation requires Initialized state but composition is created.
-const ENotInitializedState: u64 = 2;
-/// Attempted to add a role that the contributor already has.
-const EContributorRoleAlreadyExists: u64 = 2;
-/// Role index is out of bounds for this contributor.
-const EContributorRoleIndexOutOfBounds: u64 = 3;
-/// Contributor must have at least one role.
-const EMinRolesNotMet: u64 = 4;
+const ENotInitializedState: u64 = 1;
+/// Operation requires Created state but composition is published.
+const ENotCreatedState: u64 = 2;
 /// Contributor has too many roles.
-const EExceedsMaxRoles: u64 = 5;
+const EExceedsMaxRoles: u64 = 10;
+/// Contributor must have at least one role.
+const EMinRolesNotMet: u64 = 11;
+/// Role index is out of bounds for this contributor.
+const EContributorRoleIndexOutOfBounds: u64 = 12;
 /// Composition must have at least one contributor to publish.
-const ENoContributors: u64 = 7;
+const ENoContributors: u64 = 20;
+/// Attempted to add a role that the contributor already has.
+const EContributorRoleAlreadyExists: u64 = 30;
 
 //=== Public Functions ===
 

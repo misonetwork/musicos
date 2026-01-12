@@ -75,17 +75,17 @@ const DEPRECATION_DELAY_EPOCHS: u64 = 5;
 //=== Errors ===
 
 /// Protocol is not in Active state.
-const ENotActiveState: u64 = 1;
+const ENotActiveState: u64 = 3;
 /// Protocol is not in Paused state.
-const ENotPausedState: u64 = 2;
+const ENotPausedState: u64 = 5;
 /// Protocol is not in Deprecating state.
-const ENotDeprecatingState: u64 = 3;
+const ENotDeprecatingState: u64 = 6;
 /// Protocol is not in Deprecated state.
-const ENotDeprecatedState: u64 = 4;
-/// Deprecation delay period has not elapsed.
-const EDeprecationDelayNotElapsed: u64 = 5;
+const ENotDeprecatedState: u64 = 7;
 /// Protocol is already deprecated and cannot change state.
-const EAlreadyDeprecatedState: u64 = 6;
+const EAlreadyDeprecatedState: u64 = 8;
+/// Deprecation delay period has not elapsed.
+const EDeprecationDelayNotElapsed: u64 = 9;
 
 //=== Init Function ===
 

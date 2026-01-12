@@ -43,11 +43,11 @@ const SUPPORTED_SAMPLE_RATES_HZ: vector<u32> = vector[44_100, 48_000, 96_000, 19
 /// The authority type is not registered for audio creation in the protocol.
 const EInvalidAudioCreationAuthority: u64 = 0;
 /// The bit depth is not supported (must be 16, 24, or 32).
-const EUnsupportedBitDepth: u64 = 0;
+const EUnsupportedBitDepth: u64 = 20;
 /// The channel count is not supported (must be 1 or 2).
-const EUnsupportedChannels: u64 = 1;
+const EUnsupportedChannels: u64 = 21;
 /// The sample rate is not supported (must be 44100, 48000, 96000, or 192000).
-const EUnsupportedSampleRate: u64 = 1;
+const EUnsupportedSampleRate: u64 = 22;
 
 //=== Public Functions ===
 

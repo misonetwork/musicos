@@ -213,13 +213,13 @@ const ENotInitializedState: u64 = 1;
 /// Operation requires Created state but recording is published.
 const ENotCreatedState: u64 = 2;
 /// Recording has reached the maximum number of stems (10).
-const EMaxStemsExceeded: u64 = 3;
-/// Recording must have at least one contributor to publish.
-const ENoContributors: u64 = 4;
-/// Contributor must have at least one role.
-const EMinRolesNotMet: u64 = 5;
+const EMaxStemsExceeded: u64 = 10;
 /// Contributor has too many roles.
-const EExceedsMaxRoles: u64 = 6;
+const EExceedsMaxRoles: u64 = 11;
+/// Contributor must have at least one role.
+const EMinRolesNotMet: u64 = 12;
+/// Recording must have at least one contributor to publish.
+const ENoContributors: u64 = 20;
 
 //=== Public Functions ===
 

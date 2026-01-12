@@ -27,8 +27,10 @@ public enum PluginState has copy, drop, store {
 
 //=== Errors ===
 
-const ENotEnabledState: u64 = 0;
-const ENotDisabledState: u64 = 1;
+/// Plugin is not in Enabled state.
+const ENotEnabledState: u64 = 3;
+/// Plugin is not in Disabled state.
+const ENotDisabledState: u64 = 4;
 
 //=== Public Functions ===
 

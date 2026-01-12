@@ -34,7 +34,7 @@ const MAX_TRACKS_PER_DISC: u8 = 50;
 //=== Errors ===
 
 /// Number of tracks exceeds the maximum allowed (50).
-const EMaxTracksExceeded: u64 = 0;
+const EMaxTracksExceeded: u64 = 10;
 
 //=== Public Functions ===
 

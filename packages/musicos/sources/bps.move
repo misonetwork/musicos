@@ -22,11 +22,11 @@ public struct BPS(u64) has copy, drop, store;
 // === Errors ===
 
 /// Attempted to create or compute a BPS value exceeding 10,000.
-const EOverflow: u64 = 0;
+const EOverflow: u64 = 20;
 /// Attempted to subtract a larger BPS value from a smaller one.
-const EUnderflow: u64 = 1;
+const EUnderflow: u64 = 21;
 /// Attempted to divide by zero.
-const EDivideByZero: u64 = 2;
+const EDivideByZero: u64 = 22;
 
 // === Public Mutative Functions ===
 

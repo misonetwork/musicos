@@ -19,12 +19,12 @@ use sui::coin_registry::{Currency, MetadataCap, new_currency};
 
 //=== Errors ===
 
-/// Currency already has non-zero supply.
-const ENotZeroSupply: u64 = 0;
 /// Currency does not have 6 decimals.
-const EInvalidDecimals: u64 = 1;
+const EInvalidDecimals: u64 = 20;
 /// Currency symbol is not "SHARE".
-const EInvalidSymbol: u64 = 2;
+const EInvalidSymbol: u64 = 21;
+/// Currency already has non-zero supply.
+const ENotZeroSupply: u64 = 22;
 
 //=== Package Functions ===
 
