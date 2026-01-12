@@ -31,7 +31,7 @@ public struct Track has drop, store {
     recording_id: ID,
     /// Type of the recording's share token.
     recording_share_type: TypeName,
-    /// Duration of the track in milliseconds.
+    /// Duration of the track in seconds.
     duration_s: u64,
     /// Genre of the recording.
     genre_id: ID,

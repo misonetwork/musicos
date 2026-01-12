@@ -38,10 +38,10 @@ public struct Play<phantom Authority: drop> has drop {
     play_epoch: u64,
     /// Timestamp in milliseconds when the play occurred.
     play_timestamp_ms: u64,
-    /// Duration of playback in milliseconds.
-    playtime_ms: u64,
-    /// Total duration of the track in milliseconds.
-    track_duration_ms: u64,
+    /// Duration of playback in seconds.
+    playtime_s: u64,
+    /// Total duration of the track in seconds.
+    track_duration_s: u64,
 }
 
 //=== Events ===
@@ -64,10 +64,10 @@ public struct PlayCreatedEvent<phantom Authority: drop> has copy, drop {
     play_epoch: u64,
     /// Timestamp in milliseconds when the play occurred.
     play_timestamp_ms: u64,
-    /// Duration of playback in milliseconds.
-    playtime_ms: u64,
-    /// Total duration of the track in milliseconds.
-    track_duration_ms: u64,
+    /// Duration of playback in seconds.
+    playtime_s: u64,
+    /// Total duration of the track in seconds.
+    track_duration_s: u64,
 }
 
 //=== Errors ===
@@ -86,8 +86,8 @@ public fun new<Authority: drop>(
     composition_id: ID,
     recording_id: ID,
     genre_id: ID,
-    playtime_ms: u64,
-    track_duration_ms: u64,
+    playtime_s: u64,
+    track_duration_s: u64,
     protocol: &Protocol,
     clock: &Clock,
     ctx: &mut TxContext,
@@ -111,8 +111,8 @@ public fun new<Authority: drop>(
         played_by,
         play_epoch,
         play_timestamp_ms,
-        playtime_ms,
-        track_duration_ms,
+        playtime_s,
+        track_duration_s,
     });
 
     Play {
@@ -124,8 +124,8 @@ public fun new<Authority: drop>(
         played_by,
         play_epoch,
         play_timestamp_ms,
-        playtime_ms,
-        track_duration_ms,
+        playtime_s,
+        track_duration_s,
     }
 }
 
@@ -171,12 +171,12 @@ public fun play_timestamp_ms<Authority: drop>(self: &Play<Authority>): u64 {
     self.play_timestamp_ms
 }
 
-/// Returns the duration of playback in milliseconds.
-public fun playtime_ms<Authority: drop>(self: &Play<Authority>): u64 {
-    self.playtime_ms
+/// Returns the duration of playback in seconds.
+public fun playtime_s<Authority: drop>(self: &Play<Authority>): u64 {
+    self.playtime_s
 }
 
-/// Returns the total track duration in milliseconds.
-public fun track_duration_ms<Authority: drop>(self: &Play<Authority>): u64 {
-    self.track_duration_ms
+/// Returns the total track duration in seconds.
+public fun track_duration_s<Authority: drop>(self: &Play<Authority>): u64 {
+    self.track_duration_s
 }

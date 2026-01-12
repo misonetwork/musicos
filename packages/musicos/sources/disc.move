@@ -78,7 +78,7 @@ public fun tracks(self: &Disc): &vector<Track> {
     &self.tracks
 }
 
-/// Returns the total duration of this disc in milliseconds.
+/// Returns the total duration of this disc in seconds.
 public fun duration_s(self: &Disc): u64 {
     self.duration_s
 }
