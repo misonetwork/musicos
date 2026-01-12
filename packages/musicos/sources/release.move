@@ -248,7 +248,7 @@ public fun publish(self: &mut Release, cap: &ReleaseAdminCap, clock: &Clock, ctx
     match (self.state) {
         ReleaseState::Created => {
             // Assert that the number of track splits matches the number of tracks.
-            assert_track_splits_bps_length(&self.track_splits_bps, &self.track_sequence);
+            assert_track_splits_bps_length(self.track_splits_bps, &self.track_sequence);
             // Assert that the track splits sum to 100% (10,000 BPS).
             assert_track_splits_bps_sum(self.track_splits_bps);
 
@@ -304,12 +304,18 @@ public fun set_discs(self: &mut Release, cap: &ReleaseAdminCap, discs: vector<Di
 /// Sets the revenue splits for each track.
 /// The number of splits must match the track count, and they must sum to 100%.
 /// Required State: Created
-public fun set_track_splits_bps(self: &mut Release, cap: &ReleaseAdminCap, track_splits_bps: vector<BPS>) {
+public fun set_track_splits_bps(
+    self: &mut Release,
+    cap: &ReleaseAdminCap,
+    track_splits_bps_values: vector<u64>,
+) {
     self.authorize(cap);
 
     match (self.state) {
         ReleaseState::Created => {
-            assert_track_splits_bps_length(&track_splits_bps, &self.track_sequence);
+            let track_splits_bps = track_splits_bps_values.map!(|value| bps::new(value));
+
+            assert_track_splits_bps_length(track_splits_bps, &self.track_sequence);
             assert_track_splits_bps_sum(track_splits_bps);
 
             self.track_splits_bps = track_splits_bps;
@@ -433,8 +439,8 @@ public fun track_sequence(self: &Release): &TrackSequence {
 }
 
 /// Returns a reference to the track splits in basis points.
-public fun track_splits_bps(self: &Release): &vector<BPS> {
-    &self.track_splits_bps
+public fun track_splits_bps(self: &Release): vector<BPS> {
+    self.track_splits_bps
 }
 
 //=== UID Functions ===
@@ -465,7 +471,7 @@ fun authorize(self: &Release, cap: &ReleaseAdminCap) {
 }
 
 /// Asserts that the number of track splits matches the number of tracks.
-fun assert_track_splits_bps_length(track_splits_bps: &vector<BPS>, track_sequence: &TrackSequence) {
+fun assert_track_splits_bps_length(track_splits_bps: vector<BPS>, track_sequence: &TrackSequence) {
     assert!(track_splits_bps.length() == track_sequence.length() as u64, EInvalidTrackSplitsLength);
 }
 
