@@ -263,6 +263,80 @@ MusicOS integrates with:
 5. **Extensibility** - Dynamic fields and pluggable systems allow growth
 6. **Authorization** - Capability-based security at every level
 
+## Error Code System
+
+MusicOS uses a standardized error code numbering system across all modules. Error codes are grouped by category to provide consistent, predictable error handling.
+
+### Error Code Ranges
+
+| Range | Category | Description |
+|-------|----------|-------------|
+| 0 | Authorization | Permission and capability failures |
+| 1-9 | State Machine | Invalid state transitions |
+| 10-19 | Bounds/Limits | Index out of bounds, max limits exceeded |
+| 20-29 | Validation | Invalid input, format, or configuration |
+| 30-39 | Existence/Conflict | Duplicate entries, missing entities |
+
+### Error Codes by Module
+
+#### Authorization (0)
+- `EUnauthorized` (0) - Admin capability does not match the entity
+- `EInvalidAudioCreationAuthority` (0) - Authority type not registered for audio creation
+
+#### State Machine (1-9)
+- `ENotInitializedState` (1) - Operation requires Initialized state
+- `ENotCreatedState` (2) - Operation requires Created state
+- `ENotActiveState` (3) - Protocol/plugin not in Active state
+- `ENotPublishedState` (4) - Operation requires Published state
+- `ENotPausedState` (5) - Protocol not in Paused state
+- `ENotDeprecatingState` (6) - Protocol not in Deprecating state
+- `ENotDeprecatedState` (7) - Protocol not in Deprecated state
+- `EAlreadyDeprecatedState` (8) - Protocol already deprecated
+- `EDeprecationDelayNotElapsed` (9) - Deprecation delay period not complete
+- `ENotEnabledState` (3) - Plugin not in Enabled state
+- `ENotDisabledState` (4) - Plugin not in Disabled state
+
+#### Bounds/Limits (10-19)
+- `EMaxDiscsReached` (10) - Release exceeds maximum disc count
+- `EMaxTracksExceeded` (10) - Disc exceeds maximum track count
+- `EMaxStemsExceeded` (10) - Recording exceeds maximum stem count
+- `EMaxSequenceLengthExceeded` (10) - Track sequence exceeds 255 tracks
+- `EExceedsMaxRoles` (10) - Contributor role count exceeds maximum
+- `EMinRolesNotMet` (11) - Contributor role count below minimum
+- `EDiscIndexOutOfBounds` (11) - Disc index exceeds disc count
+- `EContributorRoleIndexOutOfBounds` (12) - Role index exceeds role count
+- `ETrackIndexOutOfBounds` (12) - Track index exceeds track count
+- `ESequenceIndexOutOfBounds` (13) - Sequence index exceeds total tracks
+
+#### Validation (20-29)
+- `ENoDiscs` (20) - Release must contain at least one disc
+- `ENoContributors` (20) - Entity must have at least one contributor
+- `EInvalidTrackSplitsLength` (20) - Track splits count doesn't match track count
+- `EInvalidTrackSplitsSum` (21) - Track splits don't sum to 100% (10,000 BPS)
+- `ENoRevenueToDistribute` (22) - Revenue pool has no funds
+- `EUnsupportedBitDepth` (20) - Audio bit depth not supported
+- `EUnsupportedChannels` (21) - Audio channel count not supported
+- `EUnsupportedSampleRate` (22) - Audio sample rate not supported
+- `EOverflow` (20) - BPS calculation overflow
+- `EUnderflow` (21) - BPS calculation underflow
+- `EDivideByZero` (22) - BPS division by zero
+- `EInvalidDecimals` (20) - Share token decimals invalid
+- `EInvalidSymbol` (21) - Share token symbol invalid
+- `ENotZeroSupply` (22) - Share token supply must be zero
+
+#### Existence/Conflict (30-39)
+- `EDuplicateContributor` (30) - Contributor already exists in entity
+- `EContributorRoleAlreadyExists` (30) - Role already assigned to contributor
+- `ENotIndividualKind` (31) - Operation requires Individual contributor
+- `ENotGroupKind` (32) - Operation requires Group contributor
+
+### Design Principles
+
+1. **Consistency** - Same error type uses same code across modules
+2. **Predictability** - Error ranges indicate error category
+3. **Debugging** - Code range helps identify error source quickly
+4. **Extensibility** - Gaps in ranges allow new errors without renumbering
+
 ## License
 
 Proprietary - Sona Labs
