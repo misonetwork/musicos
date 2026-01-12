@@ -68,13 +68,6 @@ public struct CompositionAdminCap has key, store {
     composition_id: ID,
 }
 
-/// Promise that ensures a composition is shared after creation.
-/// Must be consumed by calling `share()`.
-public struct ShareCompositionPromise(
-    /// ID of the composition to be shared.
-    ID,
-)
-
 //=== Derivation Keys ===
 
 /// Key for deriving the admin capability's deterministic address.
@@ -127,7 +120,9 @@ public struct CompositionSplitSetEvent has copy, drop {
 
 /// Lifecycle state of a composition.
 public enum CompositionState has copy, drop, store {
-    /// Composition is being set up and can be modified.
+    /// Composition is initialized but not yet created.
+    Initialized,
+    /// Composition has been created but not yet published.
     Created,
     /// Composition is published and immutable. Includes publication timestamp.
     Published(
@@ -157,8 +152,6 @@ const EContributorRoleIndexOutOfBounds: u64 = 3;
 const EMinRolesNotMet: u64 = 4;
 /// Contributor has too many roles.
 const EExceedsMaxRoles: u64 = 5;
-/// Promise does not match this composition's ID.
-const EInvalidCompositionForPromise: u64 = 6;
 /// Composition must have at least one contributor to publish.
 const ENoContributors: u64 = 7;
 
@@ -183,11 +176,10 @@ public fun new<CompositionShare>(
     Composition<CompositionShare>,
     CompositionAdminCap,
     Balance<CompositionShare>,
-    ShareCompositionPromise,
 ) {
     let mut composition = Composition {
         id: object::new(ctx),
-        state: CompositionState::Created,
+        state: CompositionState::Initialized,
         share_metadata_cap,
         title,
         alternate_titles: vector[],
@@ -215,26 +207,22 @@ public fun new<CompositionShare>(
         share_treasury_cap,
     );
 
-    let share_composition_promise = ShareCompositionPromise(composition.id());
-
     emit(CompositionCreatedEvent {
         composition_id: composition.id(),
     });
 
-    (composition, composition_admin_cap, composition_shares, share_composition_promise)
+    (composition, composition_admin_cap, composition_shares)
 }
 
 /// Converts the composition into a shared object.
 /// Consumes the promise returned by `new()`.
 /// Required State: Created
 public fun share<CompositionShare>(
-    self: Composition<CompositionShare>,
-    share_composition_promise: ShareCompositionPromise,
+    mut self: Composition<CompositionShare>,
 ) {
     match (self.state) {
-        CompositionState::Created => {
-            let ShareCompositionPromise(composition_id) = share_composition_promise;
-            assert!(self.id() == composition_id, EInvalidCompositionForPromise);
+        CompositionState::Initialized => {
+            self.state = CompositionState::Created;
             transfer::share_object(self);
         },
         _ => abort ENotCreatedState,
