@@ -108,13 +108,6 @@ public struct RecordingAdminCap has key, store {
     recording_id: ID,
 }
 
-/// Promise that ensures a recording is shared after creation.
-/// Must be consumed by calling `share()`.
-public struct ShareRecordingPromise(
-    /// ID of the recording to be shared.
-    ID,
-)
-
 //=== Derivation Keys ===
 
 /// Key for deriving the admin capability's deterministic address.
@@ -138,7 +131,7 @@ public struct RecordingCreatedEvent has copy, drop {
     /// ID of the created recording.
     recording_id: ID,
     /// Type of the recording's share token.
-    share_type: TypeName,
+    recording_share_type: TypeName,
     /// ID of the underlying composition.
     composition_id: ID,
     /// ID of the recording's genre.
@@ -188,6 +181,8 @@ public struct RecordingStemRemovedEvent has copy, drop {
 /// Lifecycle state of a recording.
 public enum RecordingState has copy, drop, store {
     /// Recording is being set up and can be modified.
+    Initialized,
+    /// Recording is created and can be shared.
     Created,
     /// Recording is published and immutable. Includes publication timestamp.
     Published(
@@ -209,6 +204,8 @@ const MAX_STEMS_PER_RECORDING: u8 = 10;
 
 /// The provided admin capability does not match this recording.
 const EUnauthorized: u64 = 0;
+/// Operation requires Initialized state but recording is created.
+const ENotInitializedState: u64 = 1;
 /// Operation requires Created state but recording is published.
 const ENotCreatedState: u64 = 1;
 /// Recording has reached the maximum number of stems (10).
@@ -242,13 +239,13 @@ public fun new<RecordingShare, CompositionShare>(
     share_currency: &mut Currency<RecordingShare>,
     share_metadata_cap: MetadataCap<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
-): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>, ShareRecordingPromise) {
+): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>) {
     let composition_id = composition.id();
     let genre_id = genre.id();
 
     let mut recording = Recording<RecordingShare> {
         id: claim(composition.uid_mut(), RecordingKey(*master.pcm_digest())),
-        state: RecordingState::Created,
+        state: RecordingState::Initialized,
         share_metadata_cap,
         title: *composition.title(),
         title_version: option::none(),
@@ -291,8 +288,6 @@ public fun new<RecordingShare, CompositionShare>(
         share_treasury_cap,
     );
 
-    let share_recording_promise = ShareRecordingPromise(recording.id());
-
     emit(RecordingCreatedEvent {
         recording_id: recording.id(),
         share_type: type_name::with_defining_ids<RecordingShare>(),
@@ -300,23 +295,32 @@ public fun new<RecordingShare, CompositionShare>(
         genre_id,
     });
 
-    (recording, recording_admin_cap, recording_shares, share_recording_promise)
+    (recording, recording_admin_cap, recording_shares)
 }
 
 /// Converts the recording into a shared object.
 /// Consumes the promise returned by `new()`.
-/// Required State: Created
+/// Required State: Initialized
 public fun share<RecordingShare>(
     self: Recording<RecordingShare>,
-    share_recording_promise: ShareRecordingPromise,
+    cap: &RecordingAdminCap,
 ) {
+    self.authorize(cap);
+
     match (self.state) {
-        RecordingState::Created => {
-            let ShareRecordingPromise(recording_id) = share_recording_promise;
-            assert!(self.id() == recording_id, EInvalidRecordingForPromise);
+        RecordingState::Initialized => {
+            self.state = RecordingState::Created;
+
+            emit(RecordingCreatedEvent {
+                recording_id: self.id(),
+                recording_share_type: with_defining_ids<RecordingShare>(),
+                composition_id: self.composition_id(),
+                genre_id: self.genre_id(),
+            });
+
             transfer::share_object(self);
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 

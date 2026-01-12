@@ -144,6 +144,8 @@ const MAX_ROLES_PER_CONTRIBUTOR: u64 = 20;
 const EUnauthorized: u64 = 0;
 /// Operation requires Created state but composition is published.
 const ENotCreatedState: u64 = 1;
+/// Operation requires Initialized state but composition is created.
+const ENotInitializedState: u64 = 2;
 /// Attempted to add a role that the contributor already has.
 const EContributorRoleAlreadyExists: u64 = 2;
 /// Role index is out of bounds for this contributor.
@@ -219,13 +221,16 @@ public fun new<CompositionShare>(
 /// Required State: Created
 public fun share<CompositionShare>(
     mut self: Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
 ) {
+    self.authorize(cap);
+
     match (self.state) {
         CompositionState::Initialized => {
             self.state = CompositionState::Created;
             transfer::share_object(self);
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 

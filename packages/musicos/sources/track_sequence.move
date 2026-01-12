@@ -49,7 +49,7 @@ public(package) fun new(discs: &vector<Disc>): (TrackSequence, u64) {
 
     let mut tracks_per_disc: vector<u8> = vector[];
     let mut track_positions: vector<TrackPosition> = vector[];
-    let mut duration: u64 = 0;
+    let mut duration_s: u64 = 0;
 
     discs.length().do!(|disc_idx| {
         let disc = &discs[disc_idx];
@@ -58,7 +58,7 @@ public(package) fun new(discs: &vector<Disc>): (TrackSequence, u64) {
         tracks.length().do!(|track_idx| {
             let track_position = track_position::new(disc_idx as u8, track_idx as u8);
             track_positions.push_back(track_position);
-            duration = duration + tracks[track_idx].duration();
+            duration_s = duration_s + tracks[track_idx].duration_s();
         });
 
         tracks_per_disc.push_back(tracks.length() as u8);
@@ -75,7 +75,7 @@ public(package) fun new(discs: &vector<Disc>): (TrackSequence, u64) {
         track_positions,
     };
 
-    (track_sequence, duration)
+    (track_sequence, duration_s)
 }
 
 //=== Public View Functions ===

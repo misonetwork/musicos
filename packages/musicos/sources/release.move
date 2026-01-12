@@ -42,8 +42,8 @@ public struct Release has key {
     title: String,
     /// Optional subtitle (e.g., "Deluxe Edition").
     subtitle: Option<String>,
-    /// Duration of the release in milliseconds.
-    duration: u64,
+    /// Duration of the release in seconds.
+    duration_s: u64,
     /// Collection of discs containing tracks.
     discs: vector<Disc>,
     /// Navigation structure for track ordering.
@@ -113,8 +113,8 @@ public struct ReleasePublishedEvent has copy, drop {
     release_id: ID,
     /// Timestamp (ms) when published.
     timestamp_ms: u64,
-    /// Address of the publisher.
-    publisher: address,
+    /// Address of the sender.
+    sender: address,
     /// IDs of the published compositions.
     composition_ids: vector<ID>,
     /// IDs of the published recordings.
@@ -212,7 +212,7 @@ public fun new(
     assert!(discs.length() <= MAX_DISCS as u64, EMaxDiscsReached);
 
     // Build a track sequence for the release based on the number of discs.
-    let (track_sequence, duration) = track_sequence::new(&discs);
+    let (track_sequence, duration_s) = track_sequence::new(&discs);
 
     let mut release = Release {
         id: object::new(ctx),
@@ -220,7 +220,7 @@ public fun new(
         state: ReleaseState::Initialized,
         title,
         subtitle: option::none(),
-        duration,
+        duration_s,
         discs,
         track_sequence,
         track_splits: vector[],
@@ -235,10 +235,17 @@ public fun new(
     (release, release_admin_cap)
 }
 
-public fun share(mut self: Release) {
+public fun share(mut self: Release, cap: &ReleaseAdminCap) {
+    self.authorize(cap);
+
     match (self.state) {
         ReleaseState::Initialized => {
             self.state = ReleaseState::Created;
+
+            emit(ReleaseCreatedEvent {
+                release_id: self.id(),
+            });
+
             transfer::share_object(self);
         },
         _ => abort ENotInitializedState,
@@ -248,14 +255,17 @@ public fun share(mut self: Release) {
 /// Publishes the release, making it immutable.
 /// Track splits must be set and sum to 100% before publishing.
 /// Required State: Created
-public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx: &TxContext) {
+public fun publish(self: &mut Release, cap: &ReleaseAdminCap, clock: &Clock, ctx: &TxContext) {
     self.authorize(cap);
 
     match (self.state) {
         ReleaseState::Created => {
+            // Assert that the number of track splits matches the number of tracks.
             assert_track_splits_length(&self.track_splits, &self.track_sequence);
+            // Assert that the track splits sum to 100% (10,000 BPS).
             assert_track_splits_sum(self.track_splits);
 
+            // Collect the composition and recording IDs for the release.
             let mut composition_ids: vector<ID> = vector[];
             let mut recording_ids: vector<ID> = vector[];
 
@@ -268,17 +278,16 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
 
             let timestamp_ms = clock.timestamp_ms();
 
+            // Update the release state to published.
             self.state = ReleaseState::Published(timestamp_ms);
 
             emit(ReleasePublishedEvent {
                 release_id: self.id(),
                 timestamp_ms,
-                publisher: ctx.sender(),
+                sender: ctx.sender(),
                 composition_ids,
                 recording_ids,
             });
-
-            transfer::share_object(self);
         },
         _ => abort ENotCreatedState,
     }
@@ -293,11 +302,11 @@ public fun set_discs(self: &mut Release, cap: &ReleaseAdminCap, discs: vector<Di
         ReleaseState::Created => {
             assert!(discs.length() <= MAX_DISCS as u64, EMaxDiscsReached);
 
-            let (track_sequence, duration) = track_sequence::new(&discs);
+            let (track_sequence, duration_s) = track_sequence::new(&discs);
 
             self.discs = discs;
             self.track_sequence = track_sequence;
-            self.duration = duration;
+            self.duration_s = duration_s;
 
             self.track_splits = vector[];
         },
@@ -353,7 +362,7 @@ public fun distribute_revenue<Currency>(
 
             self.track_sequence.length().do!(|i| {
                 // Derive the track identifier for the given track sequence index.
-                let track_position = self.track_sequence.track_positions()[i];
+                let track_position = self.track_sequence.track_positions()[i as u64];
 
                 // Fetch the disc and track with the track identifier.
                 let disc = &self.discs[track_position.disc_idx() as u64];
