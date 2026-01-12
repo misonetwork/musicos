@@ -11,7 +11,7 @@
 /// - Stores composition split for royalty calculations
 module musicos::track;
 
-use musicos::bps::BPS;
+use interest_bps::bps::BPS;
 use musicos::cover_art::CoverArt;
 use musicos::recording::{Recording, RecordingAdminCap};
 use std::type_name::{with_defining_ids, TypeName};
@@ -25,8 +25,8 @@ public struct Track has drop, store {
     composition_id: ID,
     /// Type of the composition's share token.
     composition_share_type: TypeName,
-    /// Split of revenue allocated to composition vs recording.
-    composition_split: BPS,
+    /// Split of revenue allocated to composition vs recording (in basis points).
+    composition_split_bps: BPS,
     /// ID of the recording on this track.
     recording_id: ID,
     /// Type of the recording's share token.
@@ -54,7 +54,7 @@ public fun new<RecordingShare>(
     Track {
         composition_id: recording.composition_id(),
         composition_share_type: *recording.composition_share_type(),
-        composition_split: *recording.composition_split(),
+        composition_split_bps: recording.composition_split_bps(),
         recording_id: recording.id(),
         recording_share_type: with_defining_ids<RecordingShare>(),
         duration_s: recording.master().duration_s(),
@@ -76,8 +76,8 @@ public fun composition_share_type(self: &Track): &TypeName {
 }
 
 /// Returns the composition's revenue split in basis points.
-public fun composition_split(self: &Track): &BPS {
-    &self.composition_split
+public fun composition_split_bps(self: &Track): BPS {
+    self.composition_split_bps
 }
 
 /// Returns the ID of the recording.

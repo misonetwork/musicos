@@ -14,7 +14,7 @@
 module musicos::composition;
 
 use musicos::artifact::Artifact;
-use musicos::bps::BPS;
+use interest_bps::bps::{Self, BPS};
 use musicos::composition_artifact_kind::CompositionArtifactKind;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
@@ -50,8 +50,8 @@ public struct Composition<phantom CompositionShare> has key {
     alternate_titles: vector<String>,
     /// Map of contributor IDs to their roles on this composition.
     contributors: VecMap<ID, vector<CompositionContributorRole>>,
-    /// Revenue split rate (in BPS) allocated to this composition vs recording.
-    split: BPS,
+    /// Revenue split rate allocated to this composition vs recording (in basis points).
+    split_bps: BPS,
     /// Optional lyrics data reference.
     lyrics: Option<Data>,
     /// Attached artifacts (sheet music, liner notes, etc.).
@@ -117,7 +117,7 @@ public struct CompositionSplitSetEvent has copy, drop {
     /// ID of the composition.
     composition_id: ID,
     /// New split value in basis points.
-    split: BPS,
+    split_value: u64,
 }
 
 //=== Enums ===
@@ -173,7 +173,7 @@ const EContributorRoleAlreadyExists: u64 = 30;
 /// - Promise that must be consumed by calling `share()`
 public fun new<CompositionShare>(
     title: String,
-    split: BPS,
+    split_value: u64,
     share_currency: &mut Currency<CompositionShare>,
     share_metadata_cap: MetadataCap<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
@@ -190,7 +190,7 @@ public fun new<CompositionShare>(
         title,
         alternate_titles: vector[],
         contributors: vec_map::empty(),
-        split,
+        split_bps: bps::new(split_value),
         lyrics: option::none(),
         artifacts: vector[],
         snapshots: vector[],
@@ -418,18 +418,18 @@ public fun remove_role_from_contributor<CompositionShare>(
 /// Sets the revenue split rate for this composition.
 /// The split determines what percentage of track revenue goes to the composition
 /// vs the recording. Can be updated at any time (even after publish).
-public fun set_split<CompositionShare>(
+public fun set_split_bps<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    split: BPS,
+    split_value: u64,
 ) {
     self.authorize(cap);
 
-    self.split = split;
+    self.split_bps = bps::new(split_value);
 
     emit(CompositionSplitSetEvent {
         composition_id: self.id(),
-        split: split,
+        split_value: self.split_bps.value(),
     });
 }
 
@@ -566,8 +566,8 @@ public fun contributors<CompositionShare>(self: &Composition<CompositionShare>):
 }
 
 /// Returns the revenue split rate in basis points.
-public fun split<CompositionShare>(self: &Composition<CompositionShare>): BPS {
-    self.split
+public fun split_bps<CompositionShare>(self: &Composition<CompositionShare>): BPS {
+    self.split_bps
 }
 
 /// Returns the optional lyrics data reference.

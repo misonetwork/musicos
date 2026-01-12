@@ -12,8 +12,8 @@
 /// - Admin-controlled state transitions
 module musicos::protocol;
 
+use interest_bps::bps::{Self, BPS};
 use musicos::admin::AdminCap;
-use musicos::bps::{Self, BPS};
 use std::type_name::{TypeName, with_defining_ids};
 use sui::vec_set::{Self, VecSet};
 
@@ -210,11 +210,6 @@ public fun id(self: &Protocol): ID {
     self.id.to_inner()
 }
 
-/// Returns the protocol's commission rate in basis points.
-public fun commission_rate(self: &Protocol): &BPS {
-    &self.commission_rate
-}
-
 /// Returns the set of authority types that can create Audio structs.
 public fun audio_creation_authority_types(self: &Protocol): &VecSet<TypeName> {
     &self.audio_creation_authority_types
@@ -233,6 +228,11 @@ public fun play_authority_types(self: &Protocol): &VecSet<TypeName> {
 /// Returns the number of epochs for royalty distribution windows.
 public fun royalty_distribution_duration_epochs(self: &Protocol): u64 {
     self.royalty_distribution_duration_epochs
+}
+
+/// Returns the protocol's commission rate in basis points.
+public fun commission_rate(self: &Protocol): BPS {
+    self.commission_rate
 }
 
 /// Returns true if the protocol is in Genesis state.

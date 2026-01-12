@@ -17,7 +17,7 @@ module musicos::recording;
 use iso639_1::language_code::LanguageCode;
 use musicos::artifact::Artifact;
 use musicos::audio::Audio;
-use musicos::bps::BPS;
+use interest_bps::bps::BPS;
 use musicos::composition::Composition;
 use musicos::contributor::Contributor;
 use musicos::cover_art::CoverArt;
@@ -64,8 +64,8 @@ public struct Recording<phantom RecordingShare> has key {
     composition_id: ID,
     /// Type of the composition's share token.
     composition_share_type: TypeName,
-    /// Revenue split for the composition (captured at creation time).
-    composition_split: BPS,
+    /// Revenue split for the composition in basis points (captured at creation time).
+    composition_split_bps: BPS,
     /// Primary artists credited on the recording.
     artists: VecSet<ID>,
     /// Featured artists credited on the recording.
@@ -254,7 +254,7 @@ public fun new<RecordingShare, CompositionShare>(
         subtitle: option::none(),
         composition_id,
         composition_share_type: with_defining_ids<CompositionShare>(),
-        composition_split: composition.split(),
+        composition_split_bps: composition.split_bps(),
         artists: vec_set::empty(),
         featured_artists: vec_set::empty(),
         contributors: vec_map::empty(),
@@ -855,8 +855,8 @@ public fun composition_share_type<RecordingShare>(self: &Recording<RecordingShar
 }
 
 /// Returns the composition's revenue split in basis points.
-public fun composition_split<RecordingShare>(self: &Recording<RecordingShare>): &BPS {
-    &self.composition_split
+public fun composition_split_bps<RecordingShare>(self: &Recording<RecordingShare>): BPS {
+    self.composition_split_bps
 }
 
 /// Returns the set of primary artist IDs.

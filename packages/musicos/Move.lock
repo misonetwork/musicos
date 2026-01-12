@@ -22,6 +22,12 @@ use_environment = "mirainet"
 manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
+[pinned.mirainet.interest_bps]
+source = { local = "../../../interest-mvr/bps" }
+use_environment = "mirainet"
+manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
 [pinned.mirainet.iso639_1]
 source = { local = "../../../iso639_1" }
 use_environment = "mirainet"
@@ -37,8 +43,8 @@ deps = { currency_treasury = "currency_treasury", std = "MoveStdlib", sui = "Sui
 [pinned.mirainet.musicos]
 source = { root = true }
 use_environment = "mirainet"
-manifest_digest = "FC847A838ABEE387609B8BC1DE423ACDB4AAEF60EBC012E8DC7746033A5254C3"
-deps = { currency_treasury = "currency_treasury", iso639_1 = "iso639_1", music = "music", revenue_pool = "revenue_pool", reward_pool = "reward_pool", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "9ED95956ABF7254BE0310D096C172C0C0A8F794B1F10D0544151D97D217303DF"
+deps = { currency_treasury = "currency_treasury", interest_bps = "interest_bps", iso639_1 = "iso639_1", music = "music", revenue_pool = "revenue_pool", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mirainet.revenue_pool]
 source = { local = "../../../revenue_pool" }
@@ -46,8 +52,8 @@ use_environment = "mirainet"
 manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
-[pinned.mirainet.reward_pool]
-source = { local = "../../../reward_pool" }
+[pinned.mirainet.royalty_pool]
+source = { local = "../../../royalty_pool" }
 use_environment = "mirainet"
 manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -70,6 +76,12 @@ use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
+[pinned.testnet.interest_bps]
+source = { local = "../../../interest-mvr/bps" }
+use_environment = "testnet"
+manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
 [pinned.testnet.iso639_1]
 source = { local = "../../../iso639_1" }
 use_environment = "testnet"
@@ -85,8 +97,8 @@ deps = { currency_treasury = "currency_treasury", std = "MoveStdlib", sui = "Sui
 [pinned.testnet.musicos]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "01B951BBC2A134A69153A429DDCF8C310FE323457DED6FF016D33BED6664936B"
-deps = { currency_treasury = "currency_treasury", iso639_1 = "iso639_1", music = "music", revenue_pool = "revenue_pool", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "0CF63B215BCC0D0B6DED32ECB12818A15EC3F2B3A9BB6E2BC9B3D584BDD24BF4"
+deps = { currency_treasury = "currency_treasury", interest_bps = "interest_bps", iso639_1 = "iso639_1", music = "music", revenue_pool = "revenue_pool", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.revenue_pool]
 source = { local = "../../../revenue_pool" }
