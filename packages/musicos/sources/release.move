@@ -24,7 +24,6 @@ use revenue_pool::revenue_pool::{Self, RevenuePool};
 use reward_pool::reward_pool;
 use std::string::String;
 use std::type_name::{TypeName, with_defining_ids};
-use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::derived_object::claim;
 use sui::event::emit;
@@ -69,20 +68,6 @@ public struct ReleaseWitness() has drop;
 
 // Derivation key for ReleaseAdminCap.
 public struct RelaseAdminCapKey() has copy, drop, store;
-
-/// Manifest for distributing revenue from a release.
-/// Used internally during the distribution process.
-#[allow(unused_field)]
-public struct ReleaseRevenueDistributionManifest<phantom Currency> {
-    /// ID of the release being distributed.
-    release_id: ID,
-    /// Balance being distributed.
-    distribution_balance: Balance<Currency>,
-    /// Total value being distributed.
-    distribution_value: u64,
-    /// Per-track split information.
-    track_splits: vector<TrackSplit>,
-}
 
 /// Revenue split information for a single track.
 #[allow(unused_field)]
@@ -454,12 +439,20 @@ public fun track_splits(self: &Release): &vector<BPS> {
 
 //=== UID Functions ===
 
-public fun uid_with_plugin<PluginWitness: drop>(self: &Release, cap: &ReleaseAdminCap, _plugin_cap: PluginCap<ReleaseWitness, PluginWitness>): &UID {
+public fun uid_with_plugin<PluginWitness: drop>(
+    self: &Release,
+    cap: &ReleaseAdminCap,
+    _plugin_cap: PluginCap<ReleaseWitness, PluginWitness>,
+): &UID {
     self.authorize(cap);
     &self.id
 }
 
-public fun uid_mut_with_plugin<PluginWitness: drop>(self: &mut Release, cap: &ReleaseAdminCap, _plugin_cap: PluginCap<ReleaseWitness, PluginWitness>): &mut UID {
+public fun uid_mut_with_plugin<PluginWitness: drop>(
+    self: &mut Release,
+    cap: &ReleaseAdminCap,
+    _plugin_cap: PluginCap<ReleaseWitness, PluginWitness>,
+): &mut UID {
     self.authorize(cap);
     &mut self.id
 }

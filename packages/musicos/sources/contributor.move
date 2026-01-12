@@ -13,9 +13,7 @@
 module musicos::contributor;
 
 use musicos::plugin::PluginCap;
-use musicos::protocol::Protocol;
 use std::string::String;
-use std::type_name::with_defining_ids;
 use sui::derived_object::claim;
 use sui::vec_set::{Self, VecSet};
 
@@ -88,8 +86,6 @@ const ENotIndividualKind: u64 = 1;
 const ENotGroupKind: u64 = 2;
 /// Attempted to add a contributor that is already a member of the group.
 const EDuplicateContributor: u64 = 3;
-/// The provided plugin type is not allowed for this contributor.
-const ENotContributorPluginType: u64 = 4;
 
 //=== Public Functions ===
 

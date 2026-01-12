@@ -24,7 +24,6 @@ use musicos::cover_art::CoverArt;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
 use musicos::plugin::PluginCap;
-use musicos::protocol::Protocol;
 use musicos::recording_artifact_kind::RecordingArtifactKind;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share;
@@ -221,8 +220,6 @@ const ENoContributors: u64 = 4;
 const EMinRolesNotMet: u64 = 5;
 /// Contributor has too many roles.
 const EExceedsMaxRoles: u64 = 6;
-/// The provided plugin type is not allowed for this recording.
-const ENotRecordingPluginType: u64 = 7;
 
 //=== Public Functions ===
 

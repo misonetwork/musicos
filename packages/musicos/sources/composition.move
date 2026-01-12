@@ -20,13 +20,11 @@ use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
 use musicos::data::Data;
 use musicos::plugin::PluginCap;
-use musicos::protocol::Protocol;
 use musicos::share;
 use musicos::snapshot::Snapshot;
 use revenue_pool::revenue_pool;
 use reward_pool::reward_pool;
 use std::string::String;
-use std::type_name::with_defining_ids;
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
@@ -162,8 +160,6 @@ const EMinRolesNotMet: u64 = 4;
 const EExceedsMaxRoles: u64 = 5;
 /// Composition must have at least one contributor to publish.
 const ENoContributors: u64 = 7;
-/// The provided plugin type is not allowed for this composition.
-const ENotCompositionPluginType: u64 = 8;
 
 //=== Public Functions ===
 
