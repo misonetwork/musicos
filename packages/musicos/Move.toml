@@ -9,7 +9,7 @@ currency_treasury = { local = "../../../currency_treasury" }
 iso639_1 = { local = "../../../iso639_1" }
 music = { local = "../coins/music" }
 revenue_pool = { local = "../../../revenue_pool" }
-reward_pool = { local = "../../../reward_pool" }
+royalty_pool = { local = "../../../royalty_pool" }
 
 [environments]
 mirainet = "dd32b170"

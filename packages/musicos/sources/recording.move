@@ -31,7 +31,7 @@ use musicos::snapshot::Snapshot;
 use musicos::stem::Stem;
 use musicos::time_signature::TimeSignature;
 use revenue_pool::revenue_pool;
-use reward_pool::reward_pool;
+use royalty_pool::royalty_pool;
 use std::string::String;
 use std::type_name::{TypeName, with_defining_ids};
 use sui::balance::Balance;
@@ -810,11 +810,11 @@ public fun new_revenue_pool<RecordingShare, Currency>(self: &mut Recording<Recor
     transfer::public_share_object(revenue_pool);
 }
 
-/// Creates a new reward pool for this recording.
+/// Creates a new royalty pool for this recording.
 /// Reward pools distribute revenue to share token holders.
-public fun new_reward_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
-    let reward_pool = reward_pool::new<RecordingShare, Currency>(&mut self.id);
-    transfer::public_share_object(reward_pool);
+public fun new_royalty_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
+    let royalty_pool = royalty_pool::new<RecordingShare, Currency>(&mut self.id);
+    transfer::public_share_object(royalty_pool);
 }
 
 //=== Public View Functions ===

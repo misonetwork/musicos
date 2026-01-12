@@ -9,7 +9,7 @@
 /// - Share token initialization with fixed supply (100M tokens, 6 decimals)
 /// - Contributor management with role assignments (Composer, Lyricist, Songwriter)
 /// - State machine: Created -> Published (immutable after publish)
-/// - Revenue and reward pool creation for royalty distribution
+/// - Revenue and royalty pool creation for royalty distribution
 /// - Deterministic addresses via derived object pattern
 module musicos::composition;
 
@@ -23,7 +23,7 @@ use musicos::plugin::PluginCap;
 use musicos::share;
 use musicos::snapshot::Snapshot;
 use revenue_pool::revenue_pool;
-use reward_pool::reward_pool;
+use royalty_pool::royalty_pool;
 use std::string::String;
 use sui::balance::Balance;
 use sui::clock::Clock;
@@ -531,11 +531,11 @@ public fun new_revenue_pool<CompositionShare, Currency>(self: &mut Composition<C
     transfer::public_share_object(revenue_pool);
 }
 
-/// Creates a new reward pool for this composition.
+/// Creates a new royalty pool for this composition.
 /// Reward pools distribute revenue to share token holders.
-public fun new_reward_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
-    let reward_pool = reward_pool::new<CompositionShare, Currency>(&mut self.id);
-    transfer::public_share_object(reward_pool);
+public fun new_royalty_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
+    let royalty_pool = royalty_pool::new<CompositionShare, Currency>(&mut self.id);
+    transfer::public_share_object(royalty_pool);
 }
 
 //=== Public View Functions ===

@@ -9,7 +9,7 @@
 /// - Support for albums, EPs, and singles
 /// - Multi-disc releases with track sequencing
 /// - Configurable per-track revenue splits
-/// - Revenue distribution to composition and recording reward pools
+/// - Revenue distribution to composition and recording royalty pools
 /// - State machine: Created -> Published
 module musicos::release;
 
@@ -21,7 +21,7 @@ use musicos::protocol::Protocol;
 use musicos::track_position::TrackPosition;
 use musicos::track_sequence::{Self, TrackSequence};
 use revenue_pool::revenue_pool::{Self, RevenuePool};
-use reward_pool::reward_pool;
+use royalty_pool::royalty_pool;
 use std::string::String;
 use std::type_name::{TypeName, with_defining_ids};
 use sui::clock::Clock;
@@ -318,7 +318,7 @@ public fun set_track_splits(self: &mut Release, cap: &ReleaseAdminCap, track_spl
     }
 }
 
-/// Distributes revenue from the release's revenue pool to composition and recording reward pools.
+/// Distributes revenue from the release's revenue pool to composition and recording royalty pools.
 /// Takes a protocol commission and splits the remainder according to track splits.
 /// Each track's revenue is further split between its composition and recording based on their split ratio.
 /// Required State: Published
@@ -370,14 +370,14 @@ public fun distribute_revenue<Currency>(
                     let composition_id = track.composition_id();
                     let recording_id = track.recording_id();
 
-                    // Transfer funds to the reward pools for the composition and recording.
-                    let composition_reward_pool_address = reward_pool::derived_address(
+                    // Transfer funds to the royalty pools for the composition and recording.
+                    let composition_royalty_pool_address = royalty_pool::derived_address(
                         composition_id,
                         *track.composition_share_type(),
                         currency_type,
                     );
 
-                    let recording_reward_pool_address = reward_pool::derived_address(
+                    let recording_royalty_pool_address = royalty_pool::derived_address(
                         recording_id,
                         *track.recording_share_type(),
                         currency_type,
@@ -391,8 +391,8 @@ public fun distribute_revenue<Currency>(
                         recording_split_value: rec_split_balance.value(),
                     });
 
-                    comp_split_balance.send_funds(composition_reward_pool_address);
-                    rec_split_balance.send_funds(recording_reward_pool_address);
+                    comp_split_balance.send_funds(composition_royalty_pool_address);
+                    rec_split_balance.send_funds(recording_royalty_pool_address);
                 };
             });
         },

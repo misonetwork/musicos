@@ -85,8 +85,8 @@ deps = { currency_treasury = "currency_treasury", std = "MoveStdlib", sui = "Sui
 [pinned.testnet.musicos]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "FD75E2239CACF216A34F675311089A73CEF0380B3952A1D51A08C01067BD7D81"
-deps = { currency_treasury = "currency_treasury", iso639_1 = "iso639_1", music = "music", revenue_pool = "revenue_pool", reward_pool = "reward_pool", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "01B951BBC2A134A69153A429DDCF8C310FE323457DED6FF016D33BED6664936B"
+deps = { currency_treasury = "currency_treasury", iso639_1 = "iso639_1", music = "music", revenue_pool = "revenue_pool", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.revenue_pool]
 source = { local = "../../../revenue_pool" }
@@ -94,8 +94,8 @@ use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
-[pinned.testnet.reward_pool]
-source = { local = "../../../reward_pool" }
+[pinned.testnet.royalty_pool]
+source = { local = "../../../royalty_pool" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
