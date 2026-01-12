@@ -10,7 +10,7 @@
 /// - Multi-disc releases with track sequencing
 /// - Configurable per-track revenue splits
 /// - Revenue distribution to composition and recording reward pools
-/// - State machine: Initialized -> Created -> Published
+/// - State machine: Created -> Created -> Published
 module musicos::release;
 
 use musicos::bps::{Self, BPS};
@@ -151,9 +151,7 @@ public enum ReleaseKind has copy, drop, store {
 
 /// Lifecycle state of a release.
 public enum ReleaseState has copy, drop, store {
-    /// Release has been created but not yet shared.
-    Initialized,
-    /// Release is shared and can be configured.
+    /// Release has been created but not yet published.
     Created,
     /// Release is published and immutable. Includes publication timestamp.
     Published(
@@ -162,24 +160,28 @@ public enum ReleaseState has copy, drop, store {
     ),
 }
 
+//=== Constants ===
+
+const MAX_DISCS: u8 = 20;
+
 //=== Errors ===
 
 /// The provided admin capability does not match this release.
 const EUnauthorized: u64 = 0;
-/// Operation requires Initialized state.
-const ENotInitializedState: u64 = 1;
 /// Operation requires Created state.
-const ENotCreatedState: u64 = 2;
+const ENotCreatedState: u64 = 1;
 /// Operation requires Published state.
-const ENotPublishedState: u64 = 3;
+const ENotPublishedState: u64 = 2;
 /// Promise does not match this release's ID.
-const EInvalidReleaseForPromise: u64 = 4;
+const EInvalidReleaseForPromise: u64 = 3;
 /// Track splits count doesn't match track count.
-const EInvalidTrackSplitsLength: u64 = 5;
+const EInvalidTrackSplitsLength: u64 = 4;
 /// Track splits don't sum to 100% (10,000 BPS).
-const EInvalidTrackSplitsSum: u64 = 6;
+const EInvalidTrackSplitsSum: u64 = 5;
 /// Revenue pool has no funds to distribute.
-const ENoRevenueToDistribute: u64 = 8;
+const ENoRevenueToDistribute: u64 = 6;
+/// Too many discs in release.
+const EMaxDiscsReached: u64 = 7;
 
 //=== Public Functions ===
 
@@ -192,13 +194,15 @@ public fun new(
     discs: vector<Disc>,
     ctx: &mut TxContext,
 ): (Release, ReleaseAdminCap, ShareReleasePromise) {
+    assert!(discs.length() <= MAX_DISCS as u64, EMaxDiscsReached);
+
     // Build a track sequence for the release based on the number of discs.
     let (track_sequence, duration) = track_sequence::new(&discs);
 
     let release = Release {
         id: object::new(ctx),
         kind,
-        state: ReleaseState::Initialized,
+        state: ReleaseState::Created,
         title,
         subtitle: option::none(),
         duration,
@@ -220,10 +224,10 @@ public fun new(
 
 /// Converts the release into a shared object.
 /// Consumes the promise returned by `new()`.
-/// Required State: Initialized
+/// Required State: Created
 public fun share(mut self: Release, share_release_promise: ShareReleasePromise) {
     match (self.state) {
-        ReleaseState::Initialized => {
+        ReleaseState::Created => {
             let ShareReleasePromise(release_id) = share_release_promise;
             assert!(self.id() == release_id, EInvalidReleaseForPromise);
 
@@ -235,7 +239,7 @@ public fun share(mut self: Release, share_release_promise: ShareReleasePromise) 
 
             transfer::share_object(self);
         },
-        _ => abort ENotInitializedState,
+        _ => abort ENotCreatedState,
     }
 }
 
