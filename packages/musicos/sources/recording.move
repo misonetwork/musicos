@@ -21,6 +21,7 @@ use interest_bps::bps::BPS;
 use musicos::composition::Composition;
 use musicos::contributor::Contributor;
 use musicos::cover_art::CoverArt;
+use musicos::credit::{Self, Credit};
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
 use musicos::plugin::PluginCap;
@@ -66,12 +67,8 @@ public struct Recording<phantom RecordingShare> has key {
     composition_share_type: TypeName,
     /// Revenue split for the composition in basis points (captured at creation time).
     composition_split_bps: BPS,
-    /// Primary artists credited on the recording.
-    artists: VecSet<ID>,
-    /// Featured artists credited on the recording.
-    featured_artists: VecSet<ID>,
     /// Map of contributor IDs to their roles on this recording.
-    contributors: VecMap<ID, vector<RecordingContributorRole>>,
+    credits: VecMap<ID, Credit<RecordingContributorRole>>,
     /// Primary genre of the recording.
     genre_id: ID,
     /// Additional genres for the recording.
@@ -198,9 +195,9 @@ public enum RecordingState has copy, drop, store {
 //=== Constants ===
 
 /// Minimum number of roles a contributor must have.
-const MIN_ROLES_PER_CONTRIBUTOR: u64 = 1;
+const MIN_ROLES_PER_CREDIT: u64 = 1;
 /// Maximum number of roles a contributor can have.
-const MAX_ROLES_PER_CONTRIBUTOR: u64 = 20;
+const MAX_ROLES_PER_CREDIT: u64 = 10;
 /// Maximum number of stems allowed per recording.
 const MAX_STEMS_PER_RECORDING: u8 = 10;
 
@@ -220,6 +217,8 @@ const EExceedsMaxRoles: u64 = 11;
 const EMinRolesNotMet: u64 = 12;
 /// Recording must have at least one contributor to publish.
 const ENoContributors: u64 = 20;
+/// Recording must have at least one primary artist to publish.
+const ENoPrimaryArtistAssigned: u64 = 21;
 
 //=== Public Functions ===
 
@@ -255,9 +254,7 @@ public fun new<RecordingShare, CompositionShare>(
         composition_id,
         composition_share_type: with_defining_ids<CompositionShare>(),
         composition_split_bps: composition.split_bps(),
-        artists: vec_set::empty(),
-        featured_artists: vec_set::empty(),
-        contributors: vec_map::empty(),
+        credits: vec_map::empty(),
         genre_id,
         secondary_genre_ids: vec_set::empty(),
         language: option::none(),
@@ -339,7 +336,9 @@ public fun publish<RecordingShare>(
     match (self.state) {
         RecordingState::Created => {
             // Assert the recording has at least one contributor.
-            assert!(!self.contributors.is_empty(), ENoContributors);
+            assert!(!self.credits.is_empty(), ENoContributors);
+            // Assert the recording has at least one primary artist.
+            assert_has_primary_artist(self);
 
             self.state = RecordingState::Published(clock.timestamp_ms());
 
@@ -406,95 +405,30 @@ public fun set_subtitle<RecordingShare>(
 
 // --- People ---
 
-/// Adds a primary artist to the recording.
-/// Required State: Created
-public fun add_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    contributor: &Contributor,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            self.artists.insert(contributor.id());
-        },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Removes a primary artist from the recording.
-/// Required State: Created
-public fun remove_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    contributor_id: ID,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            self.artists.remove(&contributor_id);
-        },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Adds a featured artist to the recording.
-/// Required State: Created
-public fun add_featured_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    contributor: &Contributor,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            self.featured_artists.insert(contributor.id());
-        },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Removes a featured artist from the recording.
-/// Required State: Created
-public fun remove_featured_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    contributor_id: ID,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            self.featured_artists.remove(&contributor_id);
-        },
-        _ => abort ENotCreatedState,
-    }
-}
-
 /// Adds a contributor to the recording with specified roles.
 /// Each contributor must have 1-20 roles.
 /// Required State: Created
-public fun add_contributor<RecordingShare>(
+public fun add_credit<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     contributor: &Contributor,
+    display_name: String,
     roles: vector<RecordingContributorRole>,
 ) {
     self.authorize(cap);
 
     match (self.state) {
         RecordingState::Created => {
-            assert!(roles.length() >= MIN_ROLES_PER_CONTRIBUTOR, EMinRolesNotMet);
-            assert!(roles.length() <= MAX_ROLES_PER_CONTRIBUTOR, EExceedsMaxRoles);
+            assert!(roles.length() >= MIN_ROLES_PER_CREDIT, EMinRolesNotMet);
+            assert!(roles.length() <= MAX_ROLES_PER_CREDIT, EExceedsMaxRoles);
 
-            self.contributors.insert(contributor.id(), roles);
+            let contributor_id = contributor.id();
+            let credit = credit::new(display_name, roles);
+            self.credits.insert(contributor_id, credit);
 
             emit(RecordingContributorAddedEvent {
                 recording_id: self.id(),
-                contributor_id: contributor.id(),
+                contributor_id,
             });
         },
         _ => abort ENotCreatedState,
@@ -503,7 +437,7 @@ public fun add_contributor<RecordingShare>(
 
 /// Removes a contributor from the recording.
 /// Required State: Created
-public fun remove_contributor<RecordingShare>(
+public fun remove_credit<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     contributor_id: ID,
@@ -512,11 +446,11 @@ public fun remove_contributor<RecordingShare>(
 
     match (self.state) {
         RecordingState::Created => {
-            self.contributors.remove(&contributor_id);
+            self.credits.remove(&contributor_id);
 
             emit(RecordingContributorRemovedEvent {
                 recording_id: self.id(),
-                contributor_id: contributor_id,
+                contributor_id,
             });
         },
         _ => abort ENotCreatedState,
@@ -859,19 +793,9 @@ public fun composition_split_bps<RecordingShare>(self: &Recording<RecordingShare
     self.composition_split_bps
 }
 
-/// Returns the set of primary artist IDs.
-public fun artists<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
-    &self.artists
-}
-
-/// Returns the set of featured artist IDs.
-public fun featured_artists<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
-    &self.featured_artists
-}
-
 /// Returns the contributor-to-roles mapping.
-public fun contributors<RecordingShare>(self: &Recording<RecordingShare>): &VecMap<ID, vector<RecordingContributorRole>> {
-    &self.contributors
+public fun credits<RecordingShare>(self: &Recording<RecordingShare>): &VecMap<ID, Credit<RecordingContributorRole>> {
+    &self.credits
 }
 
 /// Returns the primary genre ID.
@@ -964,4 +888,22 @@ public fun uid_mut_with_plugin<RecordingShare, PluginWitness: drop>(self: &mut R
 
 public(package) fun uid_mut_internal<RecordingShare>(self: &mut Recording<RecordingShare>): &mut UID {
     &mut self.id
+}
+
+
+//=== Assert Functions ===
+
+/// Asserts that at least one contributor is credited as the primary artist.
+/// This validation ensures every published recording has a clearly identified
+/// main artist for display and attribution purposes.
+///
+/// Aborts with `ENoPrimaryArtistAssigned` if no credit contains the
+/// `Artist(Primary)` role.
+fun assert_has_primary_artist<RecordingShare>(self: &Recording<RecordingShare>) {
+    let has_primary_artist = self.credits.keys().any!(|id| {
+        self.credits.get(id).roles().any!(|role| {
+            role.is_artist_role() && role.level().is_some_and!(|l| l.is_primary_level())
+        })
+    });
+    assert!(has_primary_artist, ENoPrimaryArtistAssigned);
 }

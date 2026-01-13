@@ -6,13 +6,15 @@ use sui::coin_registry::new_currency_with_otw;
 
 public struct SHARE() has drop;
 
+const SYMBOL: vector<u8> = b"";
+
 fun init(otw: SHARE, ctx: &mut TxContext) {
     let (currency_initializer, treasury_cap) = new_currency_with_otw(
         otw,
         6,
-        b"SHARE".to_string(),
-        b"SHARE".to_string(),
-        b"SHARE".to_string(),
+        SYMBOL.to_string(),
+        SYMBOL.to_string(),
+        SYMBOL.to_string(),
         b"https://sonamusic.com/share.webp".to_string(),
         ctx,
     );

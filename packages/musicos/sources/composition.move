@@ -141,6 +141,8 @@ public enum CompositionState has copy, drop, store {
 const MIN_ROLES_PER_CONTRIBUTOR: u64 = 1;
 /// Maximum number of roles a contributor can have.
 const MAX_ROLES_PER_CONTRIBUTOR: u64 = 20;
+// Maximum split value for a composition.
+const MAX_COMPOSITION_SPLIT_VALUE: u64 = 5_000;
 
 //=== Errors ===
 
@@ -156,10 +158,13 @@ const EExceedsMaxRoles: u64 = 10;
 const EMinRolesNotMet: u64 = 11;
 /// Role index is out of bounds for this contributor.
 const EContributorRoleIndexOutOfBounds: u64 = 12;
+/// Invalid composition split value.
+const EInvalidSplitValue: u64 = 13;
 /// Composition must have at least one contributor to publish.
 const ENoContributors: u64 = 20;
 /// Attempted to add a role that the contributor already has.
 const EContributorRoleAlreadyExists: u64 = 30;
+
 
 //=== Public Functions ===
 
@@ -183,6 +188,8 @@ public fun new<CompositionShare>(
     CompositionAdminCap,
     Balance<CompositionShare>,
 ) {
+    assert!(split_value <= MAX_COMPOSITION_SPLIT_VALUE, EInvalidSplitValue);
+
     let mut composition = Composition {
         id: object::new(ctx),
         state: CompositionState::Initialized,

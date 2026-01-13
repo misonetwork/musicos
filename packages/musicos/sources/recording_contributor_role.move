@@ -18,6 +18,8 @@ use std::string::String;
 public enum RecordingContributorRole has copy, drop, store {
     /// Arranged the musical parts for the recording.
     Arranger(Option<RecordingContributorLevel>),
+    /// Performed as an "artist" on the recording.
+    Artist(Option<RecordingContributorLevel>),
     /// A&R representative who discovered or developed the artist.
     ArtistsAndRepertoire,
     /// Hired and managed session musicians.
@@ -36,6 +38,8 @@ public enum RecordingContributorRole has copy, drop, store {
     MusicSupervisor(Option<RecordingContributorLevel>),
     /// Created orchestral arrangements.
     Orchestrator(Option<RecordingContributorLevel>),
+    /// An unspecified role.
+    Other(String, Option<RecordingContributorLevel>),
     /// Oversaw the creative and technical aspects of the recording.
     Producer(Option<RecordingContributorLevel>),
     /// Operated recording equipment during sessions.
@@ -62,6 +66,10 @@ public enum RecordingContributorLevel has copy, drop, store {
     Featured,
     /// Lead/primary contributor in this role.
     Lead,
+    /// Other role with optional level.
+    Other(String),
+    /// Primary artist on the recording.
+    Primary,
     /// Principal contributor with primary responsibility.
     Principal,
 }
@@ -71,6 +79,11 @@ public enum RecordingContributorLevel has copy, drop, store {
 /// Creates a new Arranger role with optional level.
 public fun new_arranger_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
     RecordingContributorRole::Arranger(level)
+}
+
+/// Creates a new Artist role with optional level.
+public fun new_artist_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
+    RecordingContributorRole::Artist(level)
 }
 
 /// Creates a new Artists & Repertoire role.
@@ -129,6 +142,11 @@ public fun new_orchestrator_role(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
     RecordingContributorRole::Orchestrator(level)
+}
+
+/// Creates a new Other role with name and optional level.
+public fun new_other_role(name: String, level: Option<RecordingContributorLevel>): RecordingContributorRole {
+    RecordingContributorRole::Other(name, level)
 }
 
 /// Creates a new Producer role with optional level.
@@ -190,6 +208,11 @@ public fun new_lead_level(): RecordingContributorLevel {
     RecordingContributorLevel::Lead
 }
 
+/// Creates an Other level with name.
+public fun new_other_level(name: String): RecordingContributorLevel {
+    RecordingContributorLevel::Other(name)
+}
+
 /// Creates a Principal level.
 public fun new_principal_level(): RecordingContributorLevel {
     RecordingContributorLevel::Principal
@@ -198,41 +221,257 @@ public fun new_principal_level(): RecordingContributorLevel {
 //=== Public View Functions ===
 
 /// Returns the optional level associated with this role.
-public fun level(self: &RecordingContributorRole): Option<RecordingContributorLevel> {
+public fun level(self: &RecordingContributorRole): &Option<RecordingContributorLevel> {
     match (self) {
-        RecordingContributorRole::Arranger(level) => *level,
-        RecordingContributorRole::ArtistsAndRepertoire => option::none(),
-        RecordingContributorRole::Contractor(level) => *level,
-        RecordingContributorRole::Copyist => option::none(),
-        RecordingContributorRole::Instrumentalist(_, level) => *level,
-        RecordingContributorRole::MasteringEngineer(level) => *level,
-        RecordingContributorRole::MixingEngineer(level) => *level,
-        RecordingContributorRole::MusicDirector(level) => *level,
-        RecordingContributorRole::MusicSupervisor(level) => *level,
-        RecordingContributorRole::Orchestrator(level) => *level,
-        RecordingContributorRole::Producer(level) => *level,
-        RecordingContributorRole::RecordingEngineer(level) => *level,
-        RecordingContributorRole::SoundDesigner(level) => *level,
-        RecordingContributorRole::Vocalist(level) => *level,
+        RecordingContributorRole::Arranger(level) => level,
+        RecordingContributorRole::Artist(level) => level,
+        RecordingContributorRole::ArtistsAndRepertoire => &option::none(),
+        RecordingContributorRole::Contractor(level) => level,
+        RecordingContributorRole::Copyist => &option::none(),
+        RecordingContributorRole::Instrumentalist(_, level) => level,
+        RecordingContributorRole::MasteringEngineer(level) => level,
+        RecordingContributorRole::MixingEngineer(level) => level,
+        RecordingContributorRole::MusicDirector(level) => level,
+        RecordingContributorRole::MusicSupervisor(level) => level,
+        RecordingContributorRole::Orchestrator(level) => level,
+        RecordingContributorRole::Other(_, level) => level,
+        RecordingContributorRole::Producer(level) => level,
+        RecordingContributorRole::RecordingEngineer(level) => level,
+        RecordingContributorRole::SoundDesigner(level) => level,
+        RecordingContributorRole::Vocalist(level) => level,
     }
 }
 
 /// Returns the human-readable name of the role.
-public fun name(self: &RecordingContributorRole): String {
+public fun name(self: &RecordingContributorRole): &String {
     match (self) {
-        RecordingContributorRole::Arranger(_) => "Arranger",
-        RecordingContributorRole::ArtistsAndRepertoire => "Artists & Repertoire",
-        RecordingContributorRole::Contractor(_) => "Contractor",
-        RecordingContributorRole::Copyist => "Copyist",
-        RecordingContributorRole::Instrumentalist(..) => "Instrumentalist",
-        RecordingContributorRole::MasteringEngineer(_) => "Mastering Engineer",
-        RecordingContributorRole::MixingEngineer(_) => "Mixing Engineer",
-        RecordingContributorRole::MusicDirector(_) => "Music Director",
-        RecordingContributorRole::MusicSupervisor(_) => "Music Supervisor",
-        RecordingContributorRole::Orchestrator(_) => "Orchestrator",
-        RecordingContributorRole::Producer(_) => "Producer",
-        RecordingContributorRole::RecordingEngineer(_) => "Recording Engineer",
-        RecordingContributorRole::SoundDesigner(_) => "Sound Designer",
-        RecordingContributorRole::Vocalist(_) => "Vocalist",
+        RecordingContributorRole::Arranger(_) => &"Arranger",
+        RecordingContributorRole::Artist(..) => &"Artist",
+        RecordingContributorRole::ArtistsAndRepertoire => &"Artists & Repertoire",
+        RecordingContributorRole::Contractor(_) => &"Contractor",
+        RecordingContributorRole::Copyist => &"Copyist",
+        RecordingContributorRole::Instrumentalist(..) => &"Instrumentalist",
+        RecordingContributorRole::MasteringEngineer(_) => &"Mastering Engineer",
+        RecordingContributorRole::MixingEngineer(_) => &"Mixing Engineer",
+        RecordingContributorRole::MusicDirector(_) => &"Music Director",
+        RecordingContributorRole::MusicSupervisor(_) => &"Music Supervisor",
+        RecordingContributorRole::Orchestrator(_) => &"Orchestrator",
+        RecordingContributorRole::Other(name, _) => name,
+        RecordingContributorRole::Producer(_) => &"Producer",
+        RecordingContributorRole::RecordingEngineer(_) => &"Recording Engineer",
+        RecordingContributorRole::SoundDesigner(_) => &"Sound Designer",
+        RecordingContributorRole::Vocalist(_) => &"Vocalist",
+    }
+}
+
+//=== Role Check Functions ===
+
+/// Returns true if this is an Arranger role.
+public fun is_arranger_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Arranger(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Artist role.
+public fun is_artist_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Artist(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Artists & Repertoire role.
+public fun is_artists_and_repertoire_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::ArtistsAndRepertoire => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Contractor role.
+public fun is_contractor_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Contractor(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Copyist role.
+public fun is_copyist_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Copyist => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Instrumentalist role.
+public fun is_instrumentalist_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Instrumentalist(..) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Mastering Engineer role.
+public fun is_mastering_engineer_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::MasteringEngineer(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Mixing Engineer role.
+public fun is_mixing_engineer_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::MixingEngineer(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Music Director role.
+public fun is_music_director_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::MusicDirector(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Music Supervisor role.
+public fun is_music_supervisor_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::MusicSupervisor(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Orchestrator role.
+public fun is_orchestrator_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Orchestrator(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Other role.
+public fun is_other_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Other(..) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Producer role.
+public fun is_producer_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Producer(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Recording Engineer role.
+public fun is_recording_engineer_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::RecordingEngineer(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Sound Designer role.
+public fun is_sound_designer_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::SoundDesigner(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Vocalist role.
+public fun is_vocalist_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Vocalist(_) => true,
+        _ => false,
+    }
+}
+
+//=== Level Check Functions ===
+
+/// Returns true if this is an Additional level.
+public fun is_additional_level(self: &RecordingContributorLevel): bool {
+    match (self) {
+        RecordingContributorLevel::Additional => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Assistant level.
+public fun is_assistant_level(self: &RecordingContributorLevel): bool {
+    match (self) {
+        RecordingContributorLevel::Assistant => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Associate level.
+public fun is_associate_level(self: &RecordingContributorLevel): bool {
+    match (self) {
+        RecordingContributorLevel::Associate => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Backing level.
+public fun is_backing_level(self: &RecordingContributorLevel): bool {
+    match (self) {
+        RecordingContributorLevel::Backing => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Executive level.
+public fun is_executive_level(self: &RecordingContributorLevel): bool {
+    match (self) {
+        RecordingContributorLevel::Executive => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Featured level.
+public fun is_featured_level(self: &RecordingContributorLevel): bool {
+    match (self) {
+        RecordingContributorLevel::Featured => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Lead level.
+public fun is_lead_level(self: &RecordingContributorLevel): bool {
+    match (self) {
+        RecordingContributorLevel::Lead => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Other level.
+public fun is_other_level(self: &RecordingContributorLevel): bool {
+    match (self) {
+        RecordingContributorLevel::Other(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Primary level.
+public fun is_primary_level(self: &RecordingContributorLevel): bool {
+    match (self) {
+        RecordingContributorLevel::Primary => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Principal level.
+public fun is_principal_level(self: &RecordingContributorLevel): bool {
+    match (self) {
+        RecordingContributorLevel::Principal => true,
+        _ => false,
     }
 }

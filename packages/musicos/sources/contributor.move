@@ -13,8 +13,8 @@
 module musicos::contributor;
 
 use musicos::plugin::PluginCap;
-use std::string::String;
 use sui::derived_object::claim;
+use sui::event::emit;
 use sui::vec_set::{Self, VecSet};
 
 //=== Structs ===
@@ -31,8 +31,6 @@ public struct Contributor has key {
     kind: ContributorKind,
     /// Current lifecycle state of the contributor.
     state: ContributorState,
-    /// Display name of the contributor.
-    name: String,
 }
 
 /// Capability that authorizes modifications to a specific contributor.
@@ -42,6 +40,8 @@ public struct ContributorAdminCap has key, store {
     id: UID,
     /// ID of the contributor this capability controls.
     contributor_id: ID,
+    /// Address of the sender of the capability.
+    sender: address,
 }
 
 /// Witness type sourced from the contributor module.
@@ -57,7 +57,7 @@ public struct ContributorAdminCapKey(
 
 //=== Enums ===
 
-/// The type of contributor: individual person or group.
+/// The type of self: individual person or group.
 public enum ContributorKind has copy, drop, store {
     /// A single person (artist, producer, etc.).
     Individual,
@@ -76,6 +76,13 @@ public enum ContributorState has copy, drop, store {
     Active,
 }
 
+//=== Events ===
+
+public struct ContributorCreatedEvent has copy, drop {
+    /// ID of the newly created contributor.
+    contributor_id: ID,
+}
+
 //=== Errors ===
 
 /// The provided admin capability does not match this contributor.
@@ -92,20 +99,24 @@ const ENotGroupKind: u64 = 32;
 /// Creates a new contributor with the specified kind and name.
 /// Returns the admin capability for managing the contributor.
 /// The contributor is shared and starts in the Created state.
-public fun new(kind: ContributorKind, name: String, ctx: &mut TxContext): ContributorAdminCap {
+public fun new(kind: ContributorKind, ctx: &mut TxContext): ContributorAdminCap {
     let mut contributor = Contributor {
         id: object::new(ctx),
         kind,
         state: ContributorState::Created,
-        name,
     };
 
     let contributor_id = contributor.id();
 
     let contributor_admin_cap = ContributorAdminCap {
         id: claim(&mut contributor.id, ContributorAdminCapKey(contributor_id)),
-        contributor_id: contributor.id(),
+        contributor_id,
+        sender: ctx.sender(),
     };
+
+    emit(ContributorCreatedEvent {
+        contributor_id: contributor.id(),
+    });
 
     transfer::share_object(contributor);
 
@@ -153,9 +164,14 @@ public fun remove_contributor(
 }
 
 // TODO: Only allow for protocol migration.
+// TODO: Validate MigrationWitness.
 /// Destroys a contributor and its admin capability.
 /// Requires the matching admin capability.
-public fun destroy(self: Contributor, cap: ContributorAdminCap) {
+public fun destroy<MigrationWitness: drop>(
+    self: Contributor,
+    cap: ContributorAdminCap,
+    _: MigrationWitness,
+) {
     self.authorize(&cap);
 
     let Contributor { id, .. } = self;
@@ -178,34 +194,34 @@ public fun new_group_kind(): ContributorKind {
 //=== Public View Functions ===
 
 /// Returns the ID of this contributor.
-public fun id(contributor: &Contributor): ID {
-    object::id(contributor)
+public fun id(self: &Contributor): ID {
+    self.id.to_inner()
 }
 
 /// Returns true if this contributor is an individual.
-public fun is_individual_kind(contributor: &Contributor): bool {
-    match (&contributor.kind) {
+public fun is_individual_kind(self: &Contributor): bool {
+    match (&self.kind) {
         ContributorKind::Individual => true,
         _ => false,
     }
 }
 
 /// Returns true if this contributor is a group.
-public fun is_group_kind(contributor: &Contributor): bool {
-    match (&contributor.kind) {
+public fun is_group_kind(self: &Contributor): bool {
+    match (&self.kind) {
         ContributorKind::Group(_) => true,
         _ => false,
     }
 }
 
 /// Aborts if this contributor is not an individual.
-public fun assert_is_individual_kind(contributor: &Contributor) {
-    assert!(is_individual_kind(contributor), ENotIndividualKind);
+public fun assert_is_individual_kind(self: &Contributor) {
+    assert!(is_individual_kind(self), ENotIndividualKind);
 }
 
 /// Aborts if this contributor is not a group.
-public fun assert_is_group_kind(contributor: &Contributor) {
-    assert!(is_group_kind(contributor), ENotGroupKind);
+public fun assert_is_group_kind(self: &Contributor) {
+    assert!(is_group_kind(self), ENotGroupKind);
 }
 
 //=== UID Functions ===
