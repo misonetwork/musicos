@@ -16,16 +16,28 @@ use std::string::String;
 /// Represents a contributor's role on a recording.
 /// Most roles include an optional level to indicate seniority.
 public enum RecordingContributorRole has copy, drop, store {
+    /// Performed voice acting or spoken word performance.
+    Actor(Option<RecordingContributorLevel>),
     /// Arranged the musical parts for the recording.
     Arranger(Option<RecordingContributorLevel>),
     /// Performed as an "artist" on the recording.
     Artist(Option<RecordingContributorLevel>),
     /// A&R representative who discovered or developed the artist.
     ArtistsAndRepertoire,
+    /// Performed as part of a choir.
+    Choir(Option<RecordingContributorLevel>),
+    /// Directed the choir performance.
+    ChoirMaster(Option<RecordingContributorLevel>),
+    /// Conducted the orchestra or ensemble.
+    Conductor(Option<RecordingContributorLevel>),
     /// Hired and managed session musicians.
     Contractor(Option<RecordingContributorLevel>),
     /// Prepared written music parts for performers.
     Copyist,
+    /// Edited and compiled audio takes.
+    Editor(Option<RecordingContributorLevel>),
+    /// Performed as part of a musical ensemble.
+    Ensemble(Option<RecordingContributorLevel>),
     /// Played an instrument on the recording. Includes instrument name.
     Instrumentalist(String, Option<RecordingContributorLevel>),
     /// Mastered the final audio for distribution.
@@ -36,14 +48,22 @@ public enum RecordingContributorRole has copy, drop, store {
     MusicDirector(Option<RecordingContributorLevel>),
     /// Oversaw music selection and licensing.
     MusicSupervisor(Option<RecordingContributorLevel>),
+    /// Narrated spoken content.
+    Narrator(Option<RecordingContributorLevel>),
+    /// Performed as part of an orchestra.
+    Orchestra(Option<RecordingContributorLevel>),
     /// Created orchestral arrangements.
     Orchestrator(Option<RecordingContributorLevel>),
     /// An unspecified role.
     Other(String, Option<RecordingContributorLevel>),
     /// Oversaw the creative and technical aspects of the recording.
     Producer(Option<RecordingContributorLevel>),
+    /// Programmed beats, synths, or electronic elements.
+    Programmer(Option<RecordingContributorLevel>),
     /// Operated recording equipment during sessions.
     RecordingEngineer(Option<RecordingContributorLevel>),
+    /// Created a remix of the recording.
+    RemixingEngineer(Option<RecordingContributorLevel>),
     /// Created sound effects or sonic textures.
     SoundDesigner(Option<RecordingContributorLevel>),
     /// Provided vocals on the recording.
@@ -76,6 +96,11 @@ public enum RecordingContributorLevel has copy, drop, store {
 
 //=== Public Functions ===
 
+/// Creates a new Actor role with optional level.
+public fun new_actor_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
+    RecordingContributorRole::Actor(level)
+}
+
 /// Creates a new Arranger role with optional level.
 public fun new_arranger_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
     RecordingContributorRole::Arranger(level)
@@ -91,6 +116,21 @@ public fun new_artists_and_repertoire_role(): RecordingContributorRole {
     RecordingContributorRole::ArtistsAndRepertoire
 }
 
+/// Creates a new Choir role with optional level.
+public fun new_choir_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
+    RecordingContributorRole::Choir(level)
+}
+
+/// Creates a new Choir Master role with optional level.
+public fun new_choir_master_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
+    RecordingContributorRole::ChoirMaster(level)
+}
+
+/// Creates a new Conductor role with optional level.
+public fun new_conductor_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
+    RecordingContributorRole::Conductor(level)
+}
+
 /// Creates a new Contractor role with optional level.
 public fun new_contractor_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
     RecordingContributorRole::Contractor(level)
@@ -99,6 +139,16 @@ public fun new_contractor_role(level: Option<RecordingContributorLevel>): Record
 /// Creates a new Copyist role.
 public fun new_copyist_role(): RecordingContributorRole {
     RecordingContributorRole::Copyist
+}
+
+/// Creates a new Editor role with optional level.
+public fun new_editor_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
+    RecordingContributorRole::Editor(level)
+}
+
+/// Creates a new Ensemble role with optional level.
+public fun new_ensemble_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
+    RecordingContributorRole::Ensemble(level)
 }
 
 /// Creates a new Instrumentalist role with instrument name and optional level.
@@ -137,6 +187,16 @@ public fun new_music_supervisor_role(
     RecordingContributorRole::MusicSupervisor(level)
 }
 
+/// Creates a new Narrator role with optional level.
+public fun new_narrator_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
+    RecordingContributorRole::Narrator(level)
+}
+
+/// Creates a new Orchestra role with optional level.
+public fun new_orchestra_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
+    RecordingContributorRole::Orchestra(level)
+}
+
 /// Creates a new Orchestrator role with optional level.
 public fun new_orchestrator_role(
     level: Option<RecordingContributorLevel>,
@@ -154,11 +214,23 @@ public fun new_producer_role(level: Option<RecordingContributorLevel>): Recordin
     RecordingContributorRole::Producer(level)
 }
 
+/// Creates a new Programmer role with optional level.
+public fun new_programmer_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
+    RecordingContributorRole::Programmer(level)
+}
+
 /// Creates a new Recording Engineer role with optional level.
 public fun new_recording_engineer_role(
     level: Option<RecordingContributorLevel>,
 ): RecordingContributorRole {
     RecordingContributorRole::RecordingEngineer(level)
+}
+
+/// Creates a new Remixing Engineer role with optional level.
+public fun new_remixing_engineer_role(
+    level: Option<RecordingContributorLevel>,
+): RecordingContributorRole {
+    RecordingContributorRole::RemixingEngineer(level)
 }
 
 /// Creates a new Sound Designer role with optional level.
@@ -221,50 +293,78 @@ public fun new_principal_level(): RecordingContributorLevel {
 //=== Public View Functions ===
 
 /// Returns the optional level associated with this role.
-public fun level(self: &RecordingContributorRole): &Option<RecordingContributorLevel> {
+public fun level(self: &RecordingContributorRole): Option<RecordingContributorLevel> {
     match (self) {
-        RecordingContributorRole::Arranger(level) => level,
-        RecordingContributorRole::Artist(level) => level,
-        RecordingContributorRole::ArtistsAndRepertoire => &option::none(),
-        RecordingContributorRole::Contractor(level) => level,
-        RecordingContributorRole::Copyist => &option::none(),
-        RecordingContributorRole::Instrumentalist(_, level) => level,
-        RecordingContributorRole::MasteringEngineer(level) => level,
-        RecordingContributorRole::MixingEngineer(level) => level,
-        RecordingContributorRole::MusicDirector(level) => level,
-        RecordingContributorRole::MusicSupervisor(level) => level,
-        RecordingContributorRole::Orchestrator(level) => level,
-        RecordingContributorRole::Other(_, level) => level,
-        RecordingContributorRole::Producer(level) => level,
-        RecordingContributorRole::RecordingEngineer(level) => level,
-        RecordingContributorRole::SoundDesigner(level) => level,
-        RecordingContributorRole::Vocalist(level) => level,
+        RecordingContributorRole::Actor(level) => *level,
+        RecordingContributorRole::Arranger(level) => *level,
+        RecordingContributorRole::Artist(level) => *level,
+        RecordingContributorRole::ArtistsAndRepertoire => option::none(),
+        RecordingContributorRole::Choir(level) => *level,
+        RecordingContributorRole::ChoirMaster(level) => *level,
+        RecordingContributorRole::Conductor(level) => *level,
+        RecordingContributorRole::Contractor(level) => *level,
+        RecordingContributorRole::Copyist => option::none(),
+        RecordingContributorRole::Editor(level) => *level,
+        RecordingContributorRole::Ensemble(level) => *level,
+        RecordingContributorRole::Instrumentalist(_, level) => *level,
+        RecordingContributorRole::MasteringEngineer(level) => *level,
+        RecordingContributorRole::MixingEngineer(level) => *level,
+        RecordingContributorRole::MusicDirector(level) => *level,
+        RecordingContributorRole::MusicSupervisor(level) => *level,
+        RecordingContributorRole::Narrator(level) => *level,
+        RecordingContributorRole::Orchestra(level) => *level,
+        RecordingContributorRole::Orchestrator(level) => *level,
+        RecordingContributorRole::Other(_, level) => *level,
+        RecordingContributorRole::Producer(level) => *level,
+        RecordingContributorRole::Programmer(level) => *level,
+        RecordingContributorRole::RecordingEngineer(level) => *level,
+        RecordingContributorRole::RemixingEngineer(level) => *level,
+        RecordingContributorRole::SoundDesigner(level) => *level,
+        RecordingContributorRole::Vocalist(level) => *level,
     }
 }
 
 /// Returns the human-readable name of the role.
-public fun name(self: &RecordingContributorRole): &String {
+public fun name(self: &RecordingContributorRole): String {
     match (self) {
-        RecordingContributorRole::Arranger(_) => &"Arranger",
-        RecordingContributorRole::Artist(..) => &"Artist",
-        RecordingContributorRole::ArtistsAndRepertoire => &"Artists & Repertoire",
-        RecordingContributorRole::Contractor(_) => &"Contractor",
-        RecordingContributorRole::Copyist => &"Copyist",
-        RecordingContributorRole::Instrumentalist(..) => &"Instrumentalist",
-        RecordingContributorRole::MasteringEngineer(_) => &"Mastering Engineer",
-        RecordingContributorRole::MixingEngineer(_) => &"Mixing Engineer",
-        RecordingContributorRole::MusicDirector(_) => &"Music Director",
-        RecordingContributorRole::MusicSupervisor(_) => &"Music Supervisor",
-        RecordingContributorRole::Orchestrator(_) => &"Orchestrator",
-        RecordingContributorRole::Other(name, _) => name,
-        RecordingContributorRole::Producer(_) => &"Producer",
-        RecordingContributorRole::RecordingEngineer(_) => &"Recording Engineer",
-        RecordingContributorRole::SoundDesigner(_) => &"Sound Designer",
-        RecordingContributorRole::Vocalist(_) => &"Vocalist",
+        RecordingContributorRole::Actor(_) => "Actor",
+        RecordingContributorRole::Arranger(_) => "Arranger",
+        RecordingContributorRole::Artist(_) => "Artist",
+        RecordingContributorRole::ArtistsAndRepertoire => "Artists & Repertoire",
+        RecordingContributorRole::Choir(_) => "Choir",
+        RecordingContributorRole::ChoirMaster(_) => "Choir Master",
+        RecordingContributorRole::Conductor(_) => "Conductor",
+        RecordingContributorRole::Contractor(_) => "Contractor",
+        RecordingContributorRole::Copyist => "Copyist",
+        RecordingContributorRole::Editor(_) => "Editor",
+        RecordingContributorRole::Ensemble(_) => "Ensemble",
+        RecordingContributorRole::Instrumentalist(..) => "Instrumentalist",
+        RecordingContributorRole::MasteringEngineer(_) => "Mastering Engineer",
+        RecordingContributorRole::MixingEngineer(_) => "Mixing Engineer",
+        RecordingContributorRole::MusicDirector(_) => "Music Director",
+        RecordingContributorRole::MusicSupervisor(_) => "Music Supervisor",
+        RecordingContributorRole::Narrator(_) => "Narrator",
+        RecordingContributorRole::Orchestra(_) => "Orchestra",
+        RecordingContributorRole::Orchestrator(_) => "Orchestrator",
+        RecordingContributorRole::Other(name, _) => *name,
+        RecordingContributorRole::Producer(_) => "Producer",
+        RecordingContributorRole::Programmer(_) => "Programmer",
+        RecordingContributorRole::RecordingEngineer(_) => "Recording Engineer",
+        RecordingContributorRole::RemixingEngineer(_) => "Remixing Engineer",
+        RecordingContributorRole::SoundDesigner(_) => "Sound Designer",
+        RecordingContributorRole::Vocalist(_) => "Vocalist",
     }
 }
 
 //=== Role Check Functions ===
+
+/// Returns true if this is an Actor role.
+public fun is_actor_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Actor(_) => true,
+        _ => false,
+    }
+}
 
 /// Returns true if this is an Arranger role.
 public fun is_arranger_role(self: &RecordingContributorRole): bool {
@@ -290,6 +390,30 @@ public fun is_artists_and_repertoire_role(self: &RecordingContributorRole): bool
     }
 }
 
+/// Returns true if this is a Choir role.
+public fun is_choir_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Choir(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Choir Master role.
+public fun is_choir_master_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::ChoirMaster(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Conductor role.
+public fun is_conductor_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Conductor(_) => true,
+        _ => false,
+    }
+}
+
 /// Returns true if this is a Contractor role.
 public fun is_contractor_role(self: &RecordingContributorRole): bool {
     match (self) {
@@ -302,6 +426,22 @@ public fun is_contractor_role(self: &RecordingContributorRole): bool {
 public fun is_copyist_role(self: &RecordingContributorRole): bool {
     match (self) {
         RecordingContributorRole::Copyist => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Editor role.
+public fun is_editor_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Editor(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Ensemble role.
+public fun is_ensemble_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Ensemble(_) => true,
         _ => false,
     }
 }
@@ -346,6 +486,22 @@ public fun is_music_supervisor_role(self: &RecordingContributorRole): bool {
     }
 }
 
+/// Returns true if this is a Narrator role.
+public fun is_narrator_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Narrator(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is an Orchestra role.
+public fun is_orchestra_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Orchestra(_) => true,
+        _ => false,
+    }
+}
+
 /// Returns true if this is an Orchestrator role.
 public fun is_orchestrator_role(self: &RecordingContributorRole): bool {
     match (self) {
@@ -370,10 +526,26 @@ public fun is_producer_role(self: &RecordingContributorRole): bool {
     }
 }
 
+/// Returns true if this is a Programmer role.
+public fun is_programmer_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::Programmer(_) => true,
+        _ => false,
+    }
+}
+
 /// Returns true if this is a Recording Engineer role.
 public fun is_recording_engineer_role(self: &RecordingContributorRole): bool {
     match (self) {
         RecordingContributorRole::RecordingEngineer(_) => true,
+        _ => false,
+    }
+}
+
+/// Returns true if this is a Remixing Engineer role.
+public fun is_remixing_engineer_role(self: &RecordingContributorRole): bool {
+    match (self) {
+        RecordingContributorRole::RemixingEngineer(_) => true,
         _ => false,
     }
 }
