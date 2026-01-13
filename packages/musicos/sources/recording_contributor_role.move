@@ -20,8 +20,6 @@ public enum RecordingContributorRole has copy, drop, store {
     Actor(Option<RecordingContributorLevel>),
     /// Arranged the musical parts for the recording.
     Arranger(Option<RecordingContributorLevel>),
-    /// Performed as an "artist" on the recording.
-    Artist(Option<RecordingContributorLevel>),
     /// A&R representative who discovered or developed the artist.
     ArtistsAndRepertoire,
     /// Performed as part of a choir.
@@ -104,11 +102,6 @@ public fun new_actor_role(level: Option<RecordingContributorLevel>): RecordingCo
 /// Creates a new Arranger role with optional level.
 public fun new_arranger_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
     RecordingContributorRole::Arranger(level)
-}
-
-/// Creates a new Artist role with optional level.
-public fun new_artist_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
-    RecordingContributorRole::Artist(level)
 }
 
 /// Creates a new Artists & Repertoire role.
@@ -297,7 +290,6 @@ public fun level(self: &RecordingContributorRole): Option<RecordingContributorLe
     match (self) {
         RecordingContributorRole::Actor(level) => *level,
         RecordingContributorRole::Arranger(level) => *level,
-        RecordingContributorRole::Artist(level) => *level,
         RecordingContributorRole::ArtistsAndRepertoire => option::none(),
         RecordingContributorRole::Choir(level) => *level,
         RecordingContributorRole::ChoirMaster(level) => *level,
@@ -329,7 +321,6 @@ public fun name(self: &RecordingContributorRole): String {
     match (self) {
         RecordingContributorRole::Actor(_) => "Actor",
         RecordingContributorRole::Arranger(_) => "Arranger",
-        RecordingContributorRole::Artist(_) => "Artist",
         RecordingContributorRole::ArtistsAndRepertoire => "Artists & Repertoire",
         RecordingContributorRole::Choir(_) => "Choir",
         RecordingContributorRole::ChoirMaster(_) => "Choir Master",
@@ -370,14 +361,6 @@ public fun is_actor_role(self: &RecordingContributorRole): bool {
 public fun is_arranger_role(self: &RecordingContributorRole): bool {
     match (self) {
         RecordingContributorRole::Arranger(_) => true,
-        _ => false,
-    }
-}
-
-/// Returns true if this is an Artist role.
-public fun is_artist_role(self: &RecordingContributorRole): bool {
-    match (self) {
-        RecordingContributorRole::Artist(_) => true,
         _ => false,
     }
 }
