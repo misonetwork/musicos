@@ -152,4 +152,4 @@ public fun track_positions(self: &TrackSequence): &vector<TrackPosition> {
 /// Returns the number of tracks on each disc.
 public fun tracks_per_disc(self: &TrackSequence): &vector<u8> {
     &self.tracks_per_disc
-}s
+}

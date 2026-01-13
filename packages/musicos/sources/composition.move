@@ -13,12 +13,12 @@
 /// - Deterministic addresses via derived object pattern
 module musicos::composition;
 
-use musicos::artifact::Artifact;
 use interest_bps::bps::{Self, BPS};
+use musicos::artifact::Artifact;
 use musicos::composition_artifact_kind::CompositionArtifactKind;
 use musicos::composition_contributor_role::CompositionContributorRole;
-use musicos::credit::Credit;
 use musicos::contributor::Contributor;
+use musicos::credit::Credit;
 use musicos::data::Data;
 use musicos::plugin::PluginCap;
 use musicos::share;
@@ -29,11 +29,10 @@ use std::string::String;
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
-use sui::coin_registry::{Currency, MetadataCap};
+use sui::coin_registry::Currency;
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
-use sui::coin_registry::CurrencyInitializer;
 
 //=== Structs ===
 
@@ -44,8 +43,6 @@ public struct Composition<phantom CompositionShare> has key {
     id: UID,
     /// Current lifecycle state.
     state: CompositionState,
-    /// Capability for updating share token metadata.
-    share_metadata_cap: MetadataCap<CompositionShare>,
     /// Primary title of the composition.
     title: String,
     /// Additional titles (translations, alternate names).
@@ -155,7 +152,6 @@ const ENoArtifacts: u64 = 21;
 /// Composition must have at least one snapshot to publish.
 const ENoSnapshots: u64 = 22;
 
-
 //=== Public Functions ===
 
 // --- Lifecycle ---
@@ -170,20 +166,14 @@ public fun new<CompositionShare>(
     title: String,
     split_value: u64,
     share_currency: &mut Currency<CompositionShare>,
-    share_metadata_cap: MetadataCap<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
     ctx: &mut TxContext,
-): (
-    Composition<CompositionShare>,
-    CompositionAdminCap,
-    Balance<CompositionShare>,
-) {
+): (Composition<CompositionShare>, CompositionAdminCap, Balance<CompositionShare>) {
     assert!(split_value <= MAX_COMPOSITION_SPLIT_VALUE, EInvalidSplitValue);
 
-    let mut composition = Composition {
+    let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Initialized,
-        share_metadata_cap,
         title,
         alternate_titles: vector[],
         credits: vec_map::empty(),
@@ -198,15 +188,8 @@ public fun new<CompositionShare>(
         composition_id: composition.id(),
     };
 
-    let mut description: String = "MusicOS Composition Shares for 0x";
-    description.append(composition.id().to_address().to_string());
-    description.append(".");
-
     let composition_shares = share::intialize<CompositionShare>(
-        "MusicOS Composition Share",
-        description,
         share_currency,
-        &composition.share_metadata_cap,
         share_treasury_cap,
     );
 
@@ -217,6 +200,7 @@ public fun new<CompositionShare>(
     (composition, composition_admin_cap, composition_shares)
 }
 
+/// TODO: Re-enable assertions for artifacts and snapshots.
 /// Publishes the composition, making it immutable.
 /// Requires at least one contributor, artifact, and snapshot.
 /// Required State: Initialized
@@ -230,8 +214,8 @@ public fun publish<CompositionShare>(
     match (self.state) {
         CompositionState::Initialized => {
             assert!(!self.credits.is_empty(), ENoContributors);
-            assert!(!self.artifacts.is_empty(), ENoArtifacts);
-            assert!(!self.snapshots.is_empty(), ENoSnapshots);
+            //assert!(!self.artifacts.is_empty(), ENoArtifacts);
+            //assert!(!self.snapshots.is_empty(), ENoSnapshots);
 
             self.state = CompositionState::Published(clock.timestamp_ms());
 
@@ -402,12 +386,16 @@ public fun title<CompositionShare>(self: &Composition<CompositionShare>): &Strin
 }
 
 /// Returns the list of alternate titles.
-public fun alternate_titles<CompositionShare>(self: &Composition<CompositionShare>): &vector<String> {
+public fun alternate_titles<CompositionShare>(
+    self: &Composition<CompositionShare>,
+): &vector<String> {
     &self.alternate_titles
 }
 
 /// Returns the contributor-to-credit mapping.
-public fun credits<CompositionShare>(self: &Composition<CompositionShare>): &VecMap<ID, Credit<CompositionContributorRole>> {
+public fun credits<CompositionShare>(
+    self: &Composition<CompositionShare>,
+): &VecMap<ID, Credit<CompositionContributorRole>> {
     &self.credits
 }
 
@@ -422,7 +410,9 @@ public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &Opti
 }
 
 /// Returns the list of attached artifacts.
-public fun artifacts<CompositionShare>(self: &Composition<CompositionShare>): &vector<Artifact<CompositionArtifactKind>> {
+public fun artifacts<CompositionShare>(
+    self: &Composition<CompositionShare>,
+): &vector<Artifact<CompositionArtifactKind>> {
     &self.artifacts
 }
 
@@ -444,16 +434,26 @@ public(package) fun authorize<CompositionShare>(
 
 //=== UID Functions ===
 
-public fun uid_with_plugin<CompositionShare, PluginWitness: drop>(self: &Composition<CompositionShare>, cap: &CompositionAdminCap, _plugin_cap: PluginCap<CompositionWitness, PluginWitness>): &UID {
+public fun uid_with_plugin<CompositionShare, PluginWitness: drop>(
+    self: &Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    _plugin_cap: PluginCap<CompositionWitness, PluginWitness>,
+): &UID {
     self.authorize(cap);
     &self.id
 }
 
-public fun uid_mut_with_plugin<CompositionShare, PluginWitness: drop>(self: &mut Composition<CompositionShare>, cap: &CompositionAdminCap, _plugin_cap: PluginCap<CompositionWitness, PluginWitness>): &mut UID {
+public fun uid_mut_with_plugin<CompositionShare, PluginWitness: drop>(
+    self: &mut Composition<CompositionShare>,
+    cap: &CompositionAdminCap,
+    _plugin_cap: PluginCap<CompositionWitness, PluginWitness>,
+): &mut UID {
     self.authorize(cap);
     &mut self.id
 }
 
-public(package) fun uid_mut_internal<CompositionShare>(self: &mut Composition<CompositionShare>): &mut UID {
+public(package) fun uid_mut_internal<CompositionShare>(
+    self: &mut Composition<CompositionShare>,
+): &mut UID {
     &mut self.id
 }

@@ -15,7 +15,7 @@ module musicos::share;
 use std::string::String;
 use sui::balance::Balance;
 use sui::coin::TreasuryCap;
-use sui::coin_registry::{Currency, MetadataCap, new_currency};
+use sui::coin_registry::{Currency, new_currency};
 
 //=== Errors ===
 
@@ -25,30 +25,27 @@ const EInvalidDecimals: u64 = 20;
 const EInvalidSymbol: u64 = 21;
 /// Currency already has non-zero supply.
 const ENotZeroSupply: u64 = 22;
+// Currency's MetadataCap has not been deleted.
+const EMetadataCapNotDeleted: u64 = 23;
 
 //=== Package Functions ===
 
+/// TODO: Add assertions for metadata name, description, and icon URL.
 /// Initializes a share currency for a composition or recording.
 /// Sets metadata, mints the fixed supply, and locks the supply.
 /// Returns the minted balance to be held by the creator.
 public(package) fun intialize<Share>(
-    name: String,
-    description: String,
     share_currency: &mut Currency<Share>,
-    share_metadata_cap: &MetadataCap<Share>,
     mut share_treasury_cap: TreasuryCap<Share>,
 ): Balance<Share> {
+    // Assert the currency's MetadataCap has been deleted.
+    assert!(share_currency.is_metadata_cap_deleted(), EMetadataCapNotDeleted);
     // Assert the currency has the correct number of decimals.
     assert!(share_currency.decimals() == share_currency_decimals!(), EInvalidDecimals);
     // Assert the currency has the correct symbol.
     assert!(share_currency.symbol() == share_symbol!(), EInvalidSymbol);
     // Assert the currency has no existing supply.
     assert!(share_treasury_cap.supply().value() == 0, ENotZeroSupply);
-
-    // Set metadata for the share currency.
-    share_currency.set_description(share_metadata_cap, description);
-    share_currency.set_icon_url(share_metadata_cap, share_icon_url!());
-    share_currency.set_name(share_metadata_cap, name);
 
     // Mint the composition share balance.
     let balance = share_treasury_cap.mint_balance(share_currency_supply!());

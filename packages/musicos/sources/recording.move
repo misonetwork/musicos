@@ -38,7 +38,7 @@ use std::type_name::{TypeName, with_defining_ids};
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
-use sui::coin_registry::{Currency, MetadataCap};
+use sui::coin_registry::Currency;
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
@@ -53,8 +53,6 @@ public struct Recording<phantom RecordingShare> has key {
     id: UID,
     /// Current lifecycle state.
     state: RecordingState,
-    /// Capability for updating share token metadata.
-    share_metadata_cap: MetadataCap<RecordingShare>,
     /// Primary title of the recording.
     title: String,
     /// Version suffix (e.g., "Radio Edit", "Extended Mix").
@@ -228,7 +226,6 @@ public fun new<RecordingShare, CompositionShare>(
     master: Audio,
     cover_art: CoverArt,
     share_currency: &mut Currency<RecordingShare>,
-    share_metadata_cap: MetadataCap<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
 ): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>) {
     let composition_id = composition.id();
@@ -237,7 +234,6 @@ public fun new<RecordingShare, CompositionShare>(
     let mut recording = Recording<RecordingShare> {
         id: claim(composition.uid_mut_internal(), RecordingKey(*master.pcm_digest())),
         state: RecordingState::Initialized,
-        share_metadata_cap,
         title: *composition.title(),
         title_version: option::none(),
         subtitle: option::none(),
@@ -272,10 +268,7 @@ public fun new<RecordingShare, CompositionShare>(
     description.append(".");
 
     let recording_shares = share::intialize<RecordingShare>(
-        "MusicOS Recording Share",
-        description,
         share_currency,
-        &recording.share_metadata_cap,
         share_treasury_cap,
     );
 

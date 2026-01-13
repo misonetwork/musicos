@@ -1,22 +1,20 @@
 module share::share;
 
-use sui::coin::TreasuryCap;
-use sui::coin_registry::{CoinRegistry, CurrencyInitializer, new_currency};
+use sui::coin_registry::new_currency_with_otw;
 
 //=== Structs ===
 
-public struct Share has key {
-    id: UID,
-}
+public struct SHARE() has drop;
 
-const SYMBOL: vector<u8> = b"";
+//=== Constants ===
 
-public fun initialize(
-    coin_registry: &mut CoinRegistry,
-    ctx: &mut TxContext,
-): (CurrencyInitializer<Share>, TreasuryCap<Share>) {
-    let (currency_initializer, treasury_cap) = new_currency<Share>(
-        coin_registry,
+const SYMBOL: vector<u8> = b"SHARE";
+
+//=== Init Function ===
+
+fun init(otw: SHARE, ctx: &mut TxContext) {
+    let (currency_initializer, treasury_cap) = new_currency_with_otw(
+        otw,
         6,
         SYMBOL.to_string(),
         SYMBOL.to_string(),
@@ -25,10 +23,7 @@ public fun initialize(
         ctx,
     );
 
-    (currency_initializer, treasury_cap)
+    currency_initializer.finalize_and_delete_metadata_cap(ctx);
 
-    //    let metadata_cap = currency_initializer.finalize(ctx);
-    //
-    //    transfer::public_transfer(metadata_cap, ctx.sender());
-    //    transfer::public_transfer(treasury_cap, ctx.sender());
+    transfer::public_transfer(treasury_cap, ctx.sender());
 }
