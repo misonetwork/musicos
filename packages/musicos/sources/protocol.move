@@ -198,9 +198,9 @@ public fun remove_contributor_verification_authority_type<Authority: drop>(
 public fun set_royalty_distribution_duration_epochs(
     self: &mut Protocol,
     _: &AdminCap,
-    duration: u64,
+    duration_epochs: u64,
 ) {
-    self.royalty_distribution_duration_epochs = duration;
+    self.royalty_distribution_duration_epochs = duration_epochs;
 }
 
 //=== Public View Functions ===

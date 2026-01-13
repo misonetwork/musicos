@@ -8,7 +8,7 @@
 /// Key features:
 /// - Share token initialization with fixed supply (100M tokens, 6 decimals)
 /// - Contributor management with role assignments (Composer, Lyricist, Songwriter)
-/// - State machine: Created -> Published (immutable after publish)
+/// - State machine: Initialized -> Published (immutable after publish)
 /// - Revenue and royalty pool creation for royalty distribution
 /// - Deterministic addresses via derived object pattern
 module musicos::composition;
@@ -17,6 +17,7 @@ use musicos::artifact::Artifact;
 use interest_bps::bps::{Self, BPS};
 use musicos::composition_artifact_kind::CompositionArtifactKind;
 use musicos::composition_contributor_role::CompositionContributorRole;
+use musicos::credit::Credit;
 use musicos::contributor::Contributor;
 use musicos::data::Data;
 use musicos::plugin::PluginCap;
@@ -49,7 +50,7 @@ public struct Composition<phantom CompositionShare> has key {
     /// Additional titles (translations, alternate names).
     alternate_titles: vector<String>,
     /// Map of contributor IDs to their roles on this composition.
-    contributors: VecMap<ID, vector<CompositionContributorRole>>,
+    credits: VecMap<ID, Credit<CompositionContributorRole>>,
     /// Revenue split rate allocated to this composition vs recording (in basis points).
     split_bps: BPS,
     /// Optional lyrics data reference.
@@ -61,7 +62,7 @@ public struct Composition<phantom CompositionShare> has key {
 }
 
 /// Capability that authorizes modifications to a specific composition.
-/// Created when a composition is registered and transferred to the owner.
+/// Initialized when a composition is registered and transferred to the owner.
 public struct CompositionAdminCap has key, store {
     /// Unique identifier for this capability.
     id: UID,
@@ -85,13 +86,13 @@ public struct PublishCompositionFee() has drop;
 //=== Events ===
 
 /// Emitted when a new composition is created.
-public struct CompositionCreatedEvent has copy, drop {
+public struct CompositionInitializedEvent has copy, drop {
     /// ID of the created composition.
     composition_id: ID,
 }
 
 /// Emitted when a composition is published.
-public struct CompositionPublishedEvent has copy, drop {
+public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop {
     /// ID of the published composition.
     composition_id: ID,
 }
@@ -101,14 +102,6 @@ public struct CompositionContributorAddedEvent has copy, drop {
     /// ID of the composition.
     composition_id: ID,
     /// ID of the added contributor.
-    contributor_id: ID,
-}
-
-/// Emitted when a contributor is removed from a composition.
-public struct CompositionContributorRemovedEvent has copy, drop {
-    /// ID of the composition.
-    composition_id: ID,
-    /// ID of the removed contributor.
     contributor_id: ID,
 }
 
@@ -124,10 +117,8 @@ public struct CompositionSplitSetEvent has copy, drop {
 
 /// Lifecycle state of a composition.
 public enum CompositionState has copy, drop, store {
-    /// Composition is initialized but not yet created.
+    /// Composition is initialized but not published.
     Initialized,
-    /// Composition has been created but not yet published.
-    Created,
     /// Composition is published and immutable. Includes publication timestamp.
     Published(
         /// Timestamp (ms) when published.
@@ -150,20 +141,18 @@ const MAX_COMPOSITION_SPLIT_VALUE: u64 = 5_000;
 const EUnauthorized: u64 = 0;
 /// Operation requires Initialized state but composition is created.
 const ENotInitializedState: u64 = 1;
-/// Operation requires Created state but composition is published.
-const ENotCreatedState: u64 = 2;
 /// Contributor has too many roles.
 const EExceedsMaxRoles: u64 = 10;
 /// Contributor must have at least one role.
 const EMinRolesNotMet: u64 = 11;
-/// Role index is out of bounds for this contributor.
-const EContributorRoleIndexOutOfBounds: u64 = 12;
 /// Invalid composition split value.
 const EInvalidSplitValue: u64 = 13;
 /// Composition must have at least one contributor to publish.
 const ENoContributors: u64 = 20;
-/// Attempted to add a role that the contributor already has.
-const EContributorRoleAlreadyExists: u64 = 30;
+/// Composition must have at least one artifact to publish.
+const ENoArtifacts: u64 = 21;
+/// Composition must have at least one snapshot to publish.
+const ENoSnapshots: u64 = 22;
 
 
 //=== Public Functions ===
@@ -196,7 +185,7 @@ public fun new<CompositionShare>(
         share_metadata_cap,
         title,
         alternate_titles: vector[],
-        contributors: vec_map::empty(),
+        credits: vec_map::empty(),
         split_bps: bps::new(split_value),
         lyrics: option::none(),
         artifacts: vector[],
@@ -220,78 +209,45 @@ public fun new<CompositionShare>(
         share_treasury_cap,
     );
 
-    emit(CompositionCreatedEvent {
+    emit(CompositionInitializedEvent {
         composition_id: composition.id(),
     });
 
     (composition, composition_admin_cap, composition_shares)
 }
 
-/// Converts the composition into a shared object.
-/// Consumes the promise returned by `new()`.
-/// Required State: Created
-public fun share<CompositionShare>(
-    mut self: Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        CompositionState::Initialized => {
-            self.state = CompositionState::Created;
-            transfer::share_object(self);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-
 /// Publishes the composition, making it immutable.
-/// Requires at least one contributor to be assigned.
-/// Required State: Created
+/// Requires at least one contributor, artifact, and snapshot.
+/// Required State: Initialized
 public fun publish<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
+    mut self: Composition<CompositionShare>,
     cap: &CompositionAdminCap,
     clock: &Clock,
 ) {
     self.authorize(cap);
 
     match (self.state) {
-        CompositionState::Created => {
-            // Assert the composition has at least one contributor.
-            assert!(!self.contributors.is_empty(), ENoContributors);
+        CompositionState::Initialized => {
+            assert!(!self.credits.is_empty(), ENoContributors);
+            assert!(!self.artifacts.is_empty(), ENoArtifacts);
+            assert!(!self.snapshots.is_empty(), ENoSnapshots);
 
             self.state = CompositionState::Published(clock.timestamp_ms());
 
-            emit(CompositionPublishedEvent {
+            emit(CompositionPublishedEvent<CompositionShare> {
                 composition_id: self.id(),
             });
+
+            transfer::share_object(self);
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 // --- Title ---
 
-/// Sets the primary title of the composition.
-/// Required State: Created
-public fun set_title<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    title: String,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        CompositionState::Created => {
-            self.title = title;
-        },
-        _ => abort ENotCreatedState,
-    }
-}
-
 /// Adds an alternate title to the composition.
-/// Required State: Created
+/// Required State: Initialized
 public fun add_alternate_title<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
@@ -300,27 +256,10 @@ public fun add_alternate_title<CompositionShare>(
     self.authorize(cap);
 
     match (self.state) {
-        CompositionState::Created => {
+        CompositionState::Initialized => {
             self.alternate_titles.push_back(alternate_title);
         },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Removes an alternate title by index.
-/// Required State: Created
-public fun remove_alternate_title<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    alternate_title_idx: u64,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        CompositionState::Created => {
-            self.alternate_titles.swap_remove(alternate_title_idx);
-        },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
@@ -328,95 +267,28 @@ public fun remove_alternate_title<CompositionShare>(
 
 /// Adds a contributor to the composition with specified roles.
 /// Each contributor must have 1-20 roles.
-/// Required State: Created
-public fun add_contributor<CompositionShare>(
+/// Required State: Initialized
+public fun add_credit<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
     contributor: &Contributor,
-    roles: vector<CompositionContributorRole>,
+    credit: Credit<CompositionContributorRole>,
 ) {
     self.authorize(cap);
 
     match (self.state) {
-        CompositionState::Created => {
-            assert!(roles.length() >= MIN_ROLES_PER_CONTRIBUTOR, EMinRolesNotMet);
-            assert!(roles.length() <= MAX_ROLES_PER_CONTRIBUTOR, EExceedsMaxRoles);
+        CompositionState::Initialized => {
+            assert!(credit.roles().length() >= MIN_ROLES_PER_CONTRIBUTOR, EMinRolesNotMet);
+            assert!(credit.roles().length() <= MAX_ROLES_PER_CONTRIBUTOR, EExceedsMaxRoles);
 
-            self.contributors.insert(contributor.id(), roles);
+            self.credits.insert(contributor.id(), credit);
 
             emit(CompositionContributorAddedEvent {
                 composition_id: self.id(),
                 contributor_id: contributor.id(),
             });
         },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Removes a contributor from the composition.
-/// Required State: Created
-public fun remove_contributor<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    contributor_id: ID,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        CompositionState::Created => {
-            self.contributors.remove(&contributor_id);
-
-            emit(CompositionContributorRemovedEvent {
-                composition_id: self.id(),
-                contributor_id: contributor_id,
-            });
-        },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Adds a role to an existing contributor.
-/// Required State: Created
-public fun add_role_to_contributor<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    contributor_id: ID,
-    role: CompositionContributorRole,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        CompositionState::Created => {
-            let roles = self.contributors.get_mut(&contributor_id);
-
-            assert!(!roles.contains(&role), EContributorRoleAlreadyExists);
-            assert!(roles.length() < MAX_ROLES_PER_CONTRIBUTOR, EExceedsMaxRoles);
-
-            roles.push_back(role);
-        },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Removes a role from a contributor by role index.
-/// Contributor must retain at least one role.
-/// Required State: Created
-public fun remove_role_from_contributor<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    contributor_id: ID,
-    role_idx: u64,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        CompositionState::Created => {
-            let roles = self.contributors.get_mut(&contributor_id);
-            assert!(role_idx < roles.length(), EContributorRoleIndexOutOfBounds);
-            assert!(roles.length() > MIN_ROLES_PER_CONTRIBUTOR, EMinRolesNotMet);
-            roles.swap_remove(role_idx);
-        },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
@@ -443,7 +315,7 @@ public fun set_split_bps<CompositionShare>(
 // --- Content ---
 
 /// Sets the lyrics data reference for the composition.
-/// Required State: Created
+/// Required State: Initialized
 public fun set_lyrics<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
@@ -452,17 +324,17 @@ public fun set_lyrics<CompositionShare>(
     self.authorize(cap);
 
     match (self.state) {
-        CompositionState::Created => {
+        CompositionState::Initialized => {
             self.lyrics.swap_or_fill(data);
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 // --- Attachments ---
 
 /// Adds an artifact to the composition.
-/// Required State: Created
+/// Required State: Initialized
 public fun add_artifact<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
@@ -471,32 +343,15 @@ public fun add_artifact<CompositionShare>(
     self.authorize(cap);
 
     match (self.state) {
-        CompositionState::Created => {
+        CompositionState::Initialized => {
             self.artifacts.push_back(artifact);
         },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Removes an artifact by index and returns it.
-/// Required State: Created
-public fun remove_artifact<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    artifact_idx: u64,
-): Artifact<CompositionArtifactKind> {
-    self.authorize(cap);
-
-    match (self.state) {
-        CompositionState::Created => {
-            self.artifacts.swap_remove(artifact_idx)
-        },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 /// Adds a snapshot to the composition.
-/// Required State: Created
+/// Required State: Initialized
 public fun add_snapshot<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
@@ -505,27 +360,10 @@ public fun add_snapshot<CompositionShare>(
     self.authorize(cap);
 
     match (self.state) {
-        CompositionState::Created => {
+        CompositionState::Initialized => {
             self.snapshots.push_back(snapshot);
         },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Removes a snapshot by index and returns it.
-/// Required State: Created
-public fun remove_snapshot<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    snapshot_idx: u64,
-): Snapshot {
-    self.authorize(cap);
-
-    match (self.state) {
-        CompositionState::Created => {
-            self.snapshots.swap_remove(snapshot_idx)
-        },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
@@ -567,9 +405,9 @@ public fun alternate_titles<CompositionShare>(self: &Composition<CompositionShar
     &self.alternate_titles
 }
 
-/// Returns the contributor-to-roles mapping.
-public fun contributors<CompositionShare>(self: &Composition<CompositionShare>): &VecMap<ID, vector<CompositionContributorRole>> {
-    &self.contributors
+/// Returns the contributor-to-credit mapping.
+public fun credits<CompositionShare>(self: &Composition<CompositionShare>): &VecMap<ID, Credit<CompositionContributorRole>> {
+    &self.credits
 }
 
 /// Returns the revenue split rate in basis points.
@@ -590,16 +428,6 @@ public fun artifacts<CompositionShare>(self: &Composition<CompositionShare>): &v
 /// Returns the list of snapshots.
 public fun snapshots<CompositionShare>(self: &Composition<CompositionShare>): &vector<Snapshot> {
     &self.snapshots
-}
-
-// TODO: Check whether contain() distinguishes enum variants.
-/// Checks if a contributor has a specific role on this composition.
-public fun contributor_has_role<CompositionShare>(
-    self: &Composition<CompositionShare>,
-    contributor_id: ID,
-    role: CompositionContributorRole,
-): bool {
-    self.contributors.get(&contributor_id).contains(&role)
 }
 
 //=== Package Functions ===

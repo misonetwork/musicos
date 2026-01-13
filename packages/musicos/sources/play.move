@@ -30,8 +30,6 @@ public struct Play<phantom Authority: drop> has drop {
     composition_id: ID,
     /// The recording that was played.
     recording_id: ID,
-    /// The genre of the recording.
-    genre_id: ID,
     /// Address of the account that triggered the play.
     played_by: address,
     /// Epoch when the play occurred.
@@ -56,8 +54,6 @@ public struct PlayCreatedEvent<phantom Authority: drop> has copy, drop {
     composition_id: ID,
     /// The recording that was played.
     recording_id: ID,
-    /// The genre of the recording.
-    genre_id: ID,
     /// Address of the account that triggered the play.
     played_by: address,
     /// Epoch when the play occurred.
@@ -85,7 +81,6 @@ public fun new<Authority: drop>(
     player_id: Option<ID>,
     composition_id: ID,
     recording_id: ID,
-    genre_id: ID,
     playtime_s: u64,
     track_duration_s: u64,
     protocol: &Protocol,
@@ -107,7 +102,6 @@ public fun new<Authority: drop>(
         player_id,
         composition_id,
         recording_id,
-        genre_id,
         played_by,
         play_epoch,
         play_timestamp_ms,
@@ -120,7 +114,6 @@ public fun new<Authority: drop>(
         player_id,
         composition_id,
         recording_id,
-        genre_id,
         played_by,
         play_epoch,
         play_timestamp_ms,
@@ -149,11 +142,6 @@ public fun composition_id<Authority: drop>(self: &Play<Authority>): ID {
 /// Returns the ID of the recording that was played.
 public fun recording_id<Authority: drop>(self: &Play<Authority>): ID {
     self.recording_id
-}
-
-/// Returns the genre ID of the recording.
-public fun genre_id<Authority: drop>(self: &Play<Authority>): ID {
-    self.genre_id
 }
 
 /// Returns the address that triggered the play.

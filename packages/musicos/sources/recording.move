@@ -8,7 +8,7 @@
 /// Key features:
 /// - Share token initialization with fixed supply (100M tokens, 6 decimals)
 /// - Contributor management with role assignments (Producer, Vocalist, etc.)
-/// - State machine: Created -> Published (immutable after publish)
+/// - State machine: Initialized -> Published (immutable after publish)
 /// - Audio management (master track and optional stems)
 /// - Musical metadata (key, tempo, time signature)
 /// - Deterministic addresses via derived object pattern
@@ -21,7 +21,7 @@ use interest_bps::bps::BPS;
 use musicos::composition::Composition;
 use musicos::contributor::Contributor;
 use musicos::cover_art::CoverArt;
-use musicos::credit::{Self, Credit};
+use musicos::credit::Credit;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
 use musicos::plugin::PluginCap;
@@ -98,7 +98,7 @@ public struct Recording<phantom RecordingShare> has key {
 }
 
 /// Capability that authorizes modifications to a specific recording.
-/// Created when a recording is registered and transferred to the owner.
+/// Initialized when a recording is registered and transferred to the owner.
 public struct RecordingAdminCap has key, store {
     /// Unique identifier for this capability.
     id: UID,
@@ -128,7 +128,7 @@ public struct PublishRecordingFee() has drop;
 //=== Events ===
 
 /// Emitted when a new recording is created.
-public struct RecordingCreatedEvent has copy, drop {
+public struct RecordingInitializedEvent has copy, drop {
     /// ID of the created recording.
     recording_id: ID,
     /// Type of the recording's share token.
@@ -153,27 +153,11 @@ public struct RecordingContributorAddedEvent has copy, drop {
     contributor_id: ID,
 }
 
-/// Emitted when a contributor is removed from a recording.
-public struct RecordingContributorRemovedEvent has copy, drop {
-    /// ID of the recording.
-    recording_id: ID,
-    /// ID of the removed contributor.
-    contributor_id: ID,
-}
-
 /// Emitted when a stem is added to a recording.
 public struct RecordingStemAddedEvent has copy, drop {
     /// ID of the recording.
     recording_id: ID,
     /// Digest of the added audio file.
-    audio_digest: vector<u8>,
-}
-
-/// Emitted when a stem is removed from a recording.
-public struct RecordingStemRemovedEvent has copy, drop {
-    /// ID of the recording.
-    recording_id: ID,
-    /// Digest of the removed audio file.
     audio_digest: vector<u8>,
 }
 
@@ -183,8 +167,6 @@ public struct RecordingStemRemovedEvent has copy, drop {
 public enum RecordingState has copy, drop, store {
     /// Recording is being set up and can be modified.
     Initialized,
-    /// Recording is created and can be shared.
-    Created,
     /// Recording is published and immutable. Includes publication timestamp.
     Published(
         /// Timestamp (ms) when published.
@@ -207,8 +189,6 @@ const MAX_STEMS_PER_RECORDING: u8 = 10;
 const EUnauthorized: u64 = 0;
 /// Operation requires Initialized state but recording is created.
 const ENotInitializedState: u64 = 1;
-/// Operation requires Created state but recording is published.
-const ENotCreatedState: u64 = 2;
 /// Recording has reached the maximum number of stems (10).
 const EMaxStemsExceeded: u64 = 10;
 /// Contributor has too many roles.
@@ -287,7 +267,7 @@ public fun new<RecordingShare, CompositionShare>(
         share_treasury_cap,
     );
 
-    emit(RecordingCreatedEvent {
+    emit(RecordingInitializedEvent {
         recording_id: recording.id(),
         recording_share_type: with_defining_ids<RecordingShare>(),
         composition_id,
@@ -297,63 +277,39 @@ public fun new<RecordingShare, CompositionShare>(
     (recording, recording_admin_cap, recording_shares)
 }
 
-/// Converts the recording into a shared object.
-/// Consumes the promise returned by `new()`.
-/// Required State: Initialized
-public fun share<RecordingShare>(
-    mut self: Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.state = RecordingState::Created;
-
-            emit(RecordingCreatedEvent {
-                recording_id: self.id(),
-                recording_share_type: with_defining_ids<RecordingShare>(),
-                composition_id: self.composition_id(),
-                genre_id: self.genre_id(),
-            });
-
-            transfer::share_object(self);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
 /// Publishes the recording, making it immutable.
 /// Requires at least one contributor to be assigned.
-/// Required State: Created
+/// Required State: Initialized
 public fun publish<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
+    mut self: Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     clock: &Clock,
 ) {
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             // Assert the recording has at least one contributor.
             assert!(!self.credits.is_empty(), ENoContributors);
             // Assert the recording has at least one primary artist.
-            assert_has_primary_artist(self);
-
+            self.assert_has_primary_artist();
+            // Set the recording's publish timestamp.
             self.state = RecordingState::Published(clock.timestamp_ms());
 
             emit(RecordingPublishedEvent {
                 recording_id: self.id(),
             });
+
+            transfer::share_object(self);
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     };
 }
 
 // --- Title ---
 
 /// Sets the primary title of the recording.
-/// Required State: Created
+/// Required State: Initialized
 public fun set_title<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -362,15 +318,15 @@ public fun set_title<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             self.title = title;
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 /// Sets the title version (e.g., "Radio Edit", "Extended Mix").
-/// Required State: Created
+/// Required State: Initialized
 public fun set_title_version<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -379,15 +335,15 @@ public fun set_title_version<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             self.title_version.swap_or_fill(title_version);
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 /// Sets the subtitle of the recording.
-/// Required State: Created
+/// Required State: Initialized
 public fun set_subtitle<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -396,10 +352,10 @@ public fun set_subtitle<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             self.subtitle.swap_or_fill(subtitle);
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
@@ -407,23 +363,21 @@ public fun set_subtitle<RecordingShare>(
 
 /// Adds a contributor to the recording with specified roles.
 /// Each contributor must have 1-20 roles.
-/// Required State: Created
+/// Required State: Initialized
 public fun add_credit<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     contributor: &Contributor,
-    display_name: String,
-    roles: vector<RecordingContributorRole>,
+    credit: Credit<RecordingContributorRole>,
 ) {
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
-            assert!(roles.length() >= MIN_ROLES_PER_CREDIT, EMinRolesNotMet);
-            assert!(roles.length() <= MAX_ROLES_PER_CREDIT, EExceedsMaxRoles);
+        RecordingState::Initialized => {
+            assert!(credit.roles().length() >= MIN_ROLES_PER_CREDIT, EMinRolesNotMet);
+            assert!(credit.roles().length() <= MAX_ROLES_PER_CREDIT, EExceedsMaxRoles);
 
             let contributor_id = contributor.id();
-            let credit = credit::new(display_name, roles);
             self.credits.insert(contributor_id, credit);
 
             emit(RecordingContributorAddedEvent {
@@ -431,104 +385,47 @@ public fun add_credit<RecordingShare>(
                 contributor_id,
             });
         },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Removes a contributor from the recording.
-/// Required State: Created
-public fun remove_credit<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    contributor_id: ID,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            self.credits.remove(&contributor_id);
-
-            emit(RecordingContributorRemovedEvent {
-                recording_id: self.id(),
-                contributor_id,
-            });
-        },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 // --- Classification ---
 
 /// Sets the primary genre of the recording.
-/// Required State: Created
+/// Can be set on any state as additional genres are created on MusicOS.
 public fun set_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     genre: &Genre,
 ) {
     self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            self.genre_id = genre.id();
-        },
-        _ => abort ENotCreatedState,
-    }
+    self.genre_id = genre.id();
 }
 
 /// Adds a secondary genre to the recording.
-/// Required State: Created
+/// Can be set on any state as additional genres are created on MusicOS.
 public fun add_secondary_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     genre: &Genre,
 ) {
     self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            self.secondary_genre_ids.insert(genre.id());
-        },
-        _ => abort ENotCreatedState,
-    }
+    self.secondary_genre_ids.insert(genre.id());
 }
 
 /// Removes a secondary genre from the recording.
-/// Required State: Created
+/// Can be set on any state as additional genres are created on MusicOS.
 public fun remove_secondary_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     genre_id: ID,
 ) {
     self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            self.secondary_genre_ids.remove(&genre_id);
-        },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Sets the language of the recording's vocals.
-/// Required State: Created
-public fun set_language<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    language: LanguageCode,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            self.language.swap_or_fill(language);
-        },
-        _ => abort ENotCreatedState,
-    }
+    self.secondary_genre_ids.remove(&genre_id);
 }
 
 /// Sets whether the recording contains explicit content.
-/// Required State: Created
+/// Required State: Initialized
 public fun set_is_explicit<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -537,15 +434,15 @@ public fun set_is_explicit<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             self.is_explicit = is_explicit;
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 /// Sets whether the recording is instrumental (no vocals).
-/// Required State: Created
+/// Required State: Initialized
 public fun set_is_instrumental<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -554,17 +451,17 @@ public fun set_is_instrumental<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             self.is_instrumental = is_instrumental;
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 // --- Musical Properties ---
 
 /// Sets the musical key of the recording.
-/// Required State: Created
+/// Required State: Initialized
 public fun set_musical_key<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -573,15 +470,15 @@ public fun set_musical_key<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             self.musical_key.swap_or_fill(musical_key);
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 /// Sets the time signature of the recording.
-/// Required State: Created
+/// Required State: Initialized
 public fun set_time_signature<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -590,15 +487,15 @@ public fun set_time_signature<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             self.time_signature.swap_or_fill(time_signature);
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 /// Sets the tempo in beats per minute.
-/// Required State: Created
+/// Required State: Initialized
 public fun set_tempo_bpm<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -607,10 +504,10 @@ public fun set_tempo_bpm<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             self.tempo_bpm.swap_or_fill(tempo_bpm);
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
@@ -618,7 +515,7 @@ public fun set_tempo_bpm<RecordingShare>(
 
 /// Adds a stem (isolated audio track) to the recording.
 /// Maximum of 10 stems per recording.
-/// Required State: Created
+/// Required State: Initialized
 public fun add_stem<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -627,7 +524,7 @@ public fun add_stem<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             assert!(self.stems.length() < MAX_STEMS_PER_RECORDING as u64, EMaxStemsExceeded);
 
             emit(RecordingStemAddedEvent {
@@ -637,38 +534,14 @@ public fun add_stem<RecordingShare>(
 
             self.stems.push_back(stem);
         },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Removes a stem by index and returns it.
-/// Required State: Created
-public fun remove_stem<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    stem_idx: u64,
-): Stem {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            let stem = self.stems.swap_remove(stem_idx);
-
-            emit(RecordingStemRemovedEvent {
-                recording_id: self.id(),
-                audio_digest: *stem.audio().pcm_digest(),
-            });
-
-            stem
-        },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 // --- Attachments ---
 
 /// Adds an artifact to the recording.
-/// Required State: Created
+/// Required State: Initialized
 public fun add_artifact<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -677,32 +550,15 @@ public fun add_artifact<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             self.artifacts.push_back(artifact);
         },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Removes an artifact by index and returns it.
-/// Required State: Created
-public fun remove_artifact<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    artifact_idx: u64,
-): Artifact<RecordingArtifactKind> {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            self.artifacts.swap_remove(artifact_idx)
-        },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 /// Adds a snapshot to the recording.
-/// Required State: Created
+/// Required State: Initialized
 public fun add_snapshot<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
@@ -711,27 +567,10 @@ public fun add_snapshot<RecordingShare>(
     self.authorize(cap);
 
     match (self.state) {
-        RecordingState::Created => {
+        RecordingState::Initialized => {
             self.snapshots.push_back(snapshot);
         },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Removes a snapshot by index and returns it.
-/// Required State: Created
-public fun remove_snapshot<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    snapshot_idx: u64,
-): Snapshot {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Created => {
-            self.snapshots.swap_remove(snapshot_idx)
-        },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 

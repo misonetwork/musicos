@@ -33,8 +33,6 @@ public struct Track has drop, store {
     recording_share_type: TypeName,
     /// Duration of the track in seconds.
     duration_s: u64,
-    /// Genre of the recording.
-    genre_id: ID,
     /// Covert art for the track. Inherited from the recording by default.
     cover_art: CoverArt,
 }
@@ -58,7 +56,6 @@ public fun new<RecordingShare>(
         recording_id: recording.id(),
         recording_share_type: with_defining_ids<RecordingShare>(),
         duration_s: recording.master().duration_s(),
-        genre_id: recording.genre_id(),
         cover_art: cover_art.destroy_with_default(*recording.cover_art()),
     }
 }
@@ -93,11 +90,6 @@ public fun recording_share_type(self: &Track): &TypeName {
 /// Returns the duration of the track in seconds.
 public fun duration_s(self: &Track): u64 {
     self.duration_s
-}
-
-/// Returns the genre ID of the recording.
-public fun genre_id(self: &Track): ID {
-    self.genre_id
 }
 
 /// Returns the cover art for the track.
