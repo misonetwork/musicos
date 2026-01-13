@@ -19,13 +19,6 @@ public fun new<Role: copy + drop + store>(display_name: String): Credit<Role> {
     Credit { display_name, roles: vector[] }
 }
 
-public fun set_display_name<Role: copy + drop + store>(
-    self: &mut Credit<Role>,
-    display_name: String,
-) {
-    self.display_name = display_name;
-}
-
 public fun add_role<Role: copy + drop + store>(self: &mut Credit<Role>, role: Role) {
     assert!(!self.roles.contains(&role), EDuplicateRole);
     self.roles.push_back(role);

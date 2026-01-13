@@ -33,6 +33,7 @@ use sui::coin_registry::{Currency, MetadataCap};
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
+use sui::coin_registry::CurrencyInitializer;
 
 //=== Structs ===
 
