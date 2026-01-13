@@ -67,6 +67,10 @@ public struct Recording<phantom RecordingShare> has key {
     composition_share_type: TypeName,
     /// Revenue split for the composition in basis points (captured at creation time).
     composition_split_bps: BPS,
+    // IDs of the primary artists on the recording.
+    primary_artist_ids: VecSet<ID>,
+    // IDs of the featured artists on the recording.
+    featured_artist_ids: VecSet<ID>,
     /// Map of contributor IDs to their roles on this recording.
     credits: VecMap<ID, Credit<RecordingContributorRole>>,
     /// Primary genre of the recording.
@@ -199,6 +203,12 @@ const EMinRolesNotMet: u64 = 12;
 const ENoContributors: u64 = 20;
 /// Recording must have at least one primary artist to publish.
 const ENoPrimaryArtistAssigned: u64 = 21;
+/// Contributor is not credited on the recording.
+const EContributorNotCredited: u64 = 22;
+/// Contributor is already a featured artist.
+const EAlreadyFeaturedArtist: u64 = 23;
+/// Contributor is already a primary artist.
+const EAlreadyPrimaryArtist: u64 = 24;
 
 //=== Public Functions ===
 
@@ -234,6 +244,8 @@ public fun new<RecordingShare, CompositionShare>(
         composition_id,
         composition_share_type: with_defining_ids<CompositionShare>(),
         composition_split_bps: composition.split_bps(),
+        primary_artist_ids: vec_set::empty(),
+        featured_artist_ids: vec_set::empty(),
         credits: vec_map::empty(),
         genre_id,
         secondary_genre_ids: vec_set::empty(),
@@ -292,7 +304,8 @@ public fun publish<RecordingShare>(
             // Assert the recording has at least one contributor.
             assert!(!self.credits.is_empty(), ENoContributors);
             // Assert the recording has at least one primary artist.
-            self.assert_has_primary_artist();
+            assert!(!self.primary_artist_ids.is_empty(), ENoPrimaryArtistAssigned);
+
             // Set the recording's publish timestamp.
             self.state = RecordingState::Published(clock.timestamp_ms());
 
@@ -384,6 +397,48 @@ public fun add_credit<RecordingShare>(
                 recording_id: self.id(),
                 contributor_id,
             });
+        },
+        _ => abort ENotInitializedState,
+    }
+}
+
+public fun add_primary_artist<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap,
+    contributor: &Contributor,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        RecordingState::Initialized => {
+            let contributor_id = contributor.id();
+            // Assert the contributor is credited on the recording.
+            assert!(self.credits.contains(&contributor_id), EContributorNotCredited);
+            // Assert the contributor is not already a featured artist.
+            assert!(!self.featured_artist_ids.contains(&contributor_id), EAlreadyFeaturedArtist);
+
+            self.primary_artist_ids.insert(contributor_id);
+        },
+        _ => abort ENotInitializedState,
+    }
+}
+
+public fun add_featured_artist<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    cap: &RecordingAdminCap,
+    contributor: &Contributor,
+) {
+    self.authorize(cap);
+
+    match (self.state) {
+        RecordingState::Initialized => {
+            let contributor_id = contributor.id();
+            // Assert the contributor is credited on the recording.
+            assert!(self.credits.contains(&contributor_id), EContributorNotCredited);
+            // Assert the contributor is not already a primary artist.
+            assert!(!self.primary_artist_ids.contains(&contributor_id), EAlreadyPrimaryArtist);
+
+            self.featured_artist_ids.insert(contributor_id);
         },
         _ => abort ENotInitializedState,
     }
@@ -702,6 +757,16 @@ public fun snapshots<RecordingShare>(self: &Recording<RecordingShare>): &vector<
     &self.snapshots
 }
 
+/// Returns whether the provided ID is a primary artist on the recording.
+public fun is_primary_artist<RecordingShare>(self: &Recording<RecordingShare>, contributor_id: ID): bool {
+    self.primary_artist_ids.contains(&contributor_id)
+}
+
+/// Returns whether the s is a featured artist on the recording.
+public fun is_featured_artist<RecordingShare>(self: &Recording<RecordingShare>, contributor_id: ID): bool {
+    self.featured_artist_ids.contains(&contributor_id)
+}
+
 //=== Package Functions ===
 
 /// Verifies that the admin capability matches this recording.
@@ -727,22 +792,4 @@ public fun uid_mut_with_plugin<RecordingShare, PluginWitness: drop>(self: &mut R
 
 public(package) fun uid_mut_internal<RecordingShare>(self: &mut Recording<RecordingShare>): &mut UID {
     &mut self.id
-}
-
-
-//=== Assert Functions ===
-
-/// Asserts that at least one contributor is credited as the primary artist.
-/// This validation ensures every published recording has a clearly identified
-/// main artist for display and attribution purposes.
-///
-/// Aborts with `ENoPrimaryArtistAssigned` if no credit contains the
-/// `Artist(Primary)` role.
-fun assert_has_primary_artist<RecordingShare>(self: &Recording<RecordingShare>) {
-    let has_primary_artist = self.credits.keys().any!(|id| {
-        self.credits.get(id).roles().any!(|role| {
-            role.is_artist_role() && role.level().is_some_and!(|l| l.is_primary_level())
-        })
-    });
-    assert!(has_primary_artist, ENoPrimaryArtistAssigned);
 }

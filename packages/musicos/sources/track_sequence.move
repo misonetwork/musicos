@@ -18,6 +18,8 @@ public struct TrackSequence has drop, store {
     tracks_per_disc: vector<u8>,
     /// Flattened list of all track positions in playback order.
     track_positions: vector<TrackPosition>,
+    // Total duration of the sequence in seconds.
+    duration_s: u64,
 }
 
 //=== Constants ===
@@ -44,7 +46,7 @@ const ENoDiscs: u64 = 20;
 /// Builds an ordered list of all track positions for navigation.
 /// Returns the track sequence and total duration in seconds (since we're looping through the tracks).
 /// Aborts if there are no discs or if total tracks exceed 255.
-public(package) fun new(discs: &vector<Disc>): (TrackSequence, u64) {
+public(package) fun new(discs: &vector<Disc>): TrackSequence {
     assert!(!discs.is_empty(), ENoDiscs);
 
     let mut tracks_per_disc: vector<u8> = vector[];
@@ -73,9 +75,10 @@ public(package) fun new(discs: &vector<Disc>): (TrackSequence, u64) {
     let track_sequence = TrackSequence {
         tracks_per_disc,
         track_positions,
+        duration_s,
     };
 
-    (track_sequence, duration_s)
+    track_sequence
 }
 
 //=== Public View Functions ===

@@ -10,7 +10,7 @@
 /// - Multi-disc releases with track sequencing
 /// - Configurable per-track revenue splits
 /// - Revenue distribution to composition and recording royalty pools
-/// - State machine: Created -> Published
+/// - State machine: Initialized -> Published
 module musicos::release;
 
 use interest_bps::bps::{Self, BPS};
@@ -42,8 +42,6 @@ public struct Release has key {
     title: String,
     /// Optional subtitle (e.g., "Deluxe Edition").
     subtitle: Option<String>,
-    /// Duration of the release in seconds.
-    duration_s: u64,
     /// Collection of discs containing tracks.
     discs: vector<Disc>,
     /// Navigation structure for track ordering.
@@ -55,7 +53,7 @@ public struct Release has key {
 }
 
 /// Capability that authorizes modifications to a specific release.
-/// Created when a release is registered and transferred to the owner.
+/// Initialized when a release is registered and transferred to the owner.
 public struct ReleaseAdminCap has key, store {
     /// Unique identifier for this capability.
     id: UID,
@@ -90,12 +88,6 @@ public struct TrackSplit has copy, drop, store {
 
 //=== Events ===
 
-/// Emitted when a new release is created.
-public struct ReleaseCreatedEvent has copy, drop {
-    /// ID of the created release.
-    release_id: ID,
-}
-
 /// Emitted when a release is published.
 public struct ReleasePublishedEvent has copy, drop {
     /// ID of the published release.
@@ -104,10 +96,6 @@ public struct ReleasePublishedEvent has copy, drop {
     timestamp_ms: u64,
     /// Address of the sender.
     sender: address,
-    /// IDs of the published compositions.
-    composition_ids: vector<ID>,
-    /// IDs of the published recordings.
-    recording_ids: vector<ID>,
 }
 
 /// Emitted when revenue is distributed for a track.
@@ -153,8 +141,6 @@ public enum ReleaseKind has copy, drop, store {
 public enum ReleaseState has copy, drop, store {
     /// Release is initialized but not yet created.
     Initialized,
-    /// Release has been created but not yet published.
-    Created,
     /// Release is published and immutable. Includes publication timestamp.
     Published(
         /// Timestamp (ms) when published.
@@ -172,10 +158,8 @@ const MAX_DISCS: u8 = 20;
 const EUnauthorized: u64 = 0;
 /// Operation requires Initialized state.
 const ENotInitializedState: u64 = 1;
-/// Operation requires Created state.
-const ENotCreatedState: u64 = 2;
 /// Operation requires Published state.
-const ENotPublishedState: u64 = 4;
+const ENotPublishedState: u64 = 2;
 /// Too many discs in release.
 const EMaxDiscsReached: u64 = 10;
 /// Track splits count doesn't match track count.
@@ -199,7 +183,7 @@ public fun new(
     assert!(discs.length() <= MAX_DISCS as u64, EMaxDiscsReached);
 
     // Build a track sequence for the release based on the number of discs.
-    let (track_sequence, duration_s) = track_sequence::new(&discs);
+    let track_sequence = track_sequence::new(&discs);
 
     let mut release = Release {
         id: object::new(ctx),
@@ -207,7 +191,6 @@ public fun new(
         state: ReleaseState::Initialized,
         title,
         subtitle: option::none(),
-        duration_s,
         discs,
         track_sequence,
         track_splits_bps: vector[],
@@ -222,46 +205,18 @@ public fun new(
     (release, release_admin_cap)
 }
 
-public fun share(mut self: Release, cap: &ReleaseAdminCap) {
+/// Publishes the release, making it immutable.
+/// Track splits must be set and sum to 100% before publishing.
+/// Required State: Initialized
+public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx: &TxContext) {
     self.authorize(cap);
 
     match (self.state) {
         ReleaseState::Initialized => {
-            self.state = ReleaseState::Created;
-
-            emit(ReleaseCreatedEvent {
-                release_id: self.id(),
-            });
-
-            transfer::share_object(self);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Publishes the release, making it immutable.
-/// Track splits must be set and sum to 100% before publishing.
-/// Required State: Created
-public fun publish(self: &mut Release, cap: &ReleaseAdminCap, clock: &Clock, ctx: &TxContext) {
-    self.authorize(cap);
-
-    match (self.state) {
-        ReleaseState::Created => {
             // Assert that the number of track splits matches the number of tracks.
             assert_track_splits_bps_length(self.track_splits_bps, &self.track_sequence);
             // Assert that the track splits sum to 100% (10,000 BPS).
             assert_track_splits_bps_sum(self.track_splits_bps);
-
-            // Collect the composition and recording IDs for the release.
-            let mut composition_ids: vector<ID> = vector[];
-            let mut recording_ids: vector<ID> = vector[];
-
-            self.track_sequence.track_positions().do_ref!(|track_position| {
-                let disc = &self.discs[track_position.disc_idx() as u64];
-                let track = &disc.tracks()[track_position.track_idx() as u64];
-                composition_ids.push_back(track.composition_id());
-                recording_ids.push_back(track.recording_id());
-            });
 
             let timestamp_ms = clock.timestamp_ms();
 
@@ -272,38 +227,17 @@ public fun publish(self: &mut Release, cap: &ReleaseAdminCap, clock: &Clock, ctx
                 release_id: self.id(),
                 timestamp_ms,
                 sender: ctx.sender(),
-                composition_ids,
-                recording_ids,
             });
+
+            transfer::share_object(self);
         },
-        _ => abort ENotCreatedState,
-    }
-}
-
-/// Sets the discs, and resets the track splits to empty.
-/// Required State: Created
-public fun set_discs(self: &mut Release, cap: &ReleaseAdminCap, discs: vector<Disc>) {
-    self.authorize(cap);
-
-    match (self.state) {
-        ReleaseState::Created => {
-            assert!(discs.length() <= MAX_DISCS as u64, EMaxDiscsReached);
-
-            let (track_sequence, duration_s) = track_sequence::new(&discs);
-
-            self.discs = discs;
-            self.track_sequence = track_sequence;
-            self.duration_s = duration_s;
-
-            self.track_splits_bps = vector[];
-        },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
 /// Sets the revenue splits for each track.
 /// The number of splits must match the track count, and they must sum to 100%.
-/// Required State: Created
+/// Required State: Initialized
 public fun set_track_splits_bps(
     self: &mut Release,
     cap: &ReleaseAdminCap,
@@ -312,7 +246,7 @@ public fun set_track_splits_bps(
     self.authorize(cap);
 
     match (self.state) {
-        ReleaseState::Created => {
+        ReleaseState::Initialized => {
             let track_splits_bps = track_splits_bps_values.map!(|value| bps::new(value));
 
             assert_track_splits_bps_length(track_splits_bps, &self.track_sequence);
@@ -320,7 +254,7 @@ public fun set_track_splits_bps(
 
             self.track_splits_bps = track_splits_bps;
         },
-        _ => abort ENotCreatedState,
+        _ => abort ENotInitializedState,
     }
 }
 
