@@ -14,18 +14,40 @@ module musicos::artifact;
 use musicos::data::Data;
 use std::string::String;
 
+//=== Structs ===
+
 /// A supplementary file attached to a composition or recording.
 /// The ArtifactKind phantom type ensures type-safe categorization.
-public struct Artifact<phantom ArtifactKind: copy + drop + store> has copy, drop, store {
+public struct Artifact<ArtifactKind: copy + drop + store> has copy, drop, store {
     /// Reference to the artifact's external storage location.
+    kind: ArtifactKind,
+    /// Reference to the artifact's external data.
     data: Data,
     /// Optional description explaining the artifact's contents.
     description: Option<String>,
 }
 
+//=== Public Functions ===
+
+/// Creates a new artifact with the given kind, data, and description.
+public fun new<ArtifactKind: copy + drop + store>(
+    kind: ArtifactKind,
+    data: Data,
+    description: Option<String>,
+): Artifact<ArtifactKind> {
+    Artifact { kind, data, description }
+}
+
+//=== Public View Functions ===
+
 /// Returns a reference to the artifact's external data.
 public fun data<ArtifactKind: copy + drop + store>(self: &Artifact<ArtifactKind>): &Data {
     &self.data
+}
+
+/// Returns a reference to the artifact's external data.
+public fun kind<ArtifactKind: copy + drop + store>(self: &Artifact<ArtifactKind>): &ArtifactKind {
+    &self.kind
 }
 
 /// Returns the optional description of the artifact.

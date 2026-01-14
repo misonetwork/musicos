@@ -6,6 +6,7 @@
 /// (audio, image, text, video) and are linked to a specific contributor.
 module musicos::snapshot;
 
+use musicos::data::Data;
 use std::string::String;
 
 //=== Structs ===
@@ -19,7 +20,7 @@ public struct Snapshot has drop, store {
     /// ID of the contributor who created this snapshot.
     contributor_id: ID,
     /// Reference to the blob storage location.
-    blob_id: String,
+    data: Data,
 }
 
 //=== Enums ===
