@@ -5,10 +5,8 @@ license = "Apache 2.0"
 authors = ["Sona Labs, Inc. (build@sonamusic.com)"]
 
 [dependencies]
-currency_treasury = { local = "../../../currency_treasury" }
 interest_bps = { local = "../../../interest-mvr/bps" }
 iso639_1 = { local = "../../../iso639_1" }
-music = { local = "../coins/music" }
 revenue_pool = { local = "../../../revenue_pool" }
 royalty_pool = { local = "../../../royalty_pool" }
 

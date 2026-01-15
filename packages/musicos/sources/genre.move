@@ -27,6 +27,8 @@ public struct Genre has key {
     id: UID,
     /// Human-readable name of the genre.
     name: String,
+    // Whether the genre can be assigned as a primary genre.
+    is_primary: bool,
 }
 
 /// Key used for deriving deterministic genre addresses from the registry.
@@ -39,6 +41,11 @@ public struct GenreRegistry has key {
     id: UID,
 }
 
+//=== Errors ===
+
+/// Genre name contains an invalid character.
+const EInvalidCharacter: u64 = 0;
+
 //=== Events ===
 
 /// Emitted when a new genre is created.
@@ -49,13 +56,46 @@ public struct GenreCreatedEvent has copy, drop {
     name: String,
 }
 
+//=== Constants ===
+
+const DEFAULT_GENRES: vector<vector<u8>> = vector[
+    b"AFRICAN",
+    b"AFROBEATS",
+    b"ALTERNATIVE",
+    b"AMBIENT",
+    b"ANIME",
+    b"ARABIC",
+    b"ASIAN",
+    b"ALTERNATIVE",
+    b"BLUES",
+    b"CLASSICAL",
+    b"COUNTRY",
+    b"DANCE",
+    b"ELECTRONIC",
+    b"FOLK",
+    b"HIP_HOP",
+    b"JAZZ",
+    b"LATIN",
+    b"METAL",
+    b"POP",
+    b"R&B",
+    b"REGGAE",
+    b"ROCK",
+];
+
 //=== Init Function ===
 
 /// Initializes the genre module by creating and sharing the GenreRegistry.
 fun init(_otw: GENRE, ctx: &mut TxContext) {
-    let genre_registry = GenreRegistry {
+    let mut genre_registry = GenreRegistry {
         id: object::new(ctx),
     };
+
+    // Create and share the default genres.
+    DEFAULT_GENRES.destroy!(|genre| {
+        let genre = new_impl(genre.to_string(), false, &mut genre_registry);
+        transfer::share_object(genre);
+    });
 
     transfer::share_object(genre_registry);
 }
@@ -65,17 +105,8 @@ fun init(_otw: GENRE, ctx: &mut TxContext) {
 /// Creates a new genre with the given name.
 /// Requires admin capability and registers the genre in the shared registry.
 /// Emits a GenreCreatedEvent upon successful creation.
-public fun new(_: &AdminCap, name: String, genre_registry: &mut GenreRegistry) {
-    let genre = Genre {
-        id: claim(&mut genre_registry.id, GenreKey(name)),
-        name,
-    };
-
-    emit(GenreCreatedEvent {
-        genre_id: genre.id(),
-        name,
-    });
-
+public fun new(_: &AdminCap, name: String, is_primary: bool, genre_registry: &mut GenreRegistry) {
+    let genre = new_impl(name, is_primary, genre_registry);
     transfer::share_object(genre);
 }
 
@@ -89,4 +120,37 @@ public fun id(self: &Genre): ID {
 /// Returns the name of the genre.
 public fun name(self: &Genre): &String {
     &self.name
+}
+
+/// Returns whether the genre can be assigned as a primary genre.
+public fun is_primary(self: &Genre): bool {
+    self.is_primary
+}
+
+//=== Private Functions ===
+
+fun new_impl(name: String, is_primary: bool, genre_registry: &mut GenreRegistry): Genre {
+    assert_valid_name(&name);
+
+    let genre = Genre {
+        id: claim(&mut genre_registry.id, GenreKey(name)),
+        name,
+        is_primary,
+    };
+
+    emit(GenreCreatedEvent {
+        genre_id: genre.id(),
+        name,
+    });
+
+    genre
+}
+
+/// Asserts that the genre name contains only valid characters (A-Z, _, &).
+fun assert_valid_name(name: &String) {
+    let valid = name.as_bytes().all!(|c| {
+        // A-Z (65-90), _ (95), & (38)
+        (*c >= 65 && *c <= 90) || *c == 95 || *c == 38
+    });
+    assert!(valid, EInvalidCharacter);
 }

@@ -21,6 +21,8 @@ use std::string::String;
 public struct Artifact<ArtifactKind: copy + drop + store> has copy, drop, store {
     /// Reference to the artifact's external storage location.
     kind: ArtifactKind,
+    /// The ID of the contributor who added the artifact.
+    contributor_id: ID,
     /// Reference to the artifact's external data.
     data: Data,
     /// Optional description explaining the artifact's contents.
@@ -32,10 +34,11 @@ public struct Artifact<ArtifactKind: copy + drop + store> has copy, drop, store 
 /// Creates a new artifact with the given kind, data, and description.
 public fun new<ArtifactKind: copy + drop + store>(
     kind: ArtifactKind,
+    contributor_id: ID,
     data: Data,
     description: Option<String>,
 ): Artifact<ArtifactKind> {
-    Artifact { kind, data, description }
+    Artifact { kind, contributor_id, data, description }
 }
 
 //=== Public View Functions ===
@@ -48,6 +51,11 @@ public fun data<ArtifactKind: copy + drop + store>(self: &Artifact<ArtifactKind>
 /// Returns a reference to the artifact's external data.
 public fun kind<ArtifactKind: copy + drop + store>(self: &Artifact<ArtifactKind>): &ArtifactKind {
     &self.kind
+}
+
+/// Returns the ID of the contributor who added the artifact.
+public fun contributor_id<ArtifactKind: copy + drop + store>(self: &Artifact<ArtifactKind>): ID {
+    self.contributor_id
 }
 
 /// Returns the optional description of the artifact.

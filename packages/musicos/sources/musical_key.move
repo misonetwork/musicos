@@ -11,7 +11,7 @@ module musicos::musical_key;
 ///           MusicalKey(F, Sharp, Minor) = F# Minor
 public struct MusicalKey(
     /// The root note letter (A through G).
-    NoteLetter,
+    Note,
     /// The accidental modifier (natural, sharp, or flat).
     Accidental,
     /// The mode (major or minor).
@@ -19,7 +19,7 @@ public struct MusicalKey(
 ) has copy, drop, store;
 
 /// The seven natural note letters in Western music.
-public enum NoteLetter has copy, drop, store {
+public enum Note has copy, drop, store {
     /// The note C.
     C,
     /// The note D.
@@ -57,7 +57,7 @@ public enum Mode has copy, drop, store {
 //=== Public View Functions ===
 
 /// Returns the root note letter of this key.
-public fun note_letter(self: &MusicalKey): NoteLetter { self.0 }
+public fun note(self: &MusicalKey): Note { self.0 }
 
 /// Returns the accidental modifier of this key.
 public fun accidental(self: &MusicalKey): Accidental { self.1 }

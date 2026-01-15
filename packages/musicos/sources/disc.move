@@ -63,19 +63,14 @@ public fun set_artwork(self: &mut Disc, artwork: String) {
 
 //=== Public View Functions ===
 
-/// Returns the optional disc-specific artwork.
-public fun artwork(self: &Disc): Option<String> {
-    self.artwork
-}
-
-/// Returns a reference to a track by its index on this disc.
-public fun track(self: &Disc, track_idx: u8): &Track {
-    &self.tracks[track_idx as u64]
-}
-
 /// Returns a reference to all tracks on this disc.
 public fun tracks(self: &Disc): &vector<Track> {
     &self.tracks
+}
+
+/// Returns the optional disc-specific artwork.
+public fun artwork(self: &Disc): Option<String> {
+    self.artwork
 }
 
 /// Returns the total duration of this disc in seconds.

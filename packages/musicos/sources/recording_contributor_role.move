@@ -52,8 +52,6 @@ public enum RecordingContributorRole has copy, drop, store {
     Orchestra(Option<RecordingContributorLevel>),
     /// Created orchestral arrangements.
     Orchestrator(Option<RecordingContributorLevel>),
-    /// An unspecified role.
-    Other(String, Option<RecordingContributorLevel>),
     /// Oversaw the creative and technical aspects of the recording.
     Producer(Option<RecordingContributorLevel>),
     /// Programmed beats, synths, or electronic elements.
@@ -84,8 +82,6 @@ public enum RecordingContributorLevel has copy, drop, store {
     Featured,
     /// Lead/primary contributor in this role.
     Lead,
-    /// Other role with optional level.
-    Other(String),
     /// Primary artist on the recording.
     Primary,
     /// Principal contributor with primary responsibility.
@@ -197,11 +193,6 @@ public fun new_orchestrator_role(
     RecordingContributorRole::Orchestrator(level)
 }
 
-/// Creates a new Other role with name and optional level.
-public fun new_other_role(name: String, level: Option<RecordingContributorLevel>): RecordingContributorRole {
-    RecordingContributorRole::Other(name, level)
-}
-
 /// Creates a new Producer role with optional level.
 public fun new_producer_role(level: Option<RecordingContributorLevel>): RecordingContributorRole {
     RecordingContributorRole::Producer(level)
@@ -273,11 +264,6 @@ public fun new_lead_level(): RecordingContributorLevel {
     RecordingContributorLevel::Lead
 }
 
-/// Creates an Other level with name.
-public fun new_other_level(name: String): RecordingContributorLevel {
-    RecordingContributorLevel::Other(name)
-}
-
 /// Creates a Principal level.
 public fun new_principal_level(): RecordingContributorLevel {
     RecordingContributorLevel::Principal
@@ -306,7 +292,6 @@ public fun level(self: &RecordingContributorRole): Option<RecordingContributorLe
         RecordingContributorRole::Narrator(level) => *level,
         RecordingContributorRole::Orchestra(level) => *level,
         RecordingContributorRole::Orchestrator(level) => *level,
-        RecordingContributorRole::Other(_, level) => *level,
         RecordingContributorRole::Producer(level) => *level,
         RecordingContributorRole::Programmer(level) => *level,
         RecordingContributorRole::RecordingEngineer(level) => *level,
@@ -337,7 +322,6 @@ public fun name(self: &RecordingContributorRole): String {
         RecordingContributorRole::Narrator(_) => "Narrator",
         RecordingContributorRole::Orchestra(_) => "Orchestra",
         RecordingContributorRole::Orchestrator(_) => "Orchestrator",
-        RecordingContributorRole::Other(name, _) => *name,
         RecordingContributorRole::Producer(_) => "Producer",
         RecordingContributorRole::Programmer(_) => "Programmer",
         RecordingContributorRole::RecordingEngineer(_) => "Recording Engineer",
@@ -493,14 +477,6 @@ public fun is_orchestrator_role(self: &RecordingContributorRole): bool {
     }
 }
 
-/// Returns true if this is an Other role.
-public fun is_other_role(self: &RecordingContributorRole): bool {
-    match (self) {
-        RecordingContributorRole::Other(..) => true,
-        _ => false,
-    }
-}
-
 /// Returns true if this is a Producer role.
 public fun is_producer_role(self: &RecordingContributorRole): bool {
     match (self) {
@@ -603,14 +579,6 @@ public fun is_featured_level(self: &RecordingContributorLevel): bool {
 public fun is_lead_level(self: &RecordingContributorLevel): bool {
     match (self) {
         RecordingContributorLevel::Lead => true,
-        _ => false,
-    }
-}
-
-/// Returns true if this is an Other level.
-public fun is_other_level(self: &RecordingContributorLevel): bool {
-    match (self) {
-        RecordingContributorLevel::Other(_) => true,
         _ => false,
     }
 }

@@ -49,3 +49,15 @@ public enum SnapshotKind has copy, drop, store {
         String,
     ),
 }
+
+public fun kind(self: &Snapshot): &SnapshotKind {
+    &self.kind
+}
+
+public fun contributor_id(self: &Snapshot): ID {
+    self.contributor_id
+}
+
+public fun data(self: &Snapshot): &Data {
+    &self.data
+}

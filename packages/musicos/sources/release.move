@@ -343,11 +343,6 @@ public fun subtitle(self: &Release): Option<String> {
     self.subtitle
 }
 
-/// Returns a reference to a disc by index.
-public fun disc(self: &Release, disc_idx: u8): &Disc {
-    &self.discs[disc_idx as u64]
-}
-
 /// Returns a reference to all discs.
 public fun discs(self: &Release): &vector<Disc> {
     &self.discs
