@@ -1,4 +1,4 @@
-// Copyright (c) Sona Labs, inc.
+// Copyright (c) Sona Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// Initializes share tokens for compositions and recordings.

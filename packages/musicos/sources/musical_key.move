@@ -9,40 +9,23 @@ module musicos::musical_key;
 /// A musical key combining a root note, accidental, and mode.
 /// Examples: MusicalKey(C, Natural, Major) = C Major
 ///           MusicalKey(F, Sharp, Minor) = F# Minor
-public struct MusicalKey(
-    /// The root note letter (A through G).
-    Note,
-    /// The accidental modifier (natural, sharp, or flat).
-    Accidental,
-    /// The mode (major or minor).
-    Mode,
-) has copy, drop, store;
+public struct MusicalKey(Note, Accidental, Mode) has copy, drop, store;
 
 /// The seven natural note letters in Western music.
 public enum Note has copy, drop, store {
-    /// The note C.
     C,
-    /// The note D.
     D,
-    /// The note E.
     E,
-    /// The note F.
     F,
-    /// The note G.
     G,
-    /// The note A.
     A,
-    /// The note B.
     B,
 }
 
 /// Pitch modifiers that raise or lower a note by a half step.
 public enum Accidental has copy, drop, store {
-    /// No modification to the natural pitch.
     Natural,
-    /// Raises the pitch by one half step.
     Sharp,
-    /// Lowers the pitch by one half step.
     Flat,
 }
 

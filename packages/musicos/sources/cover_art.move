@@ -10,18 +10,18 @@
 /// - References external storage via Data type
 module musicos::cover_art;
 
-use musicos::data::Data;
+use walrus_data::walrus_data::WalrusData;
 
 /// Cover artwork with required static image and optional animation.
 public struct CoverArt has copy, drop, store {
-    static: Data,
-    animated: Option<Data>,
+    static: WalrusData,
+    animated: Option<WalrusData>,
 }
 
 /// Creates new cover art with a static image and optional animated version.
 /// `static` - Required static image data reference.
 /// `animated` - Optional animated image/video data reference.
-public fun new(static: Data, animated: Option<Data>): CoverArt {
+public fun new(static: WalrusData, animated: Option<WalrusData>): CoverArt {
     CoverArt {
         static,
         animated,
@@ -29,11 +29,11 @@ public fun new(static: Data, animated: Option<Data>): CoverArt {
 }
 
 /// Returns a reference to the static image data.
-public fun static(self: &CoverArt): &Data {
+public fun static(self: &CoverArt): &WalrusData {
     &self.static
 }
 
 /// Returns a reference to the optional animated artwork data.
-public fun animated(self: &CoverArt): &Option<Data> {
+public fun animated(self: &CoverArt): &Option<WalrusData> {
     &self.animated
 }

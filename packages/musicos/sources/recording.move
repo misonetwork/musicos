@@ -100,16 +100,15 @@ public struct Recording<phantom RecordingShare> has key {
 
 /// Capability that authorizes modifications to a specific recording.
 /// Initialized when a recording is registered and transferred to the owner.
-public struct RecordingAdminCap has key, store {
+/// Address is derived from the recording for client-side discoverability.
+public struct RecordingAdminCap<phantom RecordingShare> has key, store {
     /// Unique identifier for this capability.
     id: UID,
-    /// ID of the recording this capability controls.
-    recording_id: ID,
 }
 
 //=== Derivation Keys ===
 
-/// Key for deriving the admin capability's deterministic address.
+/// Key for deriving the admin capability's deterministic address from the recording.
 public struct RecordingAdminCapKey() has copy, drop, store;
 
 /// Key for deriving the recording's address from the composition.
@@ -183,8 +182,6 @@ const MAX_STEMS_PER_RECORDING: u8 = 10;
 
 //=== Errors ===
 
-/// The provided admin capability does not match this recording.
-const EUnauthorized: u64 = 0;
 /// Operation requires Initialized state but recording is created.
 const ENotInitializedState: u64 = 1;
 /// Recording has reached the maximum number of stems (10).
@@ -227,7 +224,7 @@ public fun new<RecordingShare, CompositionShare>(
     cover_art: CoverArt,
     share_currency: &mut Currency<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
-): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>) {
+): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>, Balance<RecordingShare>) {
     let composition_id = composition.id();
     let primary_genre_id = genre.id();
 
@@ -258,9 +255,8 @@ public fun new<RecordingShare, CompositionShare>(
         snapshots: vector[],
     };
 
-    let recording_admin_cap = RecordingAdminCap {
+    let recording_admin_cap = RecordingAdminCap<RecordingShare> {
         id: claim(&mut recording.id, RecordingAdminCapKey()),
-        recording_id: recording.id(),
     };
 
     let mut description: String = "MusicOS Recording Shares for 0x";
@@ -287,11 +283,8 @@ public fun new<RecordingShare, CompositionShare>(
 /// Required State: Initialized
 public fun publish<RecordingShare>(
     mut self: Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     clock: &Clock,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             // Assert the recording has at least one contributor.
@@ -318,11 +311,8 @@ public fun publish<RecordingShare>(
 /// Required State: Initialized
 public fun set_title<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     title: String,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             self.title = title;
@@ -335,11 +325,8 @@ public fun set_title<RecordingShare>(
 /// Required State: Initialized
 public fun set_title_version<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     title_version: String,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             self.title_version.swap_or_fill(title_version);
@@ -352,11 +339,8 @@ public fun set_title_version<RecordingShare>(
 /// Required State: Initialized
 public fun set_subtitle<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     subtitle: String,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             self.subtitle.swap_or_fill(subtitle);
@@ -372,12 +356,9 @@ public fun set_subtitle<RecordingShare>(
 /// Required State: Initialized
 public fun add_credit<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     contributor: &Contributor,
     credit: Credit<RecordingContributorRole>,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             assert!(credit.roles().length() >= MIN_ROLES_PER_CREDIT, EMinRolesNotMet);
@@ -397,11 +378,8 @@ public fun add_credit<RecordingShare>(
 
 public fun add_primary_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     contributor: &Contributor,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             let contributor_id = contributor.id();
@@ -418,11 +396,8 @@ public fun add_primary_artist<RecordingShare>(
 
 public fun add_featured_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     contributor: &Contributor,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             let contributor_id = contributor.id();
@@ -440,38 +415,47 @@ public fun add_featured_artist<RecordingShare>(
 // --- Classification ---
 
 /// Sets the primary genre of the recording.
-/// Can be set on any state as additional genres are created on MusicOS.
+/// Required State: Initialized
 public fun set_primary_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     genre: &Genre,
 ) {
-    self.authorize(cap);
-    assert!(!self.secondary_genre_ids.contains(&genre.id()), EAlreadyAssignedAsSecondaryGenre);
-    self.primary_genre_id = genre.id();
+    match (self.state) {
+        RecordingState::Initialized => {
+            assert!(!self.secondary_genre_ids.contains(&genre.id()), EAlreadyAssignedAsSecondaryGenre);
+            self.primary_genre_id = genre.id();
+        },
+        _ => abort ENotInitializedState,
+    }
 }
 
 /// Adds a secondary genre to the recording.
-/// Can be set on any state as additional genres are created on MusicOS.
+/// Required State: Initialized
 public fun add_secondary_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     genre: &Genre,
 ) {
-    self.authorize(cap);
-    assert!(self.primary_genre_id != genre.id(), EAlreadyAssignedAsPrimaryGenre);
-    self.secondary_genre_ids.insert(genre.id());
+    match (self.state) {
+        RecordingState::Initialized => {
+            assert!(self.primary_genre_id != genre.id(), EAlreadyAssignedAsPrimaryGenre);
+            self.secondary_genre_ids.insert(genre.id());
+        },
+        _ => abort ENotInitializedState,
+    }
 }
 
 /// Removes a secondary genre from the recording.
-/// Can be set on any state as additional genres are created on MusicOS.
+/// Required State: Initialized
 public fun remove_secondary_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     genre_id: ID,
 ) {
-    self.authorize(cap);
-    self.secondary_genre_ids.remove(&genre_id);
+    match (self.state) {
+        RecordingState::Initialized => {
+            self.secondary_genre_ids.remove(&genre_id);
+        },
+        _ => abort ENotInitializedState,
+    }
 }
 
 // --- Musical Properties ---
@@ -480,11 +464,8 @@ public fun remove_secondary_genre<RecordingShare>(
 /// Required State: Initialized
 public fun set_musical_key<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     musical_key: MusicalKey,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             self.musical_key.swap_or_fill(musical_key);
@@ -497,11 +478,8 @@ public fun set_musical_key<RecordingShare>(
 /// Required State: Initialized
 public fun set_time_signature<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     time_signature: TimeSignature,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             self.time_signature.swap_or_fill(time_signature);
@@ -514,11 +492,8 @@ public fun set_time_signature<RecordingShare>(
 /// Required State: Initialized
 public fun set_tempo_bpm<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     tempo_bpm: u16,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             self.tempo_bpm.swap_or_fill(tempo_bpm);
@@ -534,11 +509,8 @@ public fun set_tempo_bpm<RecordingShare>(
 /// Required State: Initialized
 public fun add_stem<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     stem: Stem,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             assert!(self.stems.length() < MAX_STEMS_PER_RECORDING as u64, EMaxStemsExceeded);
@@ -560,11 +532,8 @@ public fun add_stem<RecordingShare>(
 /// Required State: Initialized
 public fun add_artifact<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     artifact: Artifact<RecordingArtifactKind>,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             self.assert_is_contributor(artifact.contributor_id());
@@ -578,11 +547,8 @@ public fun add_artifact<RecordingShare>(
 /// Required State: Initialized
 public fun add_snapshot<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
     snapshot: Snapshot,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         RecordingState::Initialized => {
             self.assert_is_contributor(snapshot.contributor_id());
@@ -732,24 +698,23 @@ public fun is_featured_artist<RecordingShare>(self: &Recording<RecordingShare>, 
 
 //=== Package Functions ===
 
-/// Verifies that the admin capability matches this recording.
-/// Aborts with EUnauthorized if the capability doesn't match.
-public(package) fun authorize<RecordingShare>(
-    self: &Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-) {
-    assert!(self.id() == cap.recording_id, EUnauthorized);
-}
-
 //=== UID Functions ===
 
-public fun uid<RecordingShare>(self: &Recording<RecordingShare>, cap: &RecordingAdminCap): &UID {
-    self.authorize(cap);
+/// Returns a reference to the recording's UID for reading dynamic fields.
+/// Requires the admin capability.
+public fun uid<RecordingShare>(
+    self: &Recording<RecordingShare>,
+    _cap: &RecordingAdminCap<RecordingShare>,
+): &UID {
     &self.id
 }
 
-public fun uid_mut<RecordingShare>(self: &mut Recording<RecordingShare>, cap: &RecordingAdminCap): &mut UID {
-    self.authorize(cap);
+/// Returns a mutable reference to the recording's UID for dynamic field operations.
+/// Requires the admin capability.
+public fun uid_mut<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    _cap: &RecordingAdminCap<RecordingShare>,
+): &mut UID {
     &mut self.id
 }
 

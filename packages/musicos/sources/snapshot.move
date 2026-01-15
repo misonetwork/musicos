@@ -6,8 +6,8 @@
 /// (audio, image, text, video) and are linked to a specific contributor.
 module musicos::snapshot;
 
-use musicos::data::Data;
 use std::string::String;
+use walrus_data::walrus_data::WalrusData;
 
 //=== Structs ===
 
@@ -20,7 +20,7 @@ public struct Snapshot has drop, store {
     /// ID of the contributor who created this snapshot.
     contributor_id: ID,
     /// Reference to the blob storage location.
-    data: Data,
+    data: WalrusData,
 }
 
 //=== Enums ===
@@ -58,6 +58,6 @@ public fun contributor_id(self: &Snapshot): ID {
     self.contributor_id
 }
 
-public fun data(self: &Snapshot): &Data {
+public fun data(self: &Snapshot): &WalrusData {
     &self.data
 }

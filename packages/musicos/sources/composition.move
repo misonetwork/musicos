@@ -19,7 +19,6 @@ use musicos::composition_artifact_kind::CompositionArtifactKind;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
 use musicos::credit::Credit;
-use musicos::data::Data;
 use musicos::share;
 use musicos::snapshot::Snapshot;
 use revenue_pool::revenue_pool;
@@ -32,6 +31,7 @@ use sui::coin_registry::Currency;
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
+use walrus_data::walrus_data::WalrusData;
 
 //=== Structs ===
 
@@ -51,7 +51,7 @@ public struct Composition<phantom CompositionShare> has key {
     /// Revenue split rate allocated to this composition vs recording (in basis points).
     split_bps: BPS,
     /// Optional lyrics data reference.
-    lyrics: Option<Data>,
+    lyrics: Option<WalrusData>,
     /// Attached artifacts (sheet music, liner notes, etc.).
     artifacts: vector<Artifact<CompositionArtifactKind>>,
     /// Point-in-time content snapshots.
@@ -60,16 +60,15 @@ public struct Composition<phantom CompositionShare> has key {
 
 /// Capability that authorizes modifications to a specific composition.
 /// Initialized when a composition is registered and transferred to the owner.
-public struct CompositionAdminCap has key, store {
+/// Address is derived from the composition for client-side discoverability.
+public struct CompositionAdminCap<phantom CompositionShare> has key, store {
     /// Unique identifier for this capability.
     id: UID,
-    /// ID of the composition this capability controls.
-    composition_id: ID,
 }
 
 //=== Derivation Keys ===
 
-/// Key for deriving the admin capability's deterministic address.
+/// Key for deriving the admin capability's deterministic address from the composition.
 public struct CompositionAdminCapKey() has copy, drop, store;
 
 //=== Fees ===
@@ -158,7 +157,11 @@ public fun new<CompositionShare>(
     share_currency: &mut Currency<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
     ctx: &mut TxContext,
-): (Composition<CompositionShare>, CompositionAdminCap, Balance<CompositionShare>) {
+): (
+    Composition<CompositionShare>,
+    CompositionAdminCap<CompositionShare>,
+    Balance<CompositionShare>,
+) {
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Initialized,
@@ -171,9 +174,8 @@ public fun new<CompositionShare>(
         snapshots: vector[],
     };
 
-    let composition_admin_cap = CompositionAdminCap {
+    let composition_admin_cap = CompositionAdminCap<CompositionShare> {
         id: claim(&mut composition.id, CompositionAdminCapKey()),
-        composition_id: composition.id(),
     };
 
     let composition_shares = share::intialize<CompositionShare>(
@@ -191,13 +193,7 @@ public fun new<CompositionShare>(
 /// Publishes the composition, making it immutable.
 /// Requires at least one contributor, artifact, and snapshot.
 /// Required State: Initialized
-public fun publish<CompositionShare>(
-    mut self: Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    clock: &Clock,
-) {
-    self.authorize(cap);
-
+public fun publish<CompositionShare>(mut self: Composition<CompositionShare>, clock: &Clock) {
     match (self.state) {
         CompositionState::Initialized => {
             assert!(!self.credits.is_empty(), ENoContributors);
@@ -220,11 +216,8 @@ public fun publish<CompositionShare>(
 /// Required State: Initialized
 public fun add_alternate_title<CompositionShare>(
     self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
     alternate_title: String,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         CompositionState::Initialized => {
             self.alternate_titles.push_back(alternate_title);
@@ -240,12 +233,9 @@ public fun add_alternate_title<CompositionShare>(
 /// Required State: Initialized
 public fun add_credit<CompositionShare>(
     self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
     contributor: &Contributor,
     credit: Credit<CompositionContributorRole>,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         CompositionState::Initialized => {
             assert!(credit.roles().length() >= MIN_ROLES_PER_CONTRIBUTOR, EMinRolesNotMet);
@@ -271,17 +261,19 @@ public fun add_credit<CompositionShare>(
 /// unless the recording owner explicitly syncs the split rate.
 public fun set_split_bps<CompositionShare>(
     self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
     split_value: u64,
 ) {
-    self.authorize(cap);
+    match (self.state) {
+        CompositionState::Initialized => {
+            self.split_bps = bps::new(split_value);
 
-    self.split_bps = bps::new(split_value);
-
-    emit(CompositionSplitSetEvent {
-        composition_id: self.id(),
-        split_value: self.split_bps.value(),
-    });
+            emit(CompositionSplitSetEvent {
+                composition_id: self.id(),
+                split_value: self.split_bps.value(),
+            });
+        },
+        _ => abort ENotInitializedState,
+    }
 }
 
 // --- Content ---
@@ -290,11 +282,8 @@ public fun set_split_bps<CompositionShare>(
 /// Required State: Initialized
 public fun set_lyrics<CompositionShare>(
     self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-    data: Data,
+    data: WalrusData,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         CompositionState::Initialized => {
             self.lyrics.swap_or_fill(data);
@@ -309,11 +298,8 @@ public fun set_lyrics<CompositionShare>(
 /// Required State: Initialized
 public fun add_artifact<CompositionShare>(
     self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
     artifact: Artifact<CompositionArtifactKind>,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         CompositionState::Initialized => {
             self.assert_is_contributor(artifact.contributor_id());
@@ -327,11 +313,8 @@ public fun add_artifact<CompositionShare>(
 /// Required State: Initialized
 public fun add_snapshot<CompositionShare>(
     self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
     snapshot: Snapshot,
 ) {
-    self.authorize(cap);
-
     match (self.state) {
         CompositionState::Initialized => {
             self.assert_is_contributor(snapshot.contributor_id());
@@ -394,7 +377,7 @@ public fun split_bps<CompositionShare>(self: &Composition<CompositionShare>): BP
 }
 
 /// Returns the optional lyrics data reference.
-public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &Option<Data> {
+public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &Option<WalrusData> {
     &self.lyrics
 }
 
@@ -412,24 +395,14 @@ public fun snapshots<CompositionShare>(self: &Composition<CompositionShare>): &v
 
 //=== Package Functions ===
 
-/// Verifies that the admin capability matches this composition.
-/// Aborts with EUnauthorized if the capability doesn't match.
-public(package) fun authorize<CompositionShare>(
-    self: &Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
-) {
-    assert!(self.id() == cap.composition_id, EUnauthorized);
-}
-
 //=== UID Functions ===
 
 /// Returns a reference to the composition's UID for reading dynamic fields.
 /// Requires the admin capability.
 public fun uid<CompositionShare>(
     self: &Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
+    _cap: &CompositionAdminCap<CompositionShare>,
 ): &UID {
-    self.authorize(cap);
     &self.id
 }
 
@@ -437,9 +410,8 @@ public fun uid<CompositionShare>(
 /// Requires the admin capability.
 public fun uid_mut<CompositionShare>(
     self: &mut Composition<CompositionShare>,
-    cap: &CompositionAdminCap,
+    _cap: &CompositionAdminCap<CompositionShare>,
 ): &mut UID {
-    self.authorize(cap);
     &mut self.id
 }
 

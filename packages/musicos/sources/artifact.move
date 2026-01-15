@@ -11,8 +11,8 @@
 /// - Optional description for context
 module musicos::artifact;
 
-use musicos::data::Data;
 use std::string::String;
+use walrus_data::walrus_data::WalrusData;
 
 //=== Structs ===
 
@@ -24,7 +24,7 @@ public struct Artifact<ArtifactKind: copy + drop + store> has copy, drop, store 
     /// The ID of the contributor who added the artifact.
     contributor_id: ID,
     /// Reference to the artifact's external data.
-    data: Data,
+    data: WalrusData,
     /// Optional description explaining the artifact's contents.
     description: Option<String>,
 }
@@ -35,7 +35,7 @@ public struct Artifact<ArtifactKind: copy + drop + store> has copy, drop, store 
 public fun new<ArtifactKind: copy + drop + store>(
     kind: ArtifactKind,
     contributor_id: ID,
-    data: Data,
+    data: WalrusData,
     description: Option<String>,
 ): Artifact<ArtifactKind> {
     Artifact { kind, contributor_id, data, description }
@@ -44,7 +44,7 @@ public fun new<ArtifactKind: copy + drop + store>(
 //=== Public View Functions ===
 
 /// Returns a reference to the artifact's external data.
-public fun data<ArtifactKind: copy + drop + store>(self: &Artifact<ArtifactKind>): &Data {
+public fun data<ArtifactKind: copy + drop + store>(self: &Artifact<ArtifactKind>): &WalrusData {
     &self.data
 }
 

@@ -1,3 +1,6 @@
+// Copyright (c) Sona Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /*
 #[test_only]
 module musicos::musicos_tests;

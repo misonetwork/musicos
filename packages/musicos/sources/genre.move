@@ -11,7 +11,6 @@
 /// - Event emission for genre creation tracking
 module musicos::genre;
 
-use musicos::admin::AdminCap;
 use std::string::String;
 use sui::derived_object::claim;
 use sui::event::emit;
@@ -105,7 +104,7 @@ fun init(_otw: GENRE, ctx: &mut TxContext) {
 /// Creates a new genre with the given name.
 /// Requires admin capability and registers the genre in the shared registry.
 /// Emits a GenreCreatedEvent upon successful creation.
-public fun new(_: &AdminCap, name: String, is_primary: bool, genre_registry: &mut GenreRegistry) {
+public fun new(name: String, is_primary: bool, genre_registry: &mut GenreRegistry) {
     let genre = new_impl(name, is_primary, genre_registry);
     transfer::share_object(genre);
 }

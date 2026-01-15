@@ -8,7 +8,7 @@
 /// - Content-addressed via pcm_digest for integrity verification
 module musicos::audio;
 
-use musicos::data::Data;
+use walrus_data::walrus_data::WalrusData;
 
 //=== Structs ===
 
@@ -18,7 +18,7 @@ public struct Audio has drop, store {
     bit_depth: u8,
     sample_rate_hz: u32,
     samples: u64,
-    data: Data,
+    data: WalrusData,
     pcm_digest: vector<u8>,
 }
 
@@ -30,7 +30,7 @@ public fun new(
     bit_depth: u8,
     sample_rate_hz: u32,
     samples: u64,
-    data: Data,
+    data: WalrusData,
     pcm_digest: vector<u8>,
 ): Audio {
     Audio {
@@ -66,7 +66,7 @@ public fun samples(self: &Audio): u64 {
 }
 
 /// Returns a reference to the external storage data.
-public fun data(self: &Audio): &Data {
+public fun data(self: &Audio): &WalrusData {
     &self.data
 }
 

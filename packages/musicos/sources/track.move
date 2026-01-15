@@ -43,12 +43,10 @@ public struct Track has drop, store {
 /// Requires the recording admin capability.
 /// Captures the recording's metadata at creation time.
 public fun new<RecordingShare>(
-    cap: &RecordingAdminCap,
+    _cap: &RecordingAdminCap<RecordingShare>,
     recording: &Recording<RecordingShare>,
     cover_art: Option<CoverArt>,
 ): Track {
-    recording.authorize(cap);
-
     Track {
         composition_id: recording.composition_id(),
         composition_share_type: *recording.composition_share_type(),

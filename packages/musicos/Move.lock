@@ -31,8 +31,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mirainet.musicos]
 source = { root = true }
 use_environment = "mirainet"
-manifest_digest = "C2F6E07CBAA2F68169BDFBD1A6132C3376F51F0983A7A9E53C32A1E902EB3170"
-deps = { interest_bps = "interest_bps", iso639_1 = "iso639_1", revenue_pool = "revenue_pool", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "3C6979DBFCB6EE90EE97D578BC6B049BA86C26FB3F3771E1D382F852A7096818"
+deps = { interest_bps = "interest_bps", iso639_1 = "iso639_1", revenue_pool = "revenue_pool", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui", walrus_data = "walrus_data" }
 
 [pinned.mirainet.revenue_pool]
 source = { local = "../../../revenue_pool" }
@@ -42,6 +42,12 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mirainet.royalty_pool]
 source = { local = "../../../royalty_pool" }
+use_environment = "mirainet"
+manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.mirainet.walrus_data]
+source = { local = "../../../walrus_data" }
 use_environment = "mirainet"
 manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -73,8 +79,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.musicos]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "A466CA856D65D4F895E2A08D2BF55ECA4D8C266C336F7030DEBB6204D8F3200F"
-deps = { interest_bps = "interest_bps", iso639_1 = "iso639_1", revenue_pool = "revenue_pool", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "A08D986A7B4BE62EC207B1B50D2A5005E3EF0049B302965D19D45EE207EE5890"
+deps = { interest_bps = "interest_bps", iso639_1 = "iso639_1", revenue_pool = "revenue_pool", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui", walrus_data = "walrus_data" }
 
 [pinned.testnet.revenue_pool]
 source = { local = "../../../revenue_pool" }
@@ -84,6 +90,12 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.royalty_pool]
 source = { local = "../../../royalty_pool" }
+use_environment = "testnet"
+manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.testnet.walrus_data]
+source = { local = "../../../walrus_data" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
