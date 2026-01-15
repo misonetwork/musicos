@@ -1,26 +1,21 @@
 // Copyright (c) Sona Labs, Pte Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Records a playback event for a recording in the MusicOS protocol.
+/// Records a playback event for a recording in MusicOS.
 /// Plays track when and how long a recording was streamed, enabling
-/// royalty calculations and analytics. Only authorized authorities
-/// (registered in the Protocol) can create play events.
+/// royalty calculations and analytics.
 ///
 /// Key features:
-/// - Authority-gated play creation via phantom type parameter
 /// - Timestamped playback tracking with duration metrics
 /// - Event emission for off-chain indexing and analytics
 module musicos::play;
 
-use musicos::protocol::Protocol;
-use std::type_name::with_defining_ids;
 use sui::clock::Clock;
 use sui::event::emit;
 
 //=== Structs ===
 
 /// A record of a single playback event for a recording.
-/// The phantom Authority type ensures only registered authorities can create plays.
 public struct Play<phantom Authority: drop> has drop {
     /// Unique identifier for this play event.
     play_id: address,
@@ -68,13 +63,9 @@ public struct PlayCreatedEvent<phantom Authority: drop> has copy, drop {
 
 //=== Errors ===
 
-/// The provided authority type is not registered as a play authority.
-const ENotPlayAuthority: u64 = 0;
-
 //=== Public Functions ===
 
 /// Creates a new play event for a recording.
-/// Requires a witness of an authorized Authority type registered in the Protocol.
 /// Emits a PlayCreatedEvent for off-chain tracking.
 public fun new<Authority: drop>(
     _: Authority,
@@ -83,15 +74,9 @@ public fun new<Authority: drop>(
     recording_id: ID,
     playtime_s: u64,
     track_duration_s: u64,
-    protocol: &Protocol,
     clock: &Clock,
     ctx: &mut TxContext,
 ): Play<Authority> {
-    assert!(
-        protocol.play_authority_types().contains(&with_defining_ids<Authority>()),
-        ENotPlayAuthority,
-    );
-
     let play_id = ctx.fresh_object_address();
     let played_by = ctx.sender();
     let play_epoch = ctx.epoch();

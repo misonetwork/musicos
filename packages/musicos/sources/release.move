@@ -1,7 +1,7 @@
 // Copyright (c) Sona Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Represents a music release (album, EP, or single) in the MusicOS protocol.
+/// Represents a music release (album, EP, or single) in MusicOS.
 /// A release is a collection of tracks organized into discs, with cover art
 /// and revenue distribution configuration.
 ///
@@ -16,11 +16,9 @@ module musicos::release;
 use interest_bps::bps::{Self, BPS};
 use musicos::cover_art::CoverArt;
 use musicos::disc::Disc;
-use musicos::plugin::PluginCap;
-use musicos::protocol::Protocol;
 use musicos::track_position::TrackPosition;
 use musicos::track_sequence::{Self, TrackSequence};
-use revenue_pool::revenue_pool::{Self, RevenuePool};
+use revenue_pool::revenue_pool::RevenuePool;
 use royalty_pool::royalty_pool;
 use std::string::String;
 use std::type_name::{TypeName, with_defining_ids};
@@ -60,9 +58,6 @@ public struct ReleaseAdminCap has key, store {
     /// ID of the release this capability controls.
     release_id: ID,
 }
-
-/// Witness type sourced from the release module.
-public struct ReleaseWitness() has drop;
 
 // Derivation key for ReleaseAdminCap.
 public struct RelaseAdminCapKey() has copy, drop, store;
@@ -259,14 +254,10 @@ public fun set_track_splits_bps(
 }
 
 /// Distributes revenue from the release's revenue pool to composition and recording royalty pools.
-/// Takes a protocol commission and splits the remainder according to track splits.
+/// Splits revenue according to track splits.
 /// Each track's revenue is further split between its composition and recording based on their split ratio.
 /// Required State: Published
-public fun distribute_revenue<Currency>(
-    self: &Release,
-    revenue_pool: &mut RevenuePool<Currency>,
-    protocol: &Protocol,
-) {
+public fun distribute_revenue<Currency>(self: &Release, revenue_pool: &mut RevenuePool<Currency>) {
     match (self.state) {
         ReleaseState::Published(_) => {
             // Acquire a mutable reference to the revenue pool's balance.
@@ -275,11 +266,6 @@ public fun distribute_revenue<Currency>(
             let revenue = revenue_pool.balance_mut<Currency>(&self.id);
 
             assert!(revenue.value() > 0, ENoRevenueToDistribute);
-
-            // Calculate the protocol commission and transfer it to the protocol's revenue pool.
-            let protocol_commission_value = protocol.commission_rate().calc(revenue.value());
-            let protocol_commission = revenue.split(protocol_commission_value);
-            protocol_commission.send_funds(revenue_pool::derived_address<Currency>(protocol.id()));
 
             // Store the distribution's principal value.
             let distribution_value = revenue.value();
@@ -379,20 +365,16 @@ public fun track_splits_bps(self: &Release): vector<BPS> {
 
 //=== UID Functions ===
 
-public fun uid_with_plugin<PluginWitness: drop>(
-    self: &Release,
-    cap: &ReleaseAdminCap,
-    _plugin_cap: PluginCap<ReleaseWitness, PluginWitness>,
-): &UID {
+/// Returns a reference to the release's UID for reading dynamic fields.
+/// Requires the admin capability.
+public fun uid(self: &Release, cap: &ReleaseAdminCap): &UID {
     self.authorize(cap);
     &self.id
 }
 
-public fun uid_mut_with_plugin<PluginWitness: drop>(
-    self: &mut Release,
-    cap: &ReleaseAdminCap,
-    _plugin_cap: PluginCap<ReleaseWitness, PluginWitness>,
-): &mut UID {
+/// Returns a mutable reference to the release's UID for dynamic field operations.
+/// Requires the admin capability.
+public fun uid_mut(self: &mut Release, cap: &ReleaseAdminCap): &mut UID {
     self.authorize(cap);
     &mut self.id
 }

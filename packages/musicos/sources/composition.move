@@ -1,7 +1,7 @@
 // Copyright (c) Sona Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Represents a musical composition (song, instrumental work) in the MusicOS protocol.
+/// Represents a musical composition (song, instrumental work) in MusicOS.
 /// Compositions are the underlying written works that recordings are based on.
 /// Each composition has its own share token for ownership distribution.
 ///
@@ -20,7 +20,6 @@ use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
 use musicos::credit::Credit;
 use musicos::data::Data;
-use musicos::plugin::PluginCap;
 use musicos::share;
 use musicos::snapshot::Snapshot;
 use revenue_pool::revenue_pool;
@@ -67,9 +66,6 @@ public struct CompositionAdminCap has key, store {
     /// ID of the composition this capability controls.
     composition_id: ID,
 }
-
-/// Witness type sourced from the composition module.
-public struct CompositionWitness() has drop;
 
 //=== Derivation Keys ===
 
@@ -130,8 +126,6 @@ public enum CompositionState has copy, drop, store {
 const MIN_ROLES_PER_CONTRIBUTOR: u64 = 1;
 /// Maximum number of roles a contributor can have.
 const MAX_ROLES_PER_CONTRIBUTOR: u64 = 20;
-// Maximum split value for a composition.
-const MAX_COMPOSITION_SPLIT_VALUE: u64 = 5_000;
 
 //=== Errors ===
 
@@ -143,14 +137,10 @@ const ENotInitializedState: u64 = 1;
 const EExceedsMaxRoles: u64 = 10;
 /// Contributor must have at least one role.
 const EMinRolesNotMet: u64 = 11;
-/// Invalid composition split value.
-const EInvalidSplitValue: u64 = 13;
 /// Composition must have at least one contributor to publish.
 const ENoContributors: u64 = 20;
-/// Composition must have at least one artifact to publish.
-const ENoArtifacts: u64 = 21;
-/// Composition must have at least one snapshot to publish.
-const ENoSnapshots: u64 = 22;
+/// Contributor is not credited to the composition.
+const EContributorNotCredited: u64 = 21;
 
 //=== Public Functions ===
 
@@ -169,8 +159,6 @@ public fun new<CompositionShare>(
     share_treasury_cap: TreasuryCap<CompositionShare>,
     ctx: &mut TxContext,
 ): (Composition<CompositionShare>, CompositionAdminCap, Balance<CompositionShare>) {
-    assert!(split_value <= MAX_COMPOSITION_SPLIT_VALUE, EInvalidSplitValue);
-
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Initialized,
@@ -200,7 +188,6 @@ public fun new<CompositionShare>(
     (composition, composition_admin_cap, composition_shares)
 }
 
-/// TODO: Re-enable assertions for artifacts and snapshots.
 /// Publishes the composition, making it immutable.
 /// Requires at least one contributor, artifact, and snapshot.
 /// Required State: Initialized
@@ -214,8 +201,6 @@ public fun publish<CompositionShare>(
     match (self.state) {
         CompositionState::Initialized => {
             assert!(!self.credits.is_empty(), ENoContributors);
-            //assert!(!self.artifacts.is_empty(), ENoArtifacts);
-            //assert!(!self.snapshots.is_empty(), ENoSnapshots);
 
             self.state = CompositionState::Published(clock.timestamp_ms());
 
@@ -282,6 +267,8 @@ public fun add_credit<CompositionShare>(
 /// Sets the revenue split rate for this composition.
 /// The split determines what percentage of track revenue goes to the composition
 /// vs the recording. Can be updated at any time (even after publish).
+/// Note that this does not change the split for existing recordings of the composition
+/// unless the recording owner explicitly syncs the split rate.
 public fun set_split_bps<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
@@ -329,6 +316,7 @@ public fun add_artifact<CompositionShare>(
 
     match (self.state) {
         CompositionState::Initialized => {
+            self.assert_is_contributor(artifact.contributor_id());
             self.artifacts.push_back(artifact);
         },
         _ => abort ENotInitializedState,
@@ -346,6 +334,7 @@ public fun add_snapshot<CompositionShare>(
 
     match (self.state) {
         CompositionState::Initialized => {
+            self.assert_is_contributor(snapshot.contributor_id());
             self.snapshots.push_back(snapshot);
         },
         _ => abort ENotInitializedState,
@@ -434,19 +423,21 @@ public(package) fun authorize<CompositionShare>(
 
 //=== UID Functions ===
 
-public fun uid_with_plugin<CompositionShare, PluginWitness: drop>(
+/// Returns a reference to the composition's UID for reading dynamic fields.
+/// Requires the admin capability.
+public fun uid<CompositionShare>(
     self: &Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    _plugin_cap: PluginCap<CompositionWitness, PluginWitness>,
 ): &UID {
     self.authorize(cap);
     &self.id
 }
 
-public fun uid_mut_with_plugin<CompositionShare, PluginWitness: drop>(
+/// Returns a mutable reference to the composition's UID for dynamic field operations.
+/// Requires the admin capability.
+public fun uid_mut<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap,
-    _plugin_cap: PluginCap<CompositionWitness, PluginWitness>,
 ): &mut UID {
     self.authorize(cap);
     &mut self.id
@@ -456,4 +447,13 @@ public(package) fun uid_mut_internal<CompositionShare>(
     self: &mut Composition<CompositionShare>,
 ): &mut UID {
     &mut self.id
+}
+
+//=== Private Functions ===
+
+fun assert_is_contributor<CompositionShare>(
+    self: &Composition<CompositionShare>,
+    contributor_id: ID,
+) {
+    assert!(self.credits.contains(&contributor_id), EContributorNotCredited);
 }

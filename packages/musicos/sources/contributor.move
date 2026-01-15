@@ -1,7 +1,7 @@
 // Copyright (c) Sona Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Represents artists, producers, and other contributors in the MusicOS protocol.
+/// Represents artists, producers, and other contributors in MusicOS.
 /// Contributors can be individuals or groups (bands, orchestras, etc.).
 /// Each contributor has an admin capability for managing their profile.
 ///
@@ -12,7 +12,6 @@
 /// - Groups can contain multiple individual contributors
 module musicos::contributor;
 
-use musicos::plugin::PluginCap;
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_set::{Self, VecSet};
@@ -29,8 +28,6 @@ public struct Contributor has key {
     id: UID,
     /// Whether this is an individual or group contributor.
     kind: ContributorKind,
-    /// Current lifecycle state of the contributor.
-    state: ContributorState,
 }
 
 /// Capability that authorizes modifications to a specific contributor.
@@ -40,12 +37,7 @@ public struct ContributorAdminCap has key, store {
     id: UID,
     /// ID of the contributor this capability controls.
     contributor_id: ID,
-    /// Address of the sender of the capability.
-    sender: address,
 }
-
-/// Witness type sourced from the contributor module.
-public struct ContributorWitness() has drop;
 
 //=== Derivation Keys ===
 
@@ -66,14 +58,6 @@ public enum ContributorKind has copy, drop, store {
         /// Set of individual contributor IDs in this group.
         VecSet<ID>,
     ),
-}
-
-/// Lifecycle state of a contributor.
-public enum ContributorState has copy, drop, store {
-    /// Contributor has been created but not yet activated.
-    Created,
-    /// Contributor is active and can participate in recordings/compositions.
-    Active,
 }
 
 //=== Events ===
@@ -103,7 +87,6 @@ public fun new(kind: ContributorKind, ctx: &mut TxContext): ContributorAdminCap 
     let mut contributor = Contributor {
         id: object::new(ctx),
         kind,
-        state: ContributorState::Created,
     };
 
     let contributor_id = contributor.id();
@@ -111,7 +94,6 @@ public fun new(kind: ContributorKind, ctx: &mut TxContext): ContributorAdminCap 
     let contributor_admin_cap = ContributorAdminCap {
         id: claim(&mut contributor.id, ContributorAdminCapKey(contributor_id)),
         contributor_id,
-        sender: ctx.sender(),
     };
 
     emit(ContributorCreatedEvent {
@@ -163,24 +145,6 @@ public fun remove_contributor(
     }
 }
 
-// TODO: Only allow for protocol migration.
-// TODO: Validate MigrationWitness.
-/// Destroys a contributor and its admin capability.
-/// Requires the matching admin capability.
-public fun destroy<MigrationWitness: drop>(
-    self: Contributor,
-    cap: ContributorAdminCap,
-    _: MigrationWitness,
-) {
-    self.authorize(&cap);
-
-    let Contributor { id, .. } = self;
-    id.delete();
-
-    let ContributorAdminCap { id, .. } = cap;
-    id.delete();
-}
-
 /// Creates a new individual contributor kind.
 public fun new_individual_kind(): ContributorKind {
     ContributorKind::Individual
@@ -226,20 +190,16 @@ public fun assert_is_group_kind(self: &Contributor) {
 
 //=== UID Functions ===
 
-public fun uid_with_plugin<PluginWitness: drop>(
-    self: &Contributor,
-    cap: &ContributorAdminCap,
-    _plugin_cap: PluginCap<ContributorWitness, PluginWitness>,
-): &UID {
+/// Returns a reference to the contributor's UID for reading dynamic fields.
+/// Requires the admin capability.
+public fun uid(self: &Contributor, cap: &ContributorAdminCap): &UID {
     self.authorize(cap);
     &self.id
 }
 
-public fun uid_mut_with_plugin<PluginWitness: drop>(
-    self: &mut Contributor,
-    cap: &ContributorAdminCap,
-    _plugin_cap: PluginCap<ContributorWitness, PluginWitness>,
-): &mut UID {
+/// Returns a mutable reference to the contributor's UID for dynamic field operations.
+/// Requires the admin capability.
+public fun uid_mut(self: &mut Contributor, cap: &ContributorAdminCap): &mut UID {
     self.authorize(cap);
     &mut self.id
 }

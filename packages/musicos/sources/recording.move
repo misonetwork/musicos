@@ -1,7 +1,7 @@
 // Copyright (c) Sona Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Represents an audio recording of a composition in the MusicOS protocol.
+/// Represents an audio recording of a composition in MusicOS.
 /// Recordings are the audio performances that are distributed and played.
 /// Each recording has its own share token for ownership distribution.
 ///
@@ -24,7 +24,6 @@ use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
-use musicos::plugin::PluginCap;
 use musicos::recording_artifact_kind::RecordingArtifactKind;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share;
@@ -65,16 +64,16 @@ public struct Recording<phantom RecordingShare> has key {
     composition_share_type: TypeName,
     /// Revenue split for the composition in basis points (captured at creation time).
     composition_split_bps: BPS,
+    /// Primary genre of the recording.
+    primary_genre_id: ID,
+    /// Additional genres for the recording.
+    secondary_genre_ids: VecSet<ID>,
     // IDs of the primary artists on the recording.
     primary_artist_ids: VecSet<ID>,
     // IDs of the featured artists on the recording.
     featured_artist_ids: VecSet<ID>,
     /// Map of contributor IDs to their roles on this recording.
     credits: VecMap<ID, Credit<RecordingContributorRole>>,
-    /// Primary genre of the recording.
-    genre_id: ID,
-    /// Additional genres for the recording.
-    secondary_genre_ids: VecSet<ID>,
     /// Language of the vocals (if any).
     language: Option<LanguageCode>,
     /// Whether the recording contains explicit content.
@@ -108,9 +107,6 @@ public struct RecordingAdminCap has key, store {
     recording_id: ID,
 }
 
-/// Witness type sourced from the recording module.
-public struct RecordingWitness() has drop;
-
 //=== Derivation Keys ===
 
 /// Key for deriving the admin capability's deterministic address.
@@ -138,7 +134,7 @@ public struct RecordingInitializedEvent has copy, drop {
     /// ID of the underlying composition.
     composition_id: ID,
     /// ID of the recording's genre.
-    genre_id: ID,
+    primary_genre_id: ID,
 }
 
 /// Emitted when a recording is published.
@@ -207,6 +203,10 @@ const EContributorNotCredited: u64 = 22;
 const EAlreadyFeaturedArtist: u64 = 23;
 /// Contributor is already a primary artist.
 const EAlreadyPrimaryArtist: u64 = 24;
+/// Genre is already assigned as a secondary genre.
+const EAlreadyAssignedAsSecondaryGenre: u64 = 25;
+/// Genre is already assigned as a primary genre.
+const EAlreadyAssignedAsPrimaryGenre: u64 = 26;
 
 //=== Public Functions ===
 
@@ -229,7 +229,7 @@ public fun new<RecordingShare, CompositionShare>(
     share_treasury_cap: TreasuryCap<RecordingShare>,
 ): (Recording<RecordingShare>, RecordingAdminCap, Balance<RecordingShare>) {
     let composition_id = composition.id();
-    let genre_id = genre.id();
+    let primary_genre_id = genre.id();
 
     let mut recording = Recording<RecordingShare> {
         id: claim(composition.uid_mut_internal(), RecordingKey(*master.pcm_digest())),
@@ -240,11 +240,11 @@ public fun new<RecordingShare, CompositionShare>(
         composition_id,
         composition_share_type: with_defining_ids<CompositionShare>(),
         composition_split_bps: composition.split_bps(),
+        primary_genre_id,
+        secondary_genre_ids: vec_set::empty(),
         primary_artist_ids: vec_set::empty(),
         featured_artist_ids: vec_set::empty(),
         credits: vec_map::empty(),
-        genre_id,
-        secondary_genre_ids: vec_set::empty(),
         language: option::none(),
         is_explicit,
         is_instrumental,
@@ -276,7 +276,7 @@ public fun new<RecordingShare, CompositionShare>(
         recording_id: recording.id(),
         recording_share_type: with_defining_ids<RecordingShare>(),
         composition_id,
-        genre_id,
+        primary_genre_id,
     });
 
     (recording, recording_admin_cap, recording_shares)
@@ -441,13 +441,14 @@ public fun add_featured_artist<RecordingShare>(
 
 /// Sets the primary genre of the recording.
 /// Can be set on any state as additional genres are created on MusicOS.
-public fun set_genre<RecordingShare>(
+public fun set_primary_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap,
     genre: &Genre,
 ) {
     self.authorize(cap);
-    self.genre_id = genre.id();
+    assert!(!self.secondary_genre_ids.contains(&genre.id()), EAlreadyAssignedAsSecondaryGenre);
+    self.primary_genre_id = genre.id();
 }
 
 /// Adds a secondary genre to the recording.
@@ -458,6 +459,7 @@ public fun add_secondary_genre<RecordingShare>(
     genre: &Genre,
 ) {
     self.authorize(cap);
+    assert!(self.primary_genre_id != genre.id(), EAlreadyAssignedAsPrimaryGenre);
     self.secondary_genre_ids.insert(genre.id());
 }
 
@@ -470,40 +472,6 @@ public fun remove_secondary_genre<RecordingShare>(
 ) {
     self.authorize(cap);
     self.secondary_genre_ids.remove(&genre_id);
-}
-
-/// Sets whether the recording contains explicit content.
-/// Required State: Initialized
-public fun set_is_explicit<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    is_explicit: bool,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.is_explicit = is_explicit;
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Sets whether the recording is instrumental (no vocals).
-/// Required State: Initialized
-public fun set_is_instrumental<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    cap: &RecordingAdminCap,
-    is_instrumental: bool,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.is_instrumental = is_instrumental;
-        },
-        _ => abort ENotInitializedState,
-    }
 }
 
 // --- Musical Properties ---
@@ -599,6 +567,7 @@ public fun add_artifact<RecordingShare>(
 
     match (self.state) {
         RecordingState::Initialized => {
+            self.assert_is_contributor(artifact.contributor_id());
             self.artifacts.push_back(artifact);
         },
         _ => abort ENotInitializedState,
@@ -616,6 +585,7 @@ public fun add_snapshot<RecordingShare>(
 
     match (self.state) {
         RecordingState::Initialized => {
+            self.assert_is_contributor(snapshot.contributor_id());
             self.snapshots.push_back(snapshot);
         },
         _ => abort ENotInitializedState,
@@ -686,8 +656,8 @@ public fun credits<RecordingShare>(self: &Recording<RecordingShare>): &VecMap<ID
 }
 
 /// Returns the primary genre ID.
-public fun genre_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
-    self.genre_id
+public fun primary_genre_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
+    self.primary_genre_id
 }
 
 /// Returns the set of secondary genre IDs.
@@ -773,16 +743,25 @@ public(package) fun authorize<RecordingShare>(
 
 //=== UID Functions ===
 
-public fun uid_with_plugin<RecordingShare, PluginWitness: drop>(self: &Recording<RecordingShare>, cap: &RecordingAdminCap, _plugin_cap: PluginCap<RecordingWitness, PluginWitness>): &UID {
+public fun uid<RecordingShare>(self: &Recording<RecordingShare>, cap: &RecordingAdminCap): &UID {
     self.authorize(cap);
     &self.id
 }
 
-public fun uid_mut_with_plugin<RecordingShare, PluginWitness: drop>(self: &mut Recording<RecordingShare>, cap: &RecordingAdminCap, _plugin_cap: PluginCap<RecordingWitness, PluginWitness>): &mut UID {
+public fun uid_mut<RecordingShare>(self: &mut Recording<RecordingShare>, cap: &RecordingAdminCap): &mut UID {
     self.authorize(cap);
     &mut self.id
 }
 
 public(package) fun uid_mut_internal<RecordingShare>(self: &mut Recording<RecordingShare>): &mut UID {
     &mut self.id
+}
+
+//=== Private Functions ===
+
+fun assert_is_contributor<RecordingShare>(
+    self: &Recording<RecordingShare>,
+    contributor_id: ID,
+) {
+    assert!(self.credits.contains(&contributor_id), EContributorNotCredited);
 }
