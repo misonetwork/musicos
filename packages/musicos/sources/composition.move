@@ -18,8 +18,8 @@ use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
 use musicos::credit::Credit;
 use musicos::share;
-use revenue_pool::revenue_pool;
-use royalty_pool::royalty_pool;
+use revenue_pool::revenue_pool::{Self, RevenuePool};
+use royalty_pool::royalty_pool::{Self, RoyaltyPool};
 use std::string::String;
 use sui::balance::Balance;
 use sui::clock::Clock;
@@ -283,16 +283,18 @@ public fun set_lyrics<CompositionShare>(
 
 /// Creates a new revenue pool for this composition.
 /// Revenue pools receive incoming payments before distribution.
-public fun new_revenue_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
-    let revenue_pool = revenue_pool::new<Currency>(&mut self.id);
-    transfer::public_share_object(revenue_pool);
+public fun new_revenue_pool<CompositionShare, Currency>(
+    self: &mut Composition<CompositionShare>,
+): RevenuePool<Currency> {
+    revenue_pool::new<Currency>(&mut self.id)
 }
 
 /// Creates a new royalty pool for this composition.
 /// Reward pools distribute revenue to share token holders.
-public fun new_royalty_pool<CompositionShare, Currency>(self: &mut Composition<CompositionShare>) {
-    let royalty_pool = royalty_pool::new<CompositionShare, Currency>(&mut self.id);
-    transfer::public_share_object(royalty_pool);
+public fun new_royalty_pool<CompositionShare, Currency>(
+    self: &mut Composition<CompositionShare>,
+): RoyaltyPool<CompositionShare, Currency> {
+    royalty_pool::new<CompositionShare, Currency>(&mut self.id)
 }
 
 //=== Public View Functions ===
@@ -359,4 +361,3 @@ public(package) fun uid_mut_internal<CompositionShare>(
 ): &mut UID {
     &mut self.id
 }
-

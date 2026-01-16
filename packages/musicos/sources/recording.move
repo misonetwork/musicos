@@ -25,8 +25,8 @@ use musicos::musical_key::MusicalKey;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share;
 use musicos::time_signature::TimeSignature;
-use revenue_pool::revenue_pool;
-use royalty_pool::royalty_pool;
+use revenue_pool::revenue_pool::{Self, RevenuePool};
+use royalty_pool::royalty_pool::{Self, RoyaltyPool};
 use std::string::String;
 use std::type_name::{TypeName, with_defining_ids};
 use sui::balance::Balance;
@@ -480,16 +480,14 @@ public fun set_tempo_bpm<RecordingShare>(
 
 /// Creates a new revenue pool for this recording.
 /// Revenue pools receive incoming payments before distribution.
-public fun new_revenue_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
-    let revenue_pool = revenue_pool::new<Currency>(&mut self.id);
-    transfer::public_share_object(revenue_pool);
+public fun new_revenue_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>): RevenuePool<Currency> {
+    revenue_pool::new<Currency>(&mut self.id)
 }
 
 /// Creates a new royalty pool for this recording.
 /// Reward pools distribute revenue to share token holders.
-public fun new_royalty_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>) {
-    let royalty_pool = royalty_pool::new<RecordingShare, Currency>(&mut self.id);
-    transfer::public_share_object(royalty_pool);
+public fun new_royalty_pool<RecordingShare, Currency>(self: &mut Recording<RecordingShare>): RoyaltyPool<RecordingShare, Currency> {
+    royalty_pool::new<RecordingShare, Currency>(&mut self.id)
 }
 
 //=== Public View Functions ===

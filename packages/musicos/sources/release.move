@@ -257,20 +257,24 @@ public fun set_track_splits_bps(
 /// Splits revenue according to track splits.
 /// Each track's revenue is further split between its composition and recording based on their split ratio.
 /// Required State: Published
-public fun distribute_revenue<Currency>(self: &Release, revenue_pool: &mut RevenuePool<Currency>) {
+public fun distribute_revenue<Currency>(
+    self: &mut Release,
+    revenue_pool: &mut RevenuePool<Currency>,
+) {
     match (self.state) {
         ReleaseState::Published(_) => {
             // Acquire a mutable reference to the revenue pool's balance.
             // This will abort if the provided revenue pool is not the correct one for the release
             // because revenue_pool.balance_mut() performs an authorization check internally.
-            let revenue = revenue_pool.balance_mut<Currency>(&self.id);
+            let release_id = self.id();
+
+            let revenue = revenue_pool.balance_mut<Currency>(&mut self.id);
 
             assert!(revenue.value() > 0, ENoRevenueToDistribute);
 
             // Store the distribution's principal value.
             let distribution_value = revenue.value();
 
-            let release_id = self.id();
             let currency_type = with_defining_ids<Currency>();
 
             self.track_sequence.length().do!(|i| {
