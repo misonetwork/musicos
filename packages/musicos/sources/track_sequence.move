@@ -18,8 +18,8 @@ public struct TrackSequence has drop, store {
     tracks_per_disc: vector<u8>,
     /// Flattened list of all track positions in playback order.
     track_positions: vector<TrackPosition>,
-    // Total duration of the sequence in seconds.
-    duration_s: u64,
+    // Total duration of the sequence in milliseconds.
+    duration_ms: u64,
 }
 
 //=== Constants ===
@@ -44,14 +44,14 @@ const ENoDiscs: u64 = 20;
 
 /// Creates a new track sequence from a vector of discs.
 /// Builds an ordered list of all track positions for navigation.
-/// Returns the track sequence and total duration in seconds (since we're looping through the tracks).
+/// Returns the track sequence and total duration in milliseconds (since we're looping through the tracks).
 /// Aborts if there are no discs or if total tracks exceed 255.
 public(package) fun new(discs: &vector<Disc>): TrackSequence {
     assert!(!discs.is_empty(), ENoDiscs);
 
     let mut tracks_per_disc: vector<u8> = vector[];
     let mut track_positions: vector<TrackPosition> = vector[];
-    let mut duration_s: u64 = 0;
+    let mut duration_ms: u64 = 0;
 
     discs.length().do!(|disc_idx| {
         let disc = &discs[disc_idx];
@@ -60,7 +60,7 @@ public(package) fun new(discs: &vector<Disc>): TrackSequence {
         tracks.length().do!(|track_idx| {
             let track_position = track_position::new(disc_idx as u8, track_idx as u8);
             track_positions.push_back(track_position);
-            duration_s = duration_s + tracks[track_idx].duration_s();
+            duration_ms = duration_ms + tracks[track_idx].duration_ms();
         });
 
         tracks_per_disc.push_back(tracks.length() as u8);
@@ -75,7 +75,7 @@ public(package) fun new(discs: &vector<Disc>): TrackSequence {
     let track_sequence = TrackSequence {
         tracks_per_disc,
         track_positions,
-        duration_s,
+        duration_ms,
     };
 
     track_sequence
@@ -152,4 +152,9 @@ public fun track_positions(self: &TrackSequence): &vector<TrackPosition> {
 /// Returns the number of tracks on each disc.
 public fun tracks_per_disc(self: &TrackSequence): &vector<u8> {
     &self.tracks_per_disc
+}
+
+/// Returns the total duration of the sequence in milliseconds.
+public fun duration_ms(self: &TrackSequence): u64 {
+    self.duration_ms
 }

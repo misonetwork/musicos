@@ -22,8 +22,8 @@ public struct Disc has drop, store {
     tracks: vector<Track>,
     /// Optional disc-specific artwork (e.g., for multi-disc sets with different covers).
     artwork: Option<String>,
-    /// Total duration of all tracks in seconds.
-    duration_s: u64,
+    /// Total duration of all tracks in milliseconds.
+    duration_ms: u64,
 }
 
 //=== Constants ===
@@ -44,15 +44,15 @@ const EMaxTracksExceeded: u64 = 10;
 public fun new(tracks: vector<Track>): Disc {
     assert!(tracks.length() <= MAX_TRACKS_PER_DISC as u64, EMaxTracksExceeded);
 
-    let mut duration_s = 0;
+    let mut duration_ms = 0;
     tracks.do_ref!(|track| {
-        duration_s = duration_s + track.duration_s();
+        duration_ms = duration_ms + track.duration_ms();
     });
 
     Disc {
         tracks,
         artwork: option::none(),
-        duration_s,
+        duration_ms,
     }
 }
 
@@ -73,7 +73,7 @@ public fun artwork(self: &Disc): Option<String> {
     self.artwork
 }
 
-/// Returns the total duration of this disc in seconds.
-public fun duration_s(self: &Disc): u64 {
-    self.duration_s
+/// Returns the total duration of this disc in milliseconds.
+public fun duration_ms(self: &Disc): u64 {
+    self.duration_ms
 }

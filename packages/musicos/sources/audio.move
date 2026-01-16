@@ -75,7 +75,7 @@ public fun pcm_digest(self: &Audio): &vector<u8> {
     &self.pcm_digest
 }
 
-/// Returns the duration of the audio in seconds.
-public fun duration_s(self: &Audio): u64 {
-    self.samples / (self.sample_rate_hz as u64)
+/// Returns the duration of the audio in milliseconds.
+public fun duration_ms(self: &Audio): u64 {
+    self.samples * 1_000 / (self.sample_rate_hz as u64)
 }
