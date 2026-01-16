@@ -9,13 +9,11 @@
 /// - Share token initialization with fixed supply (100M tokens, 6 decimals)
 /// - Contributor management with role assignments (Producer, Vocalist, etc.)
 /// - State machine: Initialized -> Published (immutable after publish)
-/// - Audio management (master track and optional stems)
 /// - Musical metadata (key, tempo, time signature)
 /// - Deterministic addresses via derived object pattern
 module musicos::recording;
 
 use iso639_1::language_code::LanguageCode;
-use musicos::artifact::Artifact;
 use musicos::audio::Audio;
 use interest_bps::bps::BPS;
 use musicos::composition::Composition;
@@ -24,11 +22,8 @@ use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
-use musicos::recording_artifact_kind::RecordingArtifactKind;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share;
-use musicos::snapshot::Snapshot;
-use musicos::stem::Stem;
 use musicos::time_signature::TimeSignature;
 use revenue_pool::revenue_pool;
 use royalty_pool::royalty_pool;
@@ -90,12 +85,6 @@ public struct Recording<phantom RecordingShare> has key {
     master: Audio,
     /// Cover art for the recording.
     cover_art: CoverArt,
-    /// Individual audio stems (vocals, drums, etc.).
-    stems: vector<Stem>,
-    /// Attached artifacts (lyrics, liner notes, etc.).
-    artifacts: vector<Artifact<RecordingArtifactKind>>,
-    /// Point-in-time content snapshots.
-    snapshots: vector<Snapshot>,
 }
 
 /// Capability that authorizes modifications to a specific recording.
@@ -150,14 +139,6 @@ public struct RecordingContributorAddedEvent has copy, drop {
     contributor_id: ID,
 }
 
-/// Emitted when a stem is added to a recording.
-public struct RecordingStemAddedEvent has copy, drop {
-    /// ID of the recording.
-    recording_id: ID,
-    /// Digest of the added audio file.
-    audio_digest: vector<u8>,
-}
-
 //=== Enums ===
 
 /// Lifecycle state of a recording.
@@ -177,15 +158,11 @@ public enum RecordingState has copy, drop, store {
 const MIN_ROLES_PER_CREDIT: u64 = 1;
 /// Maximum number of roles a contributor can have.
 const MAX_ROLES_PER_CREDIT: u64 = 10;
-/// Maximum number of stems allowed per recording.
-const MAX_STEMS_PER_RECORDING: u8 = 10;
 
 //=== Errors ===
 
 /// Operation requires Initialized state but recording is created.
 const ENotInitializedState: u64 = 1;
-/// Recording has reached the maximum number of stems (10).
-const EMaxStemsExceeded: u64 = 10;
 /// Contributor has too many roles.
 const EExceedsMaxRoles: u64 = 11;
 /// Contributor must have at least one role.
@@ -250,9 +227,6 @@ public fun new<RecordingShare, CompositionShare>(
         tempo_bpm: option::none(),
         master,
         cover_art,
-        stems: vector[],
-        artifacts: vector[],
-        snapshots: vector[],
     };
 
     let recording_admin_cap = RecordingAdminCap<RecordingShare> {
@@ -502,62 +476,6 @@ public fun set_tempo_bpm<RecordingShare>(
     }
 }
 
-// --- Audio ---
-
-/// Adds a stem (isolated audio track) to the recording.
-/// Maximum of 10 stems per recording.
-/// Required State: Initialized
-public fun add_stem<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    stem: Stem,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            assert!(self.stems.length() < MAX_STEMS_PER_RECORDING as u64, EMaxStemsExceeded);
-
-            emit(RecordingStemAddedEvent {
-                recording_id: self.id(),
-                audio_digest: *stem.audio().pcm_digest(),
-            });
-
-            self.stems.push_back(stem);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-// --- Attachments ---
-
-/// Adds an artifact to the recording.
-/// Required State: Initialized
-public fun add_artifact<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    artifact: Artifact<RecordingArtifactKind>,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.assert_is_contributor(artifact.contributor_id());
-            self.artifacts.push_back(artifact);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Adds a snapshot to the recording.
-/// Required State: Initialized
-public fun add_snapshot<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    snapshot: Snapshot,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.assert_is_contributor(snapshot.contributor_id());
-            self.snapshots.push_back(snapshot);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
 // --- Pools ---
 
 /// Creates a new revenue pool for this recording.
@@ -671,21 +589,6 @@ public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverAr
     &self.cover_art
 }
 
-/// Returns a reference to the list of stems.
-public fun stems<RecordingShare>(self: &Recording<RecordingShare>): &vector<Stem> {
-    &self.stems
-}
-
-/// Returns the list of attached artifacts.
-public fun artifacts<RecordingShare>(self: &Recording<RecordingShare>): &vector<Artifact<RecordingArtifactKind>> {
-    &self.artifacts
-}
-
-/// Returns the list of snapshots.
-public fun snapshots<RecordingShare>(self: &Recording<RecordingShare>): &vector<Snapshot> {
-    &self.snapshots
-}
-
 /// Returns whether the provided ID is a primary artist on the recording.
 public fun is_primary_artist<RecordingShare>(self: &Recording<RecordingShare>, contributor_id: ID): bool {
     self.primary_artist_ids.contains(&contributor_id)
@@ -701,11 +604,7 @@ public fun is_featured_artist<RecordingShare>(self: &Recording<RecordingShare>, 
 //=== UID Functions ===
 
 /// Returns a reference to the recording's UID for reading dynamic fields.
-/// Requires the admin capability.
-public fun uid<RecordingShare>(
-    self: &Recording<RecordingShare>,
-    _cap: &RecordingAdminCap<RecordingShare>,
-): &UID {
+public fun uid<RecordingShare>(self: &Recording<RecordingShare>): &UID {
     &self.id
 }
 
@@ -720,13 +619,4 @@ public fun uid_mut<RecordingShare>(
 
 public(package) fun uid_mut_internal<RecordingShare>(self: &mut Recording<RecordingShare>): &mut UID {
     &mut self.id
-}
-
-//=== Private Functions ===
-
-fun assert_is_contributor<RecordingShare>(
-    self: &Recording<RecordingShare>,
-    contributor_id: ID,
-) {
-    assert!(self.credits.contains(&contributor_id), EContributorNotCredited);
 }

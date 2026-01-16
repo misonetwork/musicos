@@ -14,13 +14,10 @@
 module musicos::composition;
 
 use interest_bps::bps::{Self, BPS};
-use musicos::artifact::Artifact;
-use musicos::composition_artifact_kind::CompositionArtifactKind;
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
 use musicos::credit::Credit;
 use musicos::share;
-use musicos::snapshot::Snapshot;
 use revenue_pool::revenue_pool;
 use royalty_pool::royalty_pool;
 use std::string::String;
@@ -52,10 +49,6 @@ public struct Composition<phantom CompositionShare> has key {
     split_bps: BPS,
     /// Optional lyrics data reference.
     lyrics: Option<WalrusData>,
-    /// Attached artifacts (sheet music, liner notes, etc.).
-    artifacts: vector<Artifact<CompositionArtifactKind>>,
-    /// Point-in-time content snapshots.
-    snapshots: vector<Snapshot>,
 }
 
 /// Capability that authorizes modifications to a specific composition.
@@ -128,8 +121,6 @@ const MAX_ROLES_PER_CONTRIBUTOR: u64 = 20;
 
 //=== Errors ===
 
-/// The provided admin capability does not match this composition.
-const EUnauthorized: u64 = 0;
 /// Operation requires Initialized state but composition is created.
 const ENotInitializedState: u64 = 1;
 /// Contributor has too many roles.
@@ -138,8 +129,6 @@ const EExceedsMaxRoles: u64 = 10;
 const EMinRolesNotMet: u64 = 11;
 /// Composition must have at least one contributor to publish.
 const ENoContributors: u64 = 20;
-/// Contributor is not credited to the composition.
-const EContributorNotCredited: u64 = 21;
 
 //=== Public Functions ===
 
@@ -170,8 +159,6 @@ public fun new<CompositionShare>(
         credits: vec_map::empty(),
         split_bps: bps::new(split_value),
         lyrics: option::none(),
-        artifacts: vector[],
-        snapshots: vector[],
     };
 
     let composition_admin_cap = CompositionAdminCap<CompositionShare> {
@@ -191,7 +178,7 @@ public fun new<CompositionShare>(
 }
 
 /// Publishes the composition, making it immutable.
-/// Requires at least one contributor, artifact, and snapshot.
+/// Requires at least one contributor.
 /// Required State: Initialized
 public fun publish<CompositionShare>(mut self: Composition<CompositionShare>, clock: &Clock) {
     match (self.state) {
@@ -292,38 +279,6 @@ public fun set_lyrics<CompositionShare>(
     }
 }
 
-// --- Attachments ---
-
-/// Adds an artifact to the composition.
-/// Required State: Initialized
-public fun add_artifact<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    artifact: Artifact<CompositionArtifactKind>,
-) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            self.assert_is_contributor(artifact.contributor_id());
-            self.artifacts.push_back(artifact);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Adds a snapshot to the composition.
-/// Required State: Initialized
-public fun add_snapshot<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    snapshot: Snapshot,
-) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            self.assert_is_contributor(snapshot.contributor_id());
-            self.snapshots.push_back(snapshot);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
 // --- Pools ---
 
 /// Creates a new revenue pool for this composition.
@@ -381,28 +336,12 @@ public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &Opti
     &self.lyrics
 }
 
-/// Returns the list of attached artifacts.
-public fun artifacts<CompositionShare>(
-    self: &Composition<CompositionShare>,
-): &vector<Artifact<CompositionArtifactKind>> {
-    &self.artifacts
-}
-
-/// Returns the list of snapshots.
-public fun snapshots<CompositionShare>(self: &Composition<CompositionShare>): &vector<Snapshot> {
-    &self.snapshots
-}
-
 //=== Package Functions ===
 
 //=== UID Functions ===
 
 /// Returns a reference to the composition's UID for reading dynamic fields.
-/// Requires the admin capability.
-public fun uid<CompositionShare>(
-    self: &Composition<CompositionShare>,
-    _cap: &CompositionAdminCap<CompositionShare>,
-): &UID {
+public fun uid<CompositionShare>(self: &Composition<CompositionShare>): &UID {
     &self.id
 }
 
@@ -421,11 +360,3 @@ public(package) fun uid_mut_internal<CompositionShare>(
     &mut self.id
 }
 
-//=== Private Functions ===
-
-fun assert_is_contributor<CompositionShare>(
-    self: &Composition<CompositionShare>,
-    contributor_id: ID,
-) {
-    assert!(self.credits.contains(&contributor_id), EContributorNotCredited);
-}

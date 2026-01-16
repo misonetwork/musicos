@@ -361,9 +361,7 @@ public fun track_splits_bps(self: &Release): vector<BPS> {
 //=== UID Functions ===
 
 /// Returns a reference to the release's UID for reading dynamic fields.
-/// Requires the admin capability.
-public fun uid(self: &Release, cap: &ReleaseAdminCap): &UID {
-    self.authorize(cap);
+public fun uid(self: &Release): &UID {
     &self.id
 }
 
