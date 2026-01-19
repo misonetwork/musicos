@@ -1,0 +1,15 @@
+[package]
+name = "musicos"
+edition = "2024.beta"
+license = "Apache 2.0"
+authors = ["Studio Mirai, LLC"]
+
+[dependencies]
+interest_bps = { local = "../interest-mvr/bps" }
+iso639_1 = { local = "../iso639_1" }
+revenue_pool = { local = "../revenue_pool" }
+reward_pool = { local = "../reward_pool" }
+walrus_data = { local = "../walrus_data" }
+
+[environments]
+mirainet = "dd32b170"
