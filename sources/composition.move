@@ -62,11 +62,6 @@ public struct CompositionAdminCap<phantom CompositionShare> has key, store {
 /// Key for deriving the admin capability's deterministic address from the composition.
 public struct CompositionAdminCapKey() has copy, drop, store;
 
-//=== Fees ===
-
-/// Marker type for publish composition fee payments.
-public struct PublishCompositionFee() has drop;
-
 //=== Events ===
 
 /// Emitted when a new composition is created.

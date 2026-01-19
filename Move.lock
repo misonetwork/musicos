@@ -22,8 +22,8 @@ use_environment = "mirainet"
 manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
-[pinned.mirainet.iso639_1]
-source = { local = "../iso639_1" }
+[pinned.mirainet.language_code]
+source = { local = "../language_code" }
 use_environment = "mirainet"
 manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -31,8 +31,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mirainet.musicos]
 source = { root = true }
 use_environment = "mirainet"
-manifest_digest = "6383B6012A0BC84276674B50334718FFBE39FD1C5EEA78E2D1F646314C6308FC"
-deps = { interest_bps = "interest_bps", iso639_1 = "iso639_1", std = "MoveStdlib", sui = "Sui", walrus_data = "walrus_data" }
+manifest_digest = "5EBA8232AB376D2AB87CAC5A5BA23A7DA280DA134719489DC0B1A56B5C91582B"
+deps = { interest_bps = "interest_bps", language_code = "language_code", std = "MoveStdlib", sui = "Sui", walrus_data = "walrus_data" }
 
 [pinned.mirainet.walrus_data]
 source = { local = "../walrus_data" }
@@ -58,8 +58,8 @@ use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
-[pinned.testnet.iso639_1]
-source = { local = "../iso639_1" }
+[pinned.testnet.language_code]
+source = { local = "../language_code" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -67,8 +67,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.musicos]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "050166AE916AA754F8B0F02E206C4DA961AD2BC6FE79802FBFBEAE87B5C86ACD"
-deps = { interest_bps = "interest_bps", iso639_1 = "iso639_1", std = "MoveStdlib", sui = "Sui", walrus_data = "walrus_data" }
+manifest_digest = "340A66B66041FD89109CF6F6538BCADF9910DE76A37E2E7B7945DC025F4921B2"
+deps = { interest_bps = "interest_bps", language_code = "language_code", std = "MoveStdlib", sui = "Sui", walrus_data = "walrus_data" }
 
 [pinned.testnet.walrus_data]
 source = { local = "../walrus_data" }

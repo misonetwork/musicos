@@ -104,11 +104,6 @@ public struct RecordingKey(
     vector<u8>,
 ) has copy, drop, store;
 
-//=== Fees ===
-
-/// Marker type for publish recording fee payments.
-public struct PublishRecordingFee() has drop;
-
 //=== Events ===
 
 /// Emitted when a new recording is created.
