@@ -33,6 +33,16 @@ public enum CompositionContributorRole has copy, drop, store {
 
 //=== Public Functions ===
 
+/// Creates a new Adapter role.
+public fun new_adapter_role(): CompositionContributorRole {
+    CompositionContributorRole::Adapter
+}
+
+/// Creates a new Arranger role.
+public fun new_arranger_role(): CompositionContributorRole {
+    CompositionContributorRole::Arranger
+}
+
 /// Creates a new Composer role.
 public fun new_composer_role(): CompositionContributorRole {
     CompositionContributorRole::Composer
@@ -46,6 +56,11 @@ public fun new_lyricist_role(): CompositionContributorRole {
 /// Creates a new Songwriter role.
 public fun new_songwriter_role(): CompositionContributorRole {
     CompositionContributorRole::Songwriter
+}
+
+/// Creates a new Translator role.
+public fun new_translator_role(): CompositionContributorRole {
+    CompositionContributorRole::Translator
 }
 
 //=== Public View Functions ===

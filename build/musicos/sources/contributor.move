@@ -188,6 +188,15 @@ public fun assert_is_group_kind(self: &Contributor) {
     assert!(is_group_kind(self), ENotGroupKind);
 }
 
+/// Returns a reference to the group members.
+/// Aborts if this contributor is not a group.
+public fun group_members(self: &Contributor): &VecSet<ID> {
+    match (&self.kind) {
+        ContributorKind::Group(members) => members,
+        _ => abort ENotGroupKind,
+    }
+}
+
 //=== UID Functions ===
 
 /// Returns a reference to the contributor's UID for reading dynamic fields.
@@ -207,7 +216,7 @@ public fun uid_mut(self: &mut Contributor, cap: &ContributorAdminCap): &mut UID 
 //=== Private Functions ===
 
 /// Verifies that the admin capability matches this contributor.
-public fun authorize(self: &Contributor, cap: &ContributorAdminCap) {
+fun authorize(self: &Contributor, cap: &ContributorAdminCap) {
     assert!(cap.contributor_id == self.id(), EUnauthorized);
 }
 

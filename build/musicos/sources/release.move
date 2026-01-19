@@ -347,6 +347,21 @@ public fun track_splits_bps(self: &Release): &vector<BPS> {
     &self.track_splits_bps
 }
 
+/// Returns the release kind (Album, EP, or Single).
+public fun kind(self: &Release): ReleaseKind {
+    self.kind
+}
+
+/// Returns the release state.
+public fun state(self: &Release): ReleaseState {
+    self.state
+}
+
+/// Returns a reference to the cover art.
+public fun cover_art(self: &Release): &CoverArt {
+    &self.cover_art
+}
+
 //=== UID Functions ===
 
 /// Returns a reference to the release's UID for reading dynamic fields.

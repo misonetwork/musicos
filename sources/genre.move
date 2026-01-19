@@ -65,7 +65,6 @@ const DEFAULT_GENRES: vector<vector<u8>> = vector[
     b"ANIME",
     b"ARABIC",
     b"ASIAN",
-    b"ALTERNATIVE",
     b"BLUES",
     b"CLASSICAL",
     b"COUNTRY",

@@ -307,6 +307,20 @@ public fun set_subtitle<RecordingShare>(self: &mut Recording<RecordingShare>, su
     }
 }
 
+/// Sets the language of the recording.
+/// Required State: Initialized
+public fun set_language<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    language: LanguageCode,
+) {
+    match (self.state) {
+        RecordingState::Initialized => {
+            self.language.swap_or_fill(language);
+        },
+        _ => abort ENotInitializedState,
+    }
+}
+
 // --- People ---
 
 /// Adds a contributor to the recording with specified roles.
@@ -365,6 +379,34 @@ public fun add_featured_artist<RecordingShare>(
             assert!(!self.primary_artist_ids.contains(&contributor_id), EAlreadyPrimaryArtist);
 
             self.featured_artist_ids.insert(contributor_id);
+        },
+        _ => abort ENotInitializedState,
+    }
+}
+
+/// Removes a primary artist from the recording.
+/// Required State: Initialized
+public fun remove_primary_artist<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    contributor_id: ID,
+) {
+    match (self.state) {
+        RecordingState::Initialized => {
+            self.primary_artist_ids.remove(&contributor_id);
+        },
+        _ => abort ENotInitializedState,
+    }
+}
+
+/// Removes a featured artist from the recording.
+/// Required State: Initialized
+public fun remove_featured_artist<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    contributor_id: ID,
+) {
+    match (self.state) {
+        RecordingState::Initialized => {
+            self.featured_artist_ids.remove(&contributor_id);
         },
         _ => abort ENotInitializedState,
     }
@@ -572,6 +614,16 @@ public fun is_featured_artist<RecordingShare>(
     contributor_id: ID,
 ): bool {
     self.featured_artist_ids.contains(&contributor_id)
+}
+
+/// Returns a reference to the primary artist IDs.
+public fun primary_artist_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
+    &self.primary_artist_ids
+}
+
+/// Returns a reference to the featured artist IDs.
+public fun featured_artist_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
+    &self.featured_artist_ids
 }
 
 //=== UID Functions ===

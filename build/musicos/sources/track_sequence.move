@@ -1,5 +1,5 @@
 // Copyright (c) Studio Mirai, LLC
-// SPDX-License-Position: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 
 /// Manages the playback order of tracks across multiple discs in a release.
 /// Provides navigation functions for moving between tracks sequentially,
@@ -132,6 +132,7 @@ public fun previous(self: &TrackSequence, disc_idx: u8, track_idx: u8): TrackPos
 }
 
 /// Returns the total number of tracks across all discs.
+/// Safe to cast to u8 because new() enforces max 255 tracks.
 public fun length(self: &TrackSequence): u8 {
     self.track_positions.length() as u8
 }

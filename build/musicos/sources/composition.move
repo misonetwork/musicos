@@ -236,9 +236,8 @@ public fun add_credit<CompositionShare>(
 
 /// Sets the revenue split rate for this composition.
 /// The split determines what percentage of track revenue goes to the composition
-/// vs the recording. Can be updated at any time (even after publish).
-/// Note that this does not change the split for existing recordings of the composition
-/// unless the recording owner explicitly syncs the split rate.
+/// vs the recording. Must be set before publishing.
+/// Required State: Initialized
 public fun set_split_bps<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     split_value: u64,
