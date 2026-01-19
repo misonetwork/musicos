@@ -22,6 +22,7 @@ use revenue_pool::revenue_pool::RevenuePool;
 use reward_pool::reward_pool;
 use std::string::String;
 use std::type_name::{TypeName, with_defining_ids};
+use sui::balance::{withdraw_funds_from_object, redeem_funds};
 use sui::clock::Clock;
 use sui::derived_object::claim;
 use sui::event::emit;
@@ -257,10 +258,7 @@ public fun set_track_splits_bps(
 /// Splits revenue according to track splits.
 /// Each track's revenue is further split between its composition and recording based on their split ratio.
 /// Required State: Published
-public fun distribute_revenue<Currency>(
-    self: &mut Release,
-    revenue_pool: &mut RevenuePool<Currency>,
-) {
+public fun distribute_revenue<Currency>(self: &mut Release, value: u64) {
     match (self.state) {
         ReleaseState::Published(_) => {
             // Acquire a mutable reference to the revenue pool's balance.
@@ -268,7 +266,8 @@ public fun distribute_revenue<Currency>(
             // because revenue_pool.balance_mut() performs an authorization check internally.
             let release_id = self.id();
 
-            let revenue = revenue_pool.balance_mut<Currency>(&mut self.id);
+            let withdrawal = withdraw_funds_from_object<Currency>(&mut self.id, value);
+            let mut revenue = redeem_funds(withdrawal);
 
             assert!(revenue.value() > 0, ENoRevenueToDistribute);
 
@@ -325,6 +324,12 @@ public fun distribute_revenue<Currency>(
                     rec_split_balance.send_funds(recording_reward_pool_address);
                 };
             });
+
+            if (revenue.value() > 0) {
+                revenue.send_funds(self.id().to_address())
+            } else {
+                revenue.destroy_zero();
+            };
         },
         _ => abort ENotPublishedState,
     }
