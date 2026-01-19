@@ -6,7 +6,7 @@ authors = ["Studio Mirai, LLC"]
 
 [dependencies]
 interest_bps = { local = "../interest-mvr/bps" }
-iso639_1 = { local = "../iso639_1" }
+language_code = { local = "../language_code" }
 walrus_data = { local = "../walrus_data" }
 
 [environments]

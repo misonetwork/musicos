@@ -14,7 +14,7 @@
 module musicos::recording;
 
 use interest_bps::bps::BPS;
-use iso639_1::language_code::LanguageCode;
+use language_code::language_code::LanguageCode;
 use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::contributor::Contributor;
