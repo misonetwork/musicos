@@ -16,6 +16,7 @@ module musicos::release;
 use interest_bps::bps::{Self, BPS};
 use musicos::cover_art::CoverArt;
 use musicos::disc::Disc;
+use musicos::plugin;
 use musicos::track_position::TrackPosition;
 use musicos::track_sequence::{Self, TrackSequence};
 use std::string::String;
@@ -93,7 +94,7 @@ public struct ReleasePublishedEvent has copy, drop {
 }
 
 /// Emitted when revenue is distributed for a track.
-public struct ReleaseRevenueDistributedEvent<phantom Currency> has copy, drop {
+public struct ReleaseRevenueDistributedEvent<phantom C> has copy, drop {
     /// ID of the release.
     release_id: ID,
     /// ID of the composition receiving revenue.
@@ -108,11 +109,7 @@ public struct ReleaseRevenueDistributedEvent<phantom Currency> has copy, drop {
 
 /// Emitted when a track payment is completed.
 #[allow(unused_field)]
-public struct ReleaseTrackPaidEvent<
-    phantom Currency,
-    phantom CompShare,
-    phantom RecShare,
-> has copy, drop {
+public struct ReleaseTrackPaidEvent<phantom C, phantom CS, phantom RS> has copy, drop {
     /// ID of the release.
     release_id: ID,
     /// Total value distributed.
@@ -256,7 +253,7 @@ public fun set_track_splits_bps(
 /// Splits revenue according to track splits.
 /// Each track's revenue is further split between its composition and recording based on their split ratio.
 /// Required State: Published
-public fun distribute_revenue<Currency>(self: &mut Release, value: u64) {
+public fun distribute_revenue<C>(self: &mut Release, value: u64) {
     match (self.state) {
         ReleaseState::Published(_) => {
             // Acquire a mutable reference to the revenue pool's balance.
@@ -264,7 +261,7 @@ public fun distribute_revenue<Currency>(self: &mut Release, value: u64) {
             // because revenue_pool.balance_mut() performs an authorization check internally.
             let release_id = self.id();
 
-            let withdrawal = withdraw_funds_from_object<Currency>(&mut self.id, value);
+            let withdrawal = withdraw_funds_from_object<C>(&mut self.id, value);
             let mut revenue = redeem_funds(withdrawal);
 
             assert!(revenue.value() > 0, ENoRevenueToDistribute);
@@ -295,7 +292,7 @@ public fun distribute_revenue<Currency>(self: &mut Release, value: u64) {
                     let composition_id = track.composition_id();
                     let recording_id = track.recording_id();
 
-                    emit(ReleaseRevenueDistributedEvent<Currency> {
+                    emit(ReleaseRevenueDistributedEvent<C> {
                         release_id,
                         composition_id,
                         composition_split_value: comp_split_balance.value(),
@@ -373,6 +370,13 @@ public fun uid(self: &Release): &UID {
 /// Requires the admin capability.
 public fun uid_mut(self: &mut Release, cap: &ReleaseAdminCap): &mut UID {
     self.authorize(cap);
+    &mut self.id
+}
+
+/// Returns a mutable reference to the release's UID for authorized plugins.
+/// Requires a witness from the plugin module.
+public fun uid_mut_authorized<P: drop>(self: &mut Release, _: P): &mut UID {
+    plugin::assert_authorized<P>(&self.id);
     &mut self.id
 }
 

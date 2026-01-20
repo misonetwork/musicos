@@ -20,6 +20,7 @@ use musicos::composition::Composition;
 use musicos::contributor::Contributor;
 use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
+use musicos::extension;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
 use musicos::recording_contributor_role::RecordingContributorRole;
@@ -185,8 +186,8 @@ const EAlreadyAssignedAsPrimaryGenre: u64 = 26;
 /// - Admin capability for the owner
 /// - Initial share token balance
 /// - Promise that must be consumed by calling `share()`
-public fun new<RecordingShare, CompositionShare>(
-    composition: &mut Composition<CompositionShare>,
+public fun new<RecordingShare, CS>(
+    composition: &mut Composition<CS>,
     genre: &Genre,
     is_explicit: bool,
     is_instrumental: bool,
@@ -205,7 +206,7 @@ public fun new<RecordingShare, CompositionShare>(
         title_version: option::none(),
         subtitle: option::none(),
         composition_id,
-        composition_share_type: with_defining_ids<CompositionShare>(),
+        composition_share_type: with_defining_ids<CS>(),
         composition_split_bps: composition.split_bps(),
         primary_genre_id,
         secondary_genre_ids: vec_set::empty(),
@@ -633,12 +634,22 @@ public fun uid<RecordingShare>(self: &Recording<RecordingShare>): &UID {
     &self.id
 }
 
-/// Returns a mutable reference to the recording's UID for dynamic field operations.
+/// Returns a mutable reference to the recording's UID.
 /// Requires the admin capability.
 public fun uid_mut<RecordingShare>(
     self: &mut Recording<RecordingShare>,
-    _cap: &RecordingAdminCap<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
 ): &mut UID {
+    &mut self.id
+}
+
+/// Returns a mutable reference to the recording's UID for authorized extensions.
+/// Requires a witness from the extension module.
+public fun uid_mut_authorized<RecordingShare, E: drop>(
+    self: &mut Recording<RecordingShare>,
+    witness: E,
+): &mut UID {
+    extension::assert_authorized(&self.id, witness);
     &mut self.id
 }
 

@@ -1,0 +1,12 @@
+[package]
+name = "reward_pool_extension"
+edition = "2024.beta"
+license = "Apache 2.0"
+authors = ["Studio Mirai, LLC"]
+
+[dependencies]
+musicos = { local = "../../musicos" }
+reward_pool = { local = "../../../../reward_pool" }
+
+[environments]
+mirainet = "f1eb94c0"

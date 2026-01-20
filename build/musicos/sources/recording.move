@@ -22,6 +22,7 @@ use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
+use musicos::plugin;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share;
 use musicos::time_signature::TimeSignature;
@@ -39,8 +40,8 @@ use sui::vec_set::{Self, VecSet};
 //=== Structs ===
 
 /// An audio recording of a composition.
-/// The phantom RecordingShare type parameter links to the share token.
-public struct Recording<phantom RecordingShare> has key {
+/// The phantom RS type parameter links to the share token.
+public struct Recording<phantom RS> has key {
     /// Unique identifier for this recording.
     id: UID,
     /// Current lifecycle state.
@@ -88,7 +89,7 @@ public struct Recording<phantom RecordingShare> has key {
 /// Capability that authorizes modifications to a specific recording.
 /// Initialized when a recording is registered and transferred to the owner.
 /// Address is derived from the recording for client-side discoverability.
-public struct RecordingAdminCap<phantom RecordingShare> has key, store {
+public struct RecordingAdminCap<phantom RS> has key, store {
     /// Unique identifier for this capability.
     id: UID,
 }
@@ -185,27 +186,27 @@ const EAlreadyAssignedAsPrimaryGenre: u64 = 26;
 /// - Admin capability for the owner
 /// - Initial share token balance
 /// - Promise that must be consumed by calling `share()`
-public fun new<RecordingShare, CompositionShare>(
-    composition: &mut Composition<CompositionShare>,
+public fun new<RS, CS>(
+    composition: &mut Composition<CS>,
     genre: &Genre,
     is_explicit: bool,
     is_instrumental: bool,
     master: Audio,
     cover_art: CoverArt,
-    share_currency: &mut Currency<RecordingShare>,
-    share_treasury_cap: TreasuryCap<RecordingShare>,
-): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>, Balance<RecordingShare>) {
+    share_currency: &mut Currency<RS>,
+    share_treasury_cap: TreasuryCap<RS>,
+): (Recording<RS>, RecordingAdminCap<RS>, Balance<RS>) {
     let composition_id = composition.id();
     let primary_genre_id = genre.id();
 
-    let mut recording = Recording<RecordingShare> {
+    let mut recording = Recording<RS> {
         id: claim(composition.uid_mut_internal(), RecordingKey(*master.pcm_digest())),
         state: RecordingState::Initialized,
         title: *composition.title(),
         title_version: option::none(),
         subtitle: option::none(),
         composition_id,
-        composition_share_type: with_defining_ids<CompositionShare>(),
+        composition_share_type: with_defining_ids<CS>(),
         composition_split_bps: composition.split_bps(),
         primary_genre_id,
         secondary_genre_ids: vec_set::empty(),
@@ -222,7 +223,7 @@ public fun new<RecordingShare, CompositionShare>(
         cover_art,
     };
 
-    let recording_admin_cap = RecordingAdminCap<RecordingShare> {
+    let recording_admin_cap = RecordingAdminCap<RS> {
         id: claim(&mut recording.id, RecordingAdminCapKey()),
     };
 
@@ -230,14 +231,14 @@ public fun new<RecordingShare, CompositionShare>(
     description.append(recording.id().to_address().to_string());
     description.append(".");
 
-    let recording_shares = share::intialize<RecordingShare>(
+    let recording_shares = share::intialize<RS>(
         share_currency,
         share_treasury_cap,
     );
 
     emit(RecordingInitializedEvent {
         recording_id: recording.id(),
-        recording_share_type: with_defining_ids<RecordingShare>(),
+        recording_share_type: with_defining_ids<RS>(),
         composition_id,
         primary_genre_id,
     });
@@ -248,7 +249,7 @@ public fun new<RecordingShare, CompositionShare>(
 /// Publishes the recording, making it immutable.
 /// Requires at least one contributor to be assigned.
 /// Required State: Initialized
-public fun publish<RecordingShare>(mut self: Recording<RecordingShare>, clock: &Clock) {
+public fun publish<RS>(mut self: Recording<RS>, clock: &Clock) {
     match (self.state) {
         RecordingState::Initialized => {
             // Assert the recording has at least one contributor.
@@ -273,7 +274,7 @@ public fun publish<RecordingShare>(mut self: Recording<RecordingShare>, clock: &
 
 /// Sets the primary title of the recording.
 /// Required State: Initialized
-public fun set_title<RecordingShare>(self: &mut Recording<RecordingShare>, title: String) {
+public fun set_title<RS>(self: &mut Recording<RS>, title: String) {
     match (self.state) {
         RecordingState::Initialized => {
             self.title = title;
@@ -284,10 +285,7 @@ public fun set_title<RecordingShare>(self: &mut Recording<RecordingShare>, title
 
 /// Sets the title version (e.g., "Radio Edit", "Extended Mix").
 /// Required State: Initialized
-public fun set_title_version<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    title_version: String,
-) {
+public fun set_title_version<RS>(self: &mut Recording<RS>, title_version: String) {
     match (self.state) {
         RecordingState::Initialized => {
             self.title_version.swap_or_fill(title_version);
@@ -298,7 +296,7 @@ public fun set_title_version<RecordingShare>(
 
 /// Sets the subtitle of the recording.
 /// Required State: Initialized
-public fun set_subtitle<RecordingShare>(self: &mut Recording<RecordingShare>, subtitle: String) {
+public fun set_subtitle<RS>(self: &mut Recording<RS>, subtitle: String) {
     match (self.state) {
         RecordingState::Initialized => {
             self.subtitle.swap_or_fill(subtitle);
@@ -309,10 +307,7 @@ public fun set_subtitle<RecordingShare>(self: &mut Recording<RecordingShare>, su
 
 /// Sets the language of the recording.
 /// Required State: Initialized
-public fun set_language<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    language: LanguageCode,
-) {
+public fun set_language<RS>(self: &mut Recording<RS>, language: LanguageCode) {
     match (self.state) {
         RecordingState::Initialized => {
             self.language.swap_or_fill(language);
@@ -326,8 +321,8 @@ public fun set_language<RecordingShare>(
 /// Adds a contributor to the recording with specified roles.
 /// Each contributor must have 1-20 roles.
 /// Required State: Initialized
-public fun add_credit<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
+public fun add_credit<RS>(
+    self: &mut Recording<RS>,
     contributor: &Contributor,
     credit: Credit<RecordingContributorRole>,
 ) {
@@ -348,10 +343,7 @@ public fun add_credit<RecordingShare>(
     }
 }
 
-public fun add_primary_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    contributor: &Contributor,
-) {
+public fun add_primary_artist<RS>(self: &mut Recording<RS>, contributor: &Contributor) {
     match (self.state) {
         RecordingState::Initialized => {
             let contributor_id = contributor.id();
@@ -366,10 +358,7 @@ public fun add_primary_artist<RecordingShare>(
     }
 }
 
-public fun add_featured_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    contributor: &Contributor,
-) {
+public fun add_featured_artist<RS>(self: &mut Recording<RS>, contributor: &Contributor) {
     match (self.state) {
         RecordingState::Initialized => {
             let contributor_id = contributor.id();
@@ -386,10 +375,7 @@ public fun add_featured_artist<RecordingShare>(
 
 /// Removes a primary artist from the recording.
 /// Required State: Initialized
-public fun remove_primary_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    contributor_id: ID,
-) {
+public fun remove_primary_artist<RS>(self: &mut Recording<RS>, contributor_id: ID) {
     match (self.state) {
         RecordingState::Initialized => {
             self.primary_artist_ids.remove(&contributor_id);
@@ -400,10 +386,7 @@ public fun remove_primary_artist<RecordingShare>(
 
 /// Removes a featured artist from the recording.
 /// Required State: Initialized
-public fun remove_featured_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    contributor_id: ID,
-) {
+public fun remove_featured_artist<RS>(self: &mut Recording<RS>, contributor_id: ID) {
     match (self.state) {
         RecordingState::Initialized => {
             self.featured_artist_ids.remove(&contributor_id);
@@ -416,7 +399,7 @@ public fun remove_featured_artist<RecordingShare>(
 
 /// Sets the primary genre of the recording.
 /// Required State: Initialized
-public fun set_primary_genre<RecordingShare>(self: &mut Recording<RecordingShare>, genre: &Genre) {
+public fun set_primary_genre<RS>(self: &mut Recording<RS>, genre: &Genre) {
     match (self.state) {
         RecordingState::Initialized => {
             assert!(
@@ -431,10 +414,7 @@ public fun set_primary_genre<RecordingShare>(self: &mut Recording<RecordingShare
 
 /// Adds a secondary genre to the recording.
 /// Required State: Initialized
-public fun add_secondary_genre<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    genre: &Genre,
-) {
+public fun add_secondary_genre<RS>(self: &mut Recording<RS>, genre: &Genre) {
     match (self.state) {
         RecordingState::Initialized => {
             assert!(self.primary_genre_id != genre.id(), EAlreadyAssignedAsPrimaryGenre);
@@ -446,10 +426,7 @@ public fun add_secondary_genre<RecordingShare>(
 
 /// Removes a secondary genre from the recording.
 /// Required State: Initialized
-public fun remove_secondary_genre<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    genre_id: ID,
-) {
+public fun remove_secondary_genre<RS>(self: &mut Recording<RS>, genre_id: ID) {
     match (self.state) {
         RecordingState::Initialized => {
             self.secondary_genre_ids.remove(&genre_id);
@@ -462,10 +439,7 @@ public fun remove_secondary_genre<RecordingShare>(
 
 /// Sets the musical key of the recording.
 /// Required State: Initialized
-public fun set_musical_key<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    musical_key: MusicalKey,
-) {
+public fun set_musical_key<RS>(self: &mut Recording<RS>, musical_key: MusicalKey) {
     match (self.state) {
         RecordingState::Initialized => {
             self.musical_key.swap_or_fill(musical_key);
@@ -476,10 +450,7 @@ public fun set_musical_key<RecordingShare>(
 
 /// Sets the time signature of the recording.
 /// Required State: Initialized
-public fun set_time_signature<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    time_signature: TimeSignature,
-) {
+public fun set_time_signature<RS>(self: &mut Recording<RS>, time_signature: TimeSignature) {
     match (self.state) {
         RecordingState::Initialized => {
             self.time_signature.swap_or_fill(time_signature);
@@ -490,7 +461,7 @@ public fun set_time_signature<RecordingShare>(
 
 /// Sets the tempo in beats per minute.
 /// Required State: Initialized
-public fun set_tempo_bpm<RecordingShare>(self: &mut Recording<RecordingShare>, tempo_bpm: u16) {
+public fun set_tempo_bpm<RS>(self: &mut Recording<RS>, tempo_bpm: u16) {
     match (self.state) {
         RecordingState::Initialized => {
             self.tempo_bpm.swap_or_fill(tempo_bpm);
@@ -502,148 +473,140 @@ public fun set_tempo_bpm<RecordingShare>(self: &mut Recording<RecordingShare>, t
 //=== Public View Functions ===
 
 /// Returns the recording's object ID.
-public fun id<RecordingShare>(self: &Recording<RecordingShare>): ID {
+public fun id<RS>(self: &Recording<RS>): ID {
     self.id.to_inner()
 }
 
 /// Returns the current lifecycle state.
-public fun state<RecordingShare>(self: &Recording<RecordingShare>): RecordingState {
+public fun state<RS>(self: &Recording<RS>): RecordingState {
     self.state
 }
 
 /// Returns the primary title.
-public fun title<RecordingShare>(self: &Recording<RecordingShare>): &String {
+public fun title<RS>(self: &Recording<RS>): &String {
     &self.title
 }
 
 /// Returns the optional title version.
-public fun title_version<RecordingShare>(self: &Recording<RecordingShare>): &Option<String> {
+public fun title_version<RS>(self: &Recording<RS>): &Option<String> {
     &self.title_version
 }
 
 /// Returns the optional subtitle.
-public fun subtitle<RecordingShare>(self: &Recording<RecordingShare>): &Option<String> {
+public fun subtitle<RS>(self: &Recording<RS>): &Option<String> {
     &self.subtitle
 }
 
 /// Returns the ID of the underlying composition.
-public fun composition_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
+public fun composition_id<RS>(self: &Recording<RS>): ID {
     self.composition_id
 }
 
 /// Returns the type of the composition's share token.
-public fun composition_share_type<RecordingShare>(self: &Recording<RecordingShare>): &TypeName {
+public fun composition_share_type<RS>(self: &Recording<RS>): &TypeName {
     &self.composition_share_type
 }
 
 /// Returns the composition's revenue split in basis points.
-public fun composition_split_bps<RecordingShare>(self: &Recording<RecordingShare>): BPS {
+public fun composition_split_bps<RS>(self: &Recording<RS>): BPS {
     self.composition_split_bps
 }
 
 /// Returns the contributor-to-roles mapping.
-public fun credits<RecordingShare>(
-    self: &Recording<RecordingShare>,
-): &VecMap<ID, Credit<RecordingContributorRole>> {
+public fun credits<RS>(self: &Recording<RS>): &VecMap<ID, Credit<RecordingContributorRole>> {
     &self.credits
 }
 
 /// Returns the primary genre ID.
-public fun primary_genre_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
+public fun primary_genre_id<RS>(self: &Recording<RS>): ID {
     self.primary_genre_id
 }
 
 /// Returns the set of secondary genre IDs.
-public fun secondary_genre_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
+public fun secondary_genre_ids<RS>(self: &Recording<RS>): &VecSet<ID> {
     &self.secondary_genre_ids
 }
 
 /// Returns the optional language code.
-public fun language<RecordingShare>(self: &Recording<RecordingShare>): &Option<LanguageCode> {
+public fun language<RS>(self: &Recording<RS>): &Option<LanguageCode> {
     &self.language
 }
 
 /// Returns whether the recording contains explicit content.
-public fun is_explicit<RecordingShare>(self: &Recording<RecordingShare>): bool {
+public fun is_explicit<RS>(self: &Recording<RS>): bool {
     self.is_explicit
 }
 
 /// Returns whether the recording is instrumental.
-public fun is_instrumental<RecordingShare>(self: &Recording<RecordingShare>): bool {
+public fun is_instrumental<RS>(self: &Recording<RS>): bool {
     self.is_instrumental
 }
 
 /// Returns the optional musical key.
-public fun musical_key<RecordingShare>(self: &Recording<RecordingShare>): &Option<MusicalKey> {
+public fun musical_key<RS>(self: &Recording<RS>): &Option<MusicalKey> {
     &self.musical_key
 }
 
 /// Returns the optional time signature.
-public fun time_signature<RecordingShare>(
-    self: &Recording<RecordingShare>,
-): &Option<TimeSignature> {
+public fun time_signature<RS>(self: &Recording<RS>): &Option<TimeSignature> {
     &self.time_signature
 }
 
 /// Returns the optional tempo in BPM.
-public fun tempo_bpm<RecordingShare>(self: &Recording<RecordingShare>): &Option<u16> {
+public fun tempo_bpm<RS>(self: &Recording<RS>): &Option<u16> {
     &self.tempo_bpm
 }
 
 /// Returns a reference to the master audio file.
-public fun master<RecordingShare>(self: &Recording<RecordingShare>): &Audio {
+public fun master<RS>(self: &Recording<RS>): &Audio {
     &self.master
 }
 
 /// Returns a reference to the cover art.
-public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverArt {
+public fun cover_art<RS>(self: &Recording<RS>): &CoverArt {
     &self.cover_art
 }
 
 /// Returns whether the provided ID is a primary artist on the recording.
-public fun is_primary_artist<RecordingShare>(
-    self: &Recording<RecordingShare>,
-    contributor_id: ID,
-): bool {
+public fun is_primary_artist<RS>(self: &Recording<RS>, contributor_id: ID): bool {
     self.primary_artist_ids.contains(&contributor_id)
 }
 
 /// Returns whether the s is a featured artist on the recording.
-public fun is_featured_artist<RecordingShare>(
-    self: &Recording<RecordingShare>,
-    contributor_id: ID,
-): bool {
+public fun is_featured_artist<RS>(self: &Recording<RS>, contributor_id: ID): bool {
     self.featured_artist_ids.contains(&contributor_id)
 }
 
 /// Returns a reference to the primary artist IDs.
-public fun primary_artist_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
+public fun primary_artist_ids<RS>(self: &Recording<RS>): &VecSet<ID> {
     &self.primary_artist_ids
 }
 
 /// Returns a reference to the featured artist IDs.
-public fun featured_artist_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
+public fun featured_artist_ids<RS>(self: &Recording<RS>): &VecSet<ID> {
     &self.featured_artist_ids
 }
 
 //=== UID Functions ===
 
 /// Returns a reference to the recording's UID for reading dynamic fields.
-public fun uid<RecordingShare>(self: &Recording<RecordingShare>): &UID {
+public fun uid<RS>(self: &Recording<RS>): &UID {
     &self.id
 }
 
 /// Returns a mutable reference to the recording's UID for dynamic field operations.
 /// Requires the admin capability.
-public fun uid_mut<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _cap: &RecordingAdminCap<RecordingShare>,
-): &mut UID {
+public fun uid_mut<RS>(self: &mut Recording<RS>, _cap: &RecordingAdminCap<RS>): &mut UID {
     &mut self.id
 }
 
-public(package) fun uid_mut_internal<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-): &mut UID {
+/// Returns a mutable reference to the recording's UID for authorized plugins.
+/// Requires a witness from the plugin module.
+public fun uid_mut_authorized<RS, P: drop>(self: &mut Recording<RS>, _: P): &mut UID {
+    plugin::assert_authorized<P>(&self.id);
+    &mut self.id
+}
+
+public(package) fun uid_mut_internal<RS>(self: &mut Recording<RS>): &mut UID {
     &mut self.id
 }

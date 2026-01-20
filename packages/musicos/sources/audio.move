@@ -12,7 +12,6 @@ use walrus_data::walrus_data::WalrusData;
 
 //=== Structs ===
 
-/// Represents a validated audio file with technical metadata.
 public struct Audio has drop, store {
     channels: u8,
     bit_depth: u8,

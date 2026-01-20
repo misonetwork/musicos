@@ -13,6 +13,8 @@ public struct Credit<Role: copy + drop + store> has copy, drop, store {
     roles: vector<Role>,
 }
 
+//=== Errors ===
+
 const EDuplicateRoles: u64 = 0;
 
 //=== Public Functions ===

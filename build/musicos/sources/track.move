@@ -42,9 +42,9 @@ public struct Track has drop, store {
 /// Creates a new track from a recording.
 /// Requires the recording admin capability.
 /// Captures the recording's metadata at creation time.
-public fun new<RecordingShare>(
-    _cap: &RecordingAdminCap<RecordingShare>,
-    recording: &Recording<RecordingShare>,
+public fun new<RS>(
+    _cap: &RecordingAdminCap<RS>,
+    recording: &Recording<RS>,
     cover_art: Option<CoverArt>,
 ): Track {
     Track {
@@ -52,7 +52,7 @@ public fun new<RecordingShare>(
         composition_share_type: *recording.composition_share_type(),
         composition_split_bps: recording.composition_split_bps(),
         recording_id: recording.id(),
-        recording_share_type: with_defining_ids<RecordingShare>(),
+        recording_share_type: with_defining_ids<RS>(),
         duration_ms: recording.master().duration_ms(),
         cover_art: cover_art.destroy_with_default(*recording.cover_art()),
     }

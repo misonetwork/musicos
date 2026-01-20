@@ -5,9 +5,9 @@ license = "Apache 2.0"
 authors = ["Studio Mirai, LLC"]
 
 [dependencies]
-interest_bps = { local = "../interest-mvr/bps" }
-language_code = { local = "../language_code" }
-walrus_data = { local = "../walrus_data" }
+interest_bps = { local = "../../../interest-mvr/bps" }
+language_code = { local = "../../../language_code" }
+walrus_data = { local = "../../../walrus_data" }
 
 [environments]
 mirainet = "f1eb94c0"

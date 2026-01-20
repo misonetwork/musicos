@@ -17,6 +17,7 @@ use interest_bps::bps::{Self, BPS};
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
 use musicos::credit::Credit;
+use musicos::extension;
 use musicos::share;
 use std::string::String;
 use sui::balance::Balance;
@@ -312,8 +313,6 @@ public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &Opti
     &self.lyrics
 }
 
-//=== Package Functions ===
-
 //=== UID Functions ===
 
 /// Returns a reference to the composition's UID for reading dynamic fields.
@@ -321,12 +320,22 @@ public fun uid<CompositionShare>(self: &Composition<CompositionShare>): &UID {
     &self.id
 }
 
-/// Returns a mutable reference to the composition's UID for dynamic field operations.
+/// Returns a mutable reference to the composition's UID.
 /// Requires the admin capability.
 public fun uid_mut<CompositionShare>(
     self: &mut Composition<CompositionShare>,
-    _cap: &CompositionAdminCap<CompositionShare>,
+    _: &CompositionAdminCap<CompositionShare>,
 ): &mut UID {
+    &mut self.id
+}
+
+/// Returns a mutable reference to the composition's UID for authorized extensions.
+/// Requires a witness from the extension module.
+public fun uid_mut_authorized<CompositionShare, Extension: drop>(
+    self: &mut Composition<CompositionShare>,
+    witness: Extension,
+): &mut UID {
+    extension::assert_authorized(&self.id, witness);
     &mut self.id
 }
 

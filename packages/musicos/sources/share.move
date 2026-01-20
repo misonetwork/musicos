@@ -58,7 +58,7 @@ public(package) fun intialize<Share>(
 
     // Mint the share balance.
     let balance = share_treasury_cap.mint_balance(share_currency_supply!());
-    
+
     // Make the supply fixed.
     share_currency.make_supply_fixed(share_treasury_cap);
 
@@ -83,7 +83,7 @@ public(package) macro fun share_icon_url(): String {
 
 fun assert_valid_share_type<Share>() {
     let t = with_defining_ids<Share>();
-    let t_name_str =  t.into_string().to_string();
+    let t_name_str = t.into_string().to_string();
     assert!(t_name_str.length() == 80, EInvalidShareType);
     let t_addr_str = t.address_string().to_string();
     let module_type_str = t_name_str.substring(t_addr_str.length() + 2, t_name_str.length());

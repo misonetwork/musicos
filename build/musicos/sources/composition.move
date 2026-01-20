@@ -17,6 +17,7 @@ use interest_bps::bps::{Self, BPS};
 use musicos::composition_contributor_role::CompositionContributorRole;
 use musicos::contributor::Contributor;
 use musicos::credit::Credit;
+use musicos::plugin;
 use musicos::share;
 use std::string::String;
 use sui::balance::Balance;
@@ -31,8 +32,8 @@ use walrus_data::walrus_data::WalrusData;
 //=== Structs ===
 
 /// A musical composition representing the underlying written work.
-/// The phantom CompositionShare type parameter links to the share token.
-public struct Composition<phantom CompositionShare> has key {
+/// The phantom CS type parameter links to the share token.
+public struct Composition<phantom CS> has key {
     /// Unique identifier for this composition.
     id: UID,
     /// Current lifecycle state.
@@ -52,7 +53,7 @@ public struct Composition<phantom CompositionShare> has key {
 /// Capability that authorizes modifications to a specific composition.
 /// Initialized when a composition is registered and transferred to the owner.
 /// Address is derived from the composition for client-side discoverability.
-public struct CompositionAdminCap<phantom CompositionShare> has key, store {
+public struct CompositionAdminCap<phantom CS> has key, store {
     /// Unique identifier for this capability.
     id: UID,
 }
@@ -71,7 +72,7 @@ public struct CompositionInitializedEvent has copy, drop {
 }
 
 /// Emitted when a composition is published.
-public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop {
+public struct CompositionPublishedEvent<phantom CS> has copy, drop {
     /// ID of the published composition.
     composition_id: ID,
 }
@@ -133,18 +134,18 @@ const ENoContributors: u64 = 20;
 /// - Admin capability for the owner
 /// - Initial share token balance
 /// - Promise that must be consumed by calling `share()`
-public fun new<CompositionShare>(
+public fun new<CS>(
     title: String,
     split_value: u64,
-    share_currency: &mut Currency<CompositionShare>,
-    share_treasury_cap: TreasuryCap<CompositionShare>,
+    share_currency: &mut Currency<CS>,
+    share_treasury_cap: TreasuryCap<CS>,
     ctx: &mut TxContext,
 ): (
-    Composition<CompositionShare>,
-    CompositionAdminCap<CompositionShare>,
-    Balance<CompositionShare>,
+    Composition<CS>,
+    CompositionAdminCap<CS>,
+    Balance<CS>,
 ) {
-    let mut composition = Composition<CompositionShare> {
+    let mut composition = Composition<CS> {
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
@@ -154,11 +155,11 @@ public fun new<CompositionShare>(
         lyrics: option::none(),
     };
 
-    let composition_admin_cap = CompositionAdminCap<CompositionShare> {
+    let composition_admin_cap = CompositionAdminCap<CS> {
         id: claim(&mut composition.id, CompositionAdminCapKey()),
     };
 
-    let composition_shares = share::intialize<CompositionShare>(
+    let composition_shares = share::intialize<CS>(
         share_currency,
         share_treasury_cap,
     );
@@ -173,14 +174,14 @@ public fun new<CompositionShare>(
 /// Publishes the composition, making it immutable.
 /// Requires at least one contributor.
 /// Required State: Initialized
-public fun publish<CompositionShare>(mut self: Composition<CompositionShare>, clock: &Clock) {
+public fun publish<CS>(mut self: Composition<CS>, clock: &Clock) {
     match (self.state) {
         CompositionState::Initialized => {
             assert!(!self.credits.is_empty(), ENoContributors);
 
             self.state = CompositionState::Published(clock.timestamp_ms());
 
-            emit(CompositionPublishedEvent<CompositionShare> {
+            emit(CompositionPublishedEvent<CS> {
                 composition_id: self.id(),
             });
 
@@ -194,8 +195,8 @@ public fun publish<CompositionShare>(mut self: Composition<CompositionShare>, cl
 
 /// Adds an alternate title to the composition.
 /// Required State: Initialized
-public fun add_alternate_title<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
+public fun add_alternate_title<CS>(
+    self: &mut Composition<CS>,
     alternate_title: String,
 ) {
     match (self.state) {
@@ -211,8 +212,8 @@ public fun add_alternate_title<CompositionShare>(
 /// Adds a contributor to the composition with specified roles.
 /// Each contributor must have 1-20 roles.
 /// Required State: Initialized
-public fun add_credit<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
+public fun add_credit<CS>(
+    self: &mut Composition<CS>,
     contributor: &Contributor,
     credit: Credit<CompositionContributorRole>,
 ) {
@@ -238,8 +239,8 @@ public fun add_credit<CompositionShare>(
 /// The split determines what percentage of track revenue goes to the composition
 /// vs the recording. Must be set before publishing.
 /// Required State: Initialized
-public fun set_split_bps<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
+public fun set_split_bps<CS>(
+    self: &mut Composition<CS>,
     split_value: u64,
 ) {
     match (self.state) {
@@ -259,8 +260,8 @@ public fun set_split_bps<CompositionShare>(
 
 /// Sets the lyrics data reference for the composition.
 /// Required State: Initialized
-public fun set_lyrics<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
+public fun set_lyrics<CS>(
+    self: &mut Composition<CS>,
     data: WalrusData,
 ) {
     match (self.state) {
@@ -274,41 +275,41 @@ public fun set_lyrics<CompositionShare>(
 //=== Public View Functions ===
 
 /// Returns the composition's object ID.
-public fun id<CompositionShare>(self: &Composition<CompositionShare>): ID {
+public fun id<CS>(self: &Composition<CS>): ID {
     self.id.to_inner()
 }
 
 /// Returns the current lifecycle state.
-public fun state<CompositionShare>(self: &Composition<CompositionShare>): CompositionState {
+public fun state<CS>(self: &Composition<CS>): CompositionState {
     self.state
 }
 
 /// Returns the primary title.
-public fun title<CompositionShare>(self: &Composition<CompositionShare>): &String {
+public fun title<CS>(self: &Composition<CS>): &String {
     &self.title
 }
 
 /// Returns the list of alternate titles.
-public fun alternate_titles<CompositionShare>(
-    self: &Composition<CompositionShare>,
+public fun alternate_titles<CS>(
+    self: &Composition<CS>,
 ): &vector<String> {
     &self.alternate_titles
 }
 
 /// Returns the contributor-to-credit mapping.
-public fun credits<CompositionShare>(
-    self: &Composition<CompositionShare>,
+public fun credits<CS>(
+    self: &Composition<CS>,
 ): &VecMap<ID, Credit<CompositionContributorRole>> {
     &self.credits
 }
 
 /// Returns the revenue split rate in basis points.
-public fun split_bps<CompositionShare>(self: &Composition<CompositionShare>): BPS {
+public fun split_bps<CS>(self: &Composition<CS>): BPS {
     self.split_bps
 }
 
 /// Returns the optional lyrics data reference.
-public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &Option<WalrusData> {
+public fun lyrics<CS>(self: &Composition<CS>): &Option<WalrusData> {
     &self.lyrics
 }
 
@@ -317,21 +318,31 @@ public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &Opti
 //=== UID Functions ===
 
 /// Returns a reference to the composition's UID for reading dynamic fields.
-public fun uid<CompositionShare>(self: &Composition<CompositionShare>): &UID {
+public fun uid<CS>(self: &Composition<CS>): &UID {
     &self.id
 }
 
 /// Returns a mutable reference to the composition's UID for dynamic field operations.
 /// Requires the admin capability.
-public fun uid_mut<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    _cap: &CompositionAdminCap<CompositionShare>,
+public fun uid_mut<CS>(
+    self: &mut Composition<CS>,
+    _cap: &CompositionAdminCap<CS>,
 ): &mut UID {
     &mut self.id
 }
 
-public(package) fun uid_mut_internal<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
+/// Returns a mutable reference to the composition's UID for authorized plugins.
+/// Requires a witness from the plugin module.
+public fun uid_mut_authorized<CS, P: drop>(
+    self: &mut Composition<CS>,
+    _: P,
+): &mut UID {
+    plugin::assert_authorized<P>(&self.id);
+    &mut self.id
+}
+
+public(package) fun uid_mut_internal<CS>(
+    self: &mut Composition<CS>,
 ): &mut UID {
     &mut self.id
 }
