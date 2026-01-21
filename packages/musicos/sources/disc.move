@@ -29,7 +29,7 @@ public struct Disc has drop, store {
 //=== Constants ===
 
 /// Maximum number of tracks allowed on a single disc.
-const MAX_TRACKS_PER_DISC: u8 = 50;
+const MAX_TRACKS_PER_DISC: u64 = 50;
 
 //=== Errors ===
 
@@ -42,7 +42,7 @@ const EMaxTracksExceeded: u64 = 10;
 /// Automatically calculates the total duration.
 /// Aborts if more than 50 tracks are provided.
 public fun new(tracks: vector<Track>): Disc {
-    assert!(tracks.length() <= MAX_TRACKS_PER_DISC as u64, EMaxTracksExceeded);
+    assert!(tracks.length() <= MAX_TRACKS_PER_DISC, EMaxTracksExceeded);
 
     let mut duration_ms = 0;
     tracks.do_ref!(|track| {

@@ -26,6 +26,8 @@ use sui::clock::Clock;
 use sui::derived_object::claim;
 use sui::event::emit;
 
+public use fun release_admin_cap_release_id as ReleaseAdminCap.release_id;
+
 //=== Structs ===
 
 /// A music release containing one or more discs of tracks.
@@ -141,7 +143,7 @@ public enum ReleaseState has copy, drop, store {
 
 //=== Constants ===
 
-const MAX_DISCS: u8 = 20;
+const MAX_DISCS: u64 = 20;
 
 //=== Errors ===
 
@@ -171,7 +173,7 @@ public fun new(
     discs: vector<Disc>,
     ctx: &mut TxContext,
 ): (Release, ReleaseAdminCap) {
-    assert!(discs.length() <= MAX_DISCS as u64, EMaxDiscsReached);
+    assert!(discs.length() <= MAX_DISCS, EMaxDiscsReached);
 
     // Build a track sequence for the release based on the number of discs.
     let track_sequence = track_sequence::new(&discs);
@@ -271,14 +273,14 @@ public fun distribute_revenue<C>(self: &mut Release, value: u64) {
 
             self.track_sequence.length().do!(|i| {
                 // Derive the track identifier for the given track sequence index.
-                let track_position = self.track_sequence.track_positions()[i as u64];
+                let track_position = self.track_sequence.track_positions()[i];
 
                 // Fetch the disc and track with the track identifier.
-                let disc = &self.discs[track_position.disc_idx() as u64];
-                let track = &disc.tracks()[track_position.track_idx() as u64];
+                let disc = &self.discs[track_position.disc_idx()];
+                let track = &disc.tracks()[track_position.track_idx()];
 
                 // Fetch the track split rate for the given track sequence index.
-                let track_split_bps = self.track_splits_bps[i as u64];
+                let track_split_bps = self.track_splits_bps[i];
 
                 if (track_split_bps.value() > 0) {
                     let rec_split_value = track_split_bps.calc(distribution_value);
@@ -359,6 +361,11 @@ public fun cover_art(self: &Release): &CoverArt {
     &self.cover_art
 }
 
+/// Returns the release ID associated with the admin capability.
+public fun release_admin_cap_release_id(cap: &ReleaseAdminCap): ID {
+    cap.release_id
+}
+
 //=== UID Functions ===
 
 /// Returns a reference to the release's UID for reading dynamic fields.
@@ -389,7 +396,7 @@ fun authorize(self: &Release, cap: &ReleaseAdminCap) {
 
 /// Asserts that the number of track splits matches the number of tracks.
 fun assert_track_splits_bps_length(track_splits_bps: vector<BPS>, track_sequence: &TrackSequence) {
-    assert!(track_splits_bps.length() == track_sequence.length() as u64, EInvalidTrackSplitsLength);
+    assert!(track_splits_bps.length() == track_sequence.length(), EInvalidTrackSplitsLength);
 }
 
 /// Asserts that the track splits sum to 100% (10,000 BPS).

@@ -15,7 +15,7 @@ use musicos::track_position::{Self, TrackPosition};
 /// Supports efficient navigation between tracks across multiple discs.
 public struct TrackSequence has drop, store {
     /// Number of tracks on each disc, indexed by disc number.
-    tracks_per_disc: vector<u8>,
+    tracks_per_disc: vector<u64>,
     /// Flattened list of all track positions in playback order.
     track_positions: vector<TrackPosition>,
     // Total duration of the sequence in milliseconds.
@@ -25,7 +25,7 @@ public struct TrackSequence has drop, store {
 //=== Constants ===
 
 /// Maximum number of tracks allowed in a single release.
-const MAX_TRACK_SEQUENCE_LENGTH: u8 = 255;
+const MAX_TRACK_SEQUENCE_LENGTH: u64 = 255;
 
 //=== Errors ===
 
@@ -49,7 +49,7 @@ const ENoDiscs: u64 = 20;
 public(package) fun new(discs: &vector<Disc>): TrackSequence {
     assert!(!discs.is_empty(), ENoDiscs);
 
-    let mut tracks_per_disc: vector<u8> = vector[];
+    let mut tracks_per_disc: vector<u64> = vector[];
     let mut track_positions: vector<TrackPosition> = vector[];
     let mut duration_ms: u64 = 0;
 
@@ -58,17 +58,17 @@ public(package) fun new(discs: &vector<Disc>): TrackSequence {
         let tracks = disc.tracks();
 
         tracks.length().do!(|track_idx| {
-            let track_position = track_position::new(disc_idx as u8, track_idx as u8);
+            let track_position = track_position::new(disc_idx, track_idx);
             track_positions.push_back(track_position);
             duration_ms = duration_ms + tracks[track_idx].duration_ms();
         });
 
-        tracks_per_disc.push_back(tracks.length() as u8);
+        tracks_per_disc.push_back(tracks.length());
     });
 
     // Assert the length of the track sequence doesn't exceed the allowed maximum.
     assert!(
-        track_positions.length() <= MAX_TRACK_SEQUENCE_LENGTH as u64,
+        track_positions.length() <= MAX_TRACK_SEQUENCE_LENGTH,
         EMaxSequenceLengthExceeded,
     );
 
@@ -87,18 +87,16 @@ public(package) fun new(discs: &vector<Disc>): TrackSequence {
 /// Advances to the next track on the current disc, or to the first track
 /// of the next disc if at the end of a disc. Wraps to the first track
 /// of the first disc when reaching the end of the release.
-public fun next(self: &TrackSequence, disc_idx: u8, track_idx: u8): TrackPosition {
-    let disc_idx_u64 = disc_idx as u64;
-
+public fun next(self: &TrackSequence, disc_idx: u64, track_idx: u64): TrackPosition {
     let disc_count = self.tracks_per_disc.length();
-    assert!(disc_idx_u64 < disc_count, EDiscIndexOutOfBounds);
+    assert!(disc_idx < disc_count, EDiscIndexOutOfBounds);
 
-    let track_count = self.tracks_per_disc[disc_idx_u64];
+    let track_count = self.tracks_per_disc[disc_idx];
     assert!(track_idx < track_count, ETrackIndexOutOfBounds);
 
     if (track_idx + 1 < track_count) {
         track_position::new(disc_idx, track_idx + 1)
-    } else if (disc_idx_u64 + 1 < disc_count) {
+    } else if (disc_idx + 1 < disc_count) {
         track_position::new(disc_idx + 1, 0)
     } else {
         track_position::new(0, 0)
@@ -109,38 +107,32 @@ public fun next(self: &TrackSequence, disc_idx: u8, track_idx: u8): TrackPositio
 /// Moves to the previous track on the current disc, or to the last track
 /// of the previous disc if at the start of a disc. Wraps to the last track
 /// of the last disc when at the beginning of the release.
-public fun previous(self: &TrackSequence, disc_idx: u8, track_idx: u8): TrackPosition {
-    let disc_idx_u64 = disc_idx as u64;
-
+public fun previous(self: &TrackSequence, disc_idx: u64, track_idx: u64): TrackPosition {
     let disc_count = self.tracks_per_disc.length();
-    assert!(disc_idx_u64 < disc_count, EDiscIndexOutOfBounds);
+    assert!(disc_idx < disc_count, EDiscIndexOutOfBounds);
 
-    let track_count = self.tracks_per_disc[disc_idx_u64];
+    let track_count = self.tracks_per_disc[disc_idx];
     assert!(track_idx < track_count, ETrackIndexOutOfBounds);
 
     if (track_idx > 0) {
         track_position::new(disc_idx, track_idx - 1)
-    } else if (disc_idx_u64 > 0) {
-        let prev_disc_idx = (disc_idx_u64 - 1) as u8;
-        let prev_track_count = self.tracks_per_disc[disc_idx_u64 - 1];
-        track_position::new(prev_disc_idx, prev_track_count - 1)
+    } else if (disc_idx > 0) {
+        let prev_track_count = self.tracks_per_disc[disc_idx - 1];
+        track_position::new(disc_idx - 1, prev_track_count - 1)
     } else {
-        let last_disc_idx = (disc_count - 1) as u8;
         let last_track_count = self.tracks_per_disc[disc_count - 1];
-        track_position::new(last_disc_idx, last_track_count - 1)
+        track_position::new(disc_count - 1, last_track_count - 1)
     }
 }
 
 /// Returns the total number of tracks across all discs.
-/// Safe to cast to u8 because new() enforces max 255 tracks.
-public fun length(self: &TrackSequence): u8 {
-    self.track_positions.length() as u8
+public fun length(self: &TrackSequence): u64 {
+    self.track_positions.length()
 }
 
 /// Returns the track position at the given sequence index.
 /// The sequence index is a flattened position across all discs.
-public fun track_position(self: &TrackSequence, track_sequence_idx: u8): &TrackPosition {
-    let track_sequence_idx = track_sequence_idx as u64;
+public fun track_position(self: &TrackSequence, track_sequence_idx: u64): &TrackPosition {
     assert!(track_sequence_idx < self.track_positions.length(), ESequenceIndexOutOfBounds);
     &self.track_positions[track_sequence_idx]
 }
@@ -151,7 +143,7 @@ public fun track_positions(self: &TrackSequence): &vector<TrackPosition> {
 }
 
 /// Returns the number of tracks on each disc.
-public fun tracks_per_disc(self: &TrackSequence): &vector<u8> {
+public fun tracks_per_disc(self: &TrackSequence): &vector<u64> {
     &self.tracks_per_disc
 }
 
