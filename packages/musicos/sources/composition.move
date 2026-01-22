@@ -174,7 +174,11 @@ public fun new<CompositionShare>(
 /// Publishes the composition, making it immutable.
 /// Requires at least one contributor.
 /// Required State: Initialized
-public fun publish<CompositionShare>(mut self: Composition<CompositionShare>, clock: &Clock) {
+public fun publish<CompositionShare>(
+    mut self: Composition<CompositionShare>,
+    _: &CompositionAdminCap<CompositionShare>,
+    clock: &Clock,
+) {
     match (self.state) {
         CompositionState::Initialized => {
             assert!(!self.credits.is_empty(), ENoContributors);
@@ -237,7 +241,8 @@ public fun add_credit<CompositionShare>(
 
 /// Sets the revenue split rate for this composition.
 /// The split determines what percentage of track revenue goes to the composition
-/// vs the recording. Must be set before publishing.
+/// vs the recording. Must be set before publishing. Note that updating the split_bps
+/// only impacts future recordings of the composition.
 /// Required State: Initialized
 public fun set_split_bps<CompositionShare>(
     self: &mut Composition<CompositionShare>,

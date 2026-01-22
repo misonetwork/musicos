@@ -12,6 +12,7 @@
 /// - Groups can contain multiple individual contributors
 module musicos::contributor;
 
+use std::string::String;
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_set::{Self, VecSet};
@@ -28,6 +29,10 @@ public struct Contributor has key {
     id: UID,
     /// Whether this is an individual or group contributor.
     kind: ContributorKind,
+    /// Human-readable name of the contributor.
+    /// Note this name is not "official" or "verified" in any way.
+    /// Verification should be performed by the application layer.
+    name: String,
 }
 
 /// Capability that authorizes modifications to a specific contributor.
@@ -65,6 +70,8 @@ public enum ContributorKind has copy, drop, store {
 public struct ContributorCreatedEvent has copy, drop {
     /// ID of the newly created contributor.
     contributor_id: ID,
+    /// Name of the contributor.
+    name: String,
 }
 
 //=== Errors ===
@@ -83,10 +90,15 @@ const ENotGroupKind: u64 = 32;
 /// Creates a new contributor with the specified kind and name.
 /// Returns the admin capability for managing the contributor.
 /// The contributor is shared and starts in the Created state.
-public fun new(kind: ContributorKind, ctx: &mut TxContext): ContributorAdminCap {
+public fun new(
+    kind: ContributorKind,
+    name: String,
+    ctx: &mut TxContext,
+): (Contributor, ContributorAdminCap) {
     let mut contributor = Contributor {
         id: object::new(ctx),
         kind,
+        name,
     };
 
     let contributor_id = contributor.id();
@@ -98,11 +110,22 @@ public fun new(kind: ContributorKind, ctx: &mut TxContext): ContributorAdminCap 
 
     emit(ContributorCreatedEvent {
         contributor_id: contributor.id(),
+        name,
     });
 
-    transfer::share_object(contributor);
+    (contributor, contributor_admin_cap)
+}
 
-    contributor_admin_cap
+// Turn the contributor into a shared object.
+public fun share(self: Contributor, cap: &ContributorAdminCap) {
+    self.authorize(cap);
+    transfer::share_object(self);
+}
+
+// Set the human-readable name of the contributor.
+public fun set_name(self: &mut Contributor, cap: &ContributorAdminCap, name: String) {
+    self.authorize(cap);
+    self.name = name;
 }
 
 /// Adds an individual contributor to a group.
@@ -162,6 +185,11 @@ public fun id(self: &Contributor): ID {
     self.id.to_inner()
 }
 
+/// Returns the human-readable name of this contributor.
+public fun name(self: &Contributor): String {
+    self.name
+}
+
 /// Returns true if this contributor is an individual.
 public fun is_individual_kind(self: &Contributor): bool {
     match (&self.kind) {
@@ -218,15 +246,4 @@ public fun uid_mut(self: &mut Contributor, cap: &ContributorAdminCap): &mut UID 
 /// Verifies that the admin capability matches this contributor.
 fun authorize(self: &Contributor, cap: &ContributorAdminCap) {
     assert!(cap.contributor_id == self.id(), EUnauthorized);
-}
-
-//=== Test Only Functions ===
-
-#[test_only]
-/// Creates a test contributor without sharing it.
-public fun new_for_testing(ctx: &mut TxContext): Contributor {
-    Contributor {
-        id: object::new(ctx),
-        kind: ContributorKind::Individual,
-    }
 }

@@ -249,7 +249,11 @@ public fun new<RecordingShare, CS>(
 /// Publishes the recording, making it immutable.
 /// Requires at least one contributor to be assigned.
 /// Required State: Initialized
-public fun publish<RecordingShare>(mut self: Recording<RecordingShare>, clock: &Clock) {
+public fun publish<RecordingShare>(
+    mut self: Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
+    clock: &Clock,
+) {
     match (self.state) {
         RecordingState::Initialized => {
             // Assert the recording has at least one contributor.

@@ -1,0 +1,12 @@
+[package]
+name = "composition_reward_pool"
+edition = "2024"
+license = "Apache 2.0"
+authors = ["Sona Labs, Inc. (build@sonamusic.com)"]
+
+[dependencies]
+musicos = { local = "../../../../musicos/packages/musicos" }
+reward_pool = { local = "../../../../reward_pool" }
+
+[environments]
+mirainet = "f1eb94c0"

@@ -16,6 +16,12 @@ use_environment = "mirainet"
 manifest_digest = "2DBAC1BE700DD546C6D7D47EFCB51CC8A331ABC62959B2C9E369271B1D376986"
 deps = { MoveStdlib = "MoveStdlib" }
 
+[pinned.mirainet.composition_reward_pool]
+source = { root = true }
+use_environment = "mirainet"
+manifest_digest = "33A12C5CEEB1CEE53F749F17EC1D9B2506B4A37D1D385271FFEAAF923CC099E5"
+deps = { musicos = "musicos", reward_pool = "reward_pool", std = "MoveStdlib", sui = "Sui" }
+
 [pinned.mirainet.interest_bps]
 source = { local = "../../../../interest-mvr/bps" }
 use_environment = "mirainet"
@@ -29,7 +35,7 @@ manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mirainet.musicos]
-source = { local = "../../musicos" }
+source = { local = "../../../../musicos/packages/musicos" }
 use_environment = "mirainet"
 manifest_digest = "56AAAEDE694249D24005831020CAA1C32B5C4A71DAF519095E7EB550FD6FEF7C"
 deps = { interest_bps = "interest_bps", language_code = "language_code", std = "MoveStdlib", sui = "Sui", walrus_data = "walrus_data" }
@@ -39,12 +45,6 @@ source = { local = "../../../../reward_pool" }
 use_environment = "mirainet"
 manifest_digest = "25CE7E42831E17A1B8A7B4C8961F258E8A1E9887659B6A7282C9415282D54451"
 deps = { stake = "stake", std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mirainet.reward_pool_extension]
-source = { root = true }
-use_environment = "mirainet"
-manifest_digest = "19863932CC515D5788795EAFEB70D1A43540E37BCF46DA9DAD1C1BA4CD357121"
-deps = { musicos = "musicos", reward_pool = "reward_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mirainet.stake]
 source = { local = "../../../../stake" }
@@ -70,6 +70,12 @@ use_environment = "testnet"
 manifest_digest = "7AFB66695545775FBFBB2D3078ADFD084244D5002392E837FDE21D9EA1C6D01C"
 deps = { MoveStdlib = "MoveStdlib" }
 
+[pinned.testnet.composition_reward_pool]
+source = { root = true }
+use_environment = "testnet"
+manifest_digest = "BA2C5D58143A83ABA18E260CBB885D3D127D8363B69271F083DDCECABA115334"
+deps = { musicos = "musicos", reward_pool = "reward_pool", std = "MoveStdlib", sui = "Sui" }
+
 [pinned.testnet.interest_bps]
 source = { local = "../../../../interest-mvr/bps" }
 use_environment = "testnet"
@@ -83,7 +89,7 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.musicos]
-source = { local = "../../musicos" }
+source = { local = "../../../../musicos/packages/musicos" }
 use_environment = "testnet"
 manifest_digest = "286487E4B290DC1C976870DF2D7BE280A726FDC7E04EDE154F104532873D6073"
 deps = { interest_bps = "interest_bps", language_code = "language_code", std = "MoveStdlib", sui = "Sui", walrus_data = "walrus_data" }
@@ -93,12 +99,6 @@ source = { local = "../../../../reward_pool" }
 use_environment = "testnet"
 manifest_digest = "13743973AE9DA64071620F7F22FE22017FA3CD575965FD675BC623C1565DC037"
 deps = { stake = "stake", std = "MoveStdlib", sui = "Sui" }
-
-[pinned.testnet.reward_pool_extension]
-source = { root = true }
-use_environment = "testnet"
-manifest_digest = "94724905C5304F969A5AD73A2FE925FE41DF1BDF6A8BE3AD2CFE041E6EC9B951"
-deps = { musicos = "musicos", reward_pool = "reward_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.stake]
 source = { local = "../../../../stake" }
