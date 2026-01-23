@@ -1,4 +1,6 @@
 // Copyright (c) Studio Mirai, LLC
+// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Alex Clapworthy
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents audio files in MusicOS with technical metadata.
@@ -21,7 +23,13 @@ public struct Audio has drop, store {
     pcm_digest: vector<u8>,
 }
 
+//=== Constants ===
+
+const PCM_DIGEST_LENGTH: u64 = 32;
+
 //=== Public Functions ===
+
+const EInvalidPcmDigestLength: u64 = 0;
 
 /// Creates a new Audio object with the given parameters.
 public fun new(
@@ -32,6 +40,8 @@ public fun new(
     data: WalrusData,
     pcm_digest: vector<u8>,
 ): Audio {
+    assert!(pcm_digest.length() == PCM_DIGEST_LENGTH, EInvalidPcmDigestLength);
+
     Audio {
         channels,
         bit_depth,
@@ -78,9 +88,4 @@ public fun pcm_digest(self: &Audio): &vector<u8> {
 /// Multiplies first to preserve precision before integer division.
 public fun duration_ms(self: &Audio): u64 {
     self.samples * 1_000 / (self.sample_rate_hz as u64)
-}
-
-/// Returns the duration of the audio in whole seconds (truncated).
-public fun duration_s(self: &Audio): u64 {
-    self.samples / (self.sample_rate_hz as u64)
 }

@@ -1,4 +1,6 @@
 // Copyright (c) Studio Mirai, LLC
+// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Alex Clapworthy
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents a disc within a release, containing an ordered list of tracks.
