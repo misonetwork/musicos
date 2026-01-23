@@ -4,9 +4,9 @@
 
 [published.mirainet]
 chain-id = "f1eb94c0"
-published-at = "0x52880fc964ce94328de0ee971eba8da6de172a9ddee3824b6a65a88cf703c55f"
-original-id = "0x52880fc964ce94328de0ee971eba8da6de172a9ddee3824b6a65a88cf703c55f"
+published-at = "0xdff14ab16824c23026f01f190556cc627ff7f5f3b5052b3230260e466ab8c5e3"
+original-id = "0xdff14ab16824c23026f01f190556cc627ff7f5f3b5052b3230260e466ab8c5e3"
 version = 1
 toolchain-version = "1.63.4"
 build-config = { flavor = "sui", edition = "2024" }
-upgrade-capability = "0x4907198ef02c9fbdc131c78e83446caadd30a5825e65e2692182f562e6e8be95"
+upgrade-capability = "0x8c6ecf248c5029d8754efe850510f87cb00af21be848410936b3eeb4ddbacef0"

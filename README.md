@@ -6,12 +6,12 @@ Developed by **Studio Mirai, LLC**.
 
 ## Overview
 
-MusicOS is a comprehensive smart contract system that tokenizes music rights and facilitates fair revenue distribution among all contributors in the music value chain. It provides on-chain management for:
+MusicOS is a comprehensive smart contract system that tokenizes music rights and facilitates fair revenue distribution among all parties in the music value chain. It provides on-chain management for:
 
 - **Compositions** - The written musical works (songs, instrumentals)
 - **Recordings** - Audio performances of compositions
 - **Releases** - Published collections of tracks (albums, EPs, singles)
-- **Contributors** - Individuals and groups who create and produce music
+- **Parties** - Individuals and groups who create and produce music
 - **Revenue Distribution** - Automated royalty splits via basis points (BPS)
 
 ## Core Concepts
@@ -49,7 +49,7 @@ A composition represents the underlying musical work—the song itself, independ
 
 - Title and alternate titles
 - Lyrics (optional)
-- Contributors with roles (Composer, Lyricist, Songwriter)
+- Parties with roles (Composer, Lyricist, Songwriter)
 - Split rates for royalty distribution
 - Artifacts (sheet music, etc.)
 
@@ -62,7 +62,7 @@ A recording is a specific audio performance of a composition, capturing the mast
 - Master audio file with technical metadata (channels, bit depth, sample rate)
 - Genre classification (primary and secondary)
 - Artists and featured artists
-- Production contributors (Producer, Engineer, Vocalist, etc.)
+- Production parties (Producer, Engineer, Vocalist, etc.)
 - Stems (up to 10 separate audio tracks)
 - Musical metadata (key, time signature, tempo)
 
@@ -83,14 +83,14 @@ A release is a published collection of tracks organized into discs—the final p
 - Track sequence navigation
 - Per-track revenue splits
 
-### Contributors
+### Parties
 
-Contributors are individuals or groups who participate in creating music.
+Parties are individuals or groups who participate in creating music.
 
 **Types:**
 
-- Individual contributors
-- Group contributors
+- Individual parties
+- Group parties
 
 **Composition Roles:**
 
@@ -188,17 +188,17 @@ Once published, compositions and recordings become **immutable**—ensuring perm
 ### Publishing a Composition
 
 1. Create composition with admin capability
-2. Add contributors with their roles
+2. Add parties with their roles
 3. Set lyrics (optional)
 4. Configure split percentages
-5. Publish (requires at least one contributor and valid splits)
+5. Publish (requires at least one party and valid splits)
 6. Create revenue and reward pools
 
 ### Creating a Recording
 
 1. Create recording linked to an existing composition
 2. Provide master audio (validated by protocol)
-3. Add recording contributors with roles
+3. Add recording parties with roles
 4. Add stems (optional, up to 10)
 5. Publish recording
 
@@ -223,7 +223,7 @@ Once published, compositions and recordings become **immutable**—ensuring perm
 | `release`     | Release management               |
 | `track`       | Individual track entries         |
 | `disc`        | Disc organization                |
-| `contributor` | Contributor management           |
+| `party`       | Party management                 |
 | `share`       | Share token system               |
 | `bps`         | Basis points calculations        |
 | `audio`       | Audio file handling              |
@@ -236,13 +236,13 @@ Once published, compositions and recordings become **immutable**—ensuring perm
 
 - **Capability-based authorization** - Admin caps control access
 - **Derived objects** - Secure capability chaining
-- **Validation at every step** - Contributor counts, split sums, audio specs
+- **Validation at every step** - Party counts, split sums, audio specs
 - **Event emission** - All state changes are auditable on-chain
 
 ### Extensibility
 
 - **Dynamic fields** - Add metadata without protocol changes
-- **Pluggable authorities** - Audio creation, play tracking, contributor verification
+- **Pluggable authorities** - Audio creation, play tracking, party verification
 - **Artifact system** - Support for additional file types
 
 ## Integration
@@ -301,16 +301,16 @@ MusicOS uses a standardized error code numbering system across all modules. Erro
 - `EMaxTracksExceeded` (10) - Disc exceeds maximum track count
 - `EMaxStemsExceeded` (10) - Recording exceeds maximum stem count
 - `EMaxSequenceLengthExceeded` (10) - Track sequence exceeds 255 tracks
-- `EExceedsMaxRoles` (10) - Contributor role count exceeds maximum
-- `EMinRolesNotMet` (11) - Contributor role count below minimum
+- `EExceedsMaxRoles` (10) - Party role count exceeds maximum
+- `EMinRolesNotMet` (11) - Party role count below minimum
 - `EDiscIndexOutOfBounds` (11) - Disc index exceeds disc count
-- `EContributorRoleIndexOutOfBounds` (12) - Role index exceeds role count
+- `EPartyRoleIndexOutOfBounds` (12) - Role index exceeds role count
 - `ETrackIndexOutOfBounds` (12) - Track index exceeds track count
 - `ESequenceIndexOutOfBounds` (13) - Sequence index exceeds total tracks
 
 #### Validation (20-29)
 - `ENoDiscs` (20) - Release must contain at least one disc
-- `ENoContributors` (20) - Entity must have at least one contributor
+- `ENoParties` (20) - Entity must have at least one party
 - `EInvalidTrackSplitsLength` (20) - Track splits count doesn't match track count
 - `EInvalidTrackSplitsSum` (21) - Track splits don't sum to 100% (10,000 BPS)
 - `ENoRevenueToDistribute` (22) - Revenue pool has no funds
@@ -325,10 +325,10 @@ MusicOS uses a standardized error code numbering system across all modules. Erro
 - `ENotZeroSupply` (22) - Share token supply must be zero
 
 #### Existence/Conflict (30-39)
-- `EDuplicateContributor` (30) - Contributor already exists in entity
-- `EContributorRoleAlreadyExists` (30) - Role already assigned to contributor
-- `ENotIndividualKind` (31) - Operation requires Individual contributor
-- `ENotGroupKind` (32) - Operation requires Group contributor
+- `EDuplicateParty` (30) - Party already exists in entity
+- `EPartyRoleAlreadyExists` (30) - Role already assigned to party
+- `ENotIndividualKind` (31) - Operation requires Individual party
+- `ENotGroupKind` (32) - Operation requires Group party
 
 ### Design Principles
 

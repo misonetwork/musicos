@@ -17,12 +17,13 @@ module musicos::share;
 use std::string::String;
 use std::type_name::with_defining_ids;
 use sui::balance::Balance;
+use sui::bcs;
 use sui::coin::TreasuryCap;
 use sui::coin_registry::{Currency, new_currency};
 
 //=== Constants ===
 
-const SHARE_TYPE: vector<u8> = b"share::Share";
+const SHARE_TYPE: vector<u8> = b"::share::Share";
 
 //=== Errors ===
 
@@ -85,9 +86,13 @@ public(package) macro fun share_icon_url(): String {
 
 fun assert_valid_share_type<Share>() {
     let t = with_defining_ids<Share>();
-    let t_name_str = t.into_string().to_string();
-    assert!(t_name_str.length() == 80, EInvalidShareType);
-    let t_addr_str = t.address_string().to_string();
-    let module_type_str = t_name_str.substring(t_addr_str.length() + 2, t_name_str.length());
-    assert!(module_type_str == SHARE_TYPE.to_string(), EInvalidShareType);
+    let bytes = bcs::to_bytes(&t);
+    let share_type = SHARE_TYPE;
+
+    let bytes_len = bytes.length();
+    let suffix_len = share_type.length();
+
+    suffix_len.do!(|i| {
+        assert!(bytes[bytes_len - suffix_len + i] == share_type[i], EInvalidShareType);
+    });
 }

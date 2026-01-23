@@ -9,7 +9,7 @@
 ///
 /// Key features:
 /// - Share token initialization with fixed supply (100M tokens, 6 decimals)
-/// - Contributor management with role assignments (Producer, Vocalist, etc.)
+/// - Party management with role assignments (Producer, Vocalist, etc.)
 /// - State machine: Initialized -> Published (immutable after publish)
 /// - Musical metadata (key, tempo, time signature)
 /// - Deterministic addresses via derived object pattern
@@ -19,13 +19,13 @@ use interest_bps::bps::BPS;
 use language_code::language_code::LanguageCode;
 use musicos::audio::Audio;
 use musicos::composition::Composition;
-use musicos::contributor::Contributor;
+use musicos::party::Party;
 use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
 use musicos::extension;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
-use musicos::recording_contributor_role::RecordingContributorRole;
+use musicos::recording_party_role::RecordingPartyRole;
 use musicos::share;
 use musicos::stem::Stem;
 use musicos::time_signature::TimeSignature;
@@ -69,8 +69,8 @@ public struct Recording<phantom RecordingShare> has key {
     primary_artist_ids: VecSet<ID>,
     // IDs of the featured artists on the recording.
     featured_artist_ids: VecSet<ID>,
-    /// Map of contributor IDs to their roles on this recording.
-    credits: VecMap<ID, Credit<RecordingContributorRole>>,
+    /// Map of party IDs to their roles on this recording.
+    credits: VecMap<ID, Credit<RecordingPartyRole>>,
     /// Language of the vocals (if any).
     language: Option<LanguageCode>,
     /// Whether the recording contains explicit content.
@@ -143,38 +143,38 @@ public struct RecordingPublishedEvent has copy, drop {
     recording_id: ID,
 }
 
-/// Emitted when a contributor is added to a recording.
-public struct RecordingContributorAddedEvent has copy, drop {
+/// Emitted when a party is added to a recording.
+public struct RecordingPartyAddedEvent has copy, drop {
     /// ID of the recording.
     recording_id: ID,
-    /// ID of the added contributor.
-    contributor_id: ID,
+    /// ID of the added party.
+    party_id: ID,
 }
 
 //=== Constants ===
 
-/// Minimum number of roles a contributor must have.
+/// Minimum number of roles a party must have.
 const MIN_ROLES_PER_CREDIT: u64 = 1;
-/// Maximum number of roles a contributor can have.
+/// Maximum number of roles a party can have.
 const MAX_ROLES_PER_CREDIT: u64 = 10;
 
 //=== Errors ===
 
 /// Operation requires Initialized state but recording is created.
 const ENotInitializedState: u64 = 1;
-/// Contributor has too many roles.
+/// Party has too many roles.
 const EExceedsMaxRoles: u64 = 11;
-/// Contributor must have at least one role.
+/// Party must have at least one role.
 const EMinRolesNotMet: u64 = 12;
-/// Recording must have at least one contributor to publish.
-const ENoContributors: u64 = 20;
+/// Recording must have at least one party to publish.
+const ENoParties: u64 = 20;
 /// Recording must have at least one primary artist to publish.
 const ENoPrimaryArtistAssigned: u64 = 21;
-/// Contributor is not credited on the recording.
-const EContributorNotCredited: u64 = 22;
-/// Contributor is already a featured artist.
+/// Party is not credited on the recording.
+const EPartyNotCredited: u64 = 22;
+/// Party is already a featured artist.
 const EAlreadyFeaturedArtist: u64 = 23;
-/// Contributor is already a primary artist.
+/// Party is already a primary artist.
 const EAlreadyPrimaryArtist: u64 = 24;
 /// Genre is already assigned as a secondary genre.
 const EAlreadyAssignedAsSecondaryGenre: u64 = 25;
@@ -253,7 +253,7 @@ public fun new<RecordingShare, CS>(
 }
 
 /// Publishes the recording, making it immutable.
-/// Requires at least one contributor to be assigned.
+/// Requires at least one party to be assigned.
 /// Required State: Initialized
 public fun publish<RecordingShare>(
     mut self: Recording<RecordingShare>,
@@ -262,8 +262,8 @@ public fun publish<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
-            // Assert the recording has at least one contributor.
-            assert!(!self.credits.is_empty(), ENoContributors);
+            // Assert the recording has at least one party.
+            assert!(!self.credits.is_empty(), ENoParties);
             // Assert the recording has at least one primary artist.
             assert!(!self.primary_artist_ids.is_empty(), ENoPrimaryArtistAssigned);
 
@@ -344,26 +344,26 @@ public fun set_language<RecordingShare>(
 
 // --- People ---
 
-/// Adds a contributor to the recording with specified roles.
-/// Each contributor must have 1-20 roles.
+/// Adds a party to the recording with specified roles.
+/// Each party must have 1-20 roles.
 /// Required State: Initialized
 public fun add_credit<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
-    contributor: &Contributor,
-    credit: Credit<RecordingContributorRole>,
+    party: &Party,
+    credit: Credit<RecordingPartyRole>,
 ) {
     match (self.state) {
         RecordingState::Initialized => {
             assert!(credit.roles().length() >= MIN_ROLES_PER_CREDIT, EMinRolesNotMet);
             assert!(credit.roles().length() <= MAX_ROLES_PER_CREDIT, EExceedsMaxRoles);
 
-            let contributor_id = contributor.id();
-            self.credits.insert(contributor_id, credit);
+            let party_id = party.id();
+            self.credits.insert(party_id, credit);
 
-            emit(RecordingContributorAddedEvent {
+            emit(RecordingPartyAddedEvent {
                 recording_id: self.id(),
-                contributor_id,
+                party_id,
             });
         },
         _ => abort ENotInitializedState,
@@ -373,17 +373,17 @@ public fun add_credit<RecordingShare>(
 public fun add_primary_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
-    contributor: &Contributor,
+    party: &Party,
 ) {
     match (self.state) {
         RecordingState::Initialized => {
-            let contributor_id = contributor.id();
-            // Assert the contributor is credited on the recording.
-            assert!(self.credits.contains(&contributor_id), EContributorNotCredited);
-            // Assert the contributor is not already a featured artist.
-            assert!(!self.featured_artist_ids.contains(&contributor_id), EAlreadyFeaturedArtist);
+            let party_id = party.id();
+            // Assert the party is credited on the recording.
+            assert!(self.credits.contains(&party_id), EPartyNotCredited);
+            // Assert the party is not already a featured artist.
+            assert!(!self.featured_artist_ids.contains(&party_id), EAlreadyFeaturedArtist);
 
-            self.primary_artist_ids.insert(contributor_id);
+            self.primary_artist_ids.insert(party_id);
         },
         _ => abort ENotInitializedState,
     }
@@ -392,17 +392,17 @@ public fun add_primary_artist<RecordingShare>(
 public fun add_featured_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
-    contributor: &Contributor,
+    party: &Party,
 ) {
     match (self.state) {
         RecordingState::Initialized => {
-            let contributor_id = contributor.id();
-            // Assert the contributor is credited on the recording.
-            assert!(self.credits.contains(&contributor_id), EContributorNotCredited);
-            // Assert the contributor is not already a primary artist.
-            assert!(!self.primary_artist_ids.contains(&contributor_id), EAlreadyPrimaryArtist);
+            let party_id = party.id();
+            // Assert the party is credited on the recording.
+            assert!(self.credits.contains(&party_id), EPartyNotCredited);
+            // Assert the party is not already a primary artist.
+            assert!(!self.primary_artist_ids.contains(&party_id), EAlreadyPrimaryArtist);
 
-            self.featured_artist_ids.insert(contributor_id);
+            self.featured_artist_ids.insert(party_id);
         },
         _ => abort ENotInitializedState,
     }
@@ -413,11 +413,11 @@ public fun add_featured_artist<RecordingShare>(
 public fun remove_primary_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
-    contributor_id: ID,
+    party_id: ID,
 ) {
     match (self.state) {
         RecordingState::Initialized => {
-            self.primary_artist_ids.remove(&contributor_id);
+            self.primary_artist_ids.remove(&party_id);
         },
         _ => abort ENotInitializedState,
     }
@@ -428,11 +428,11 @@ public fun remove_primary_artist<RecordingShare>(
 public fun remove_featured_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
-    contributor_id: ID,
+    party_id: ID,
 ) {
     match (self.state) {
         RecordingState::Initialized => {
-            self.featured_artist_ids.remove(&contributor_id);
+            self.featured_artist_ids.remove(&party_id);
         },
         _ => abort ENotInitializedState,
     }
@@ -612,10 +612,10 @@ public fun featured_artist_ids<RecordingShare>(self: &Recording<RecordingShare>)
     &self.featured_artist_ids
 }
 
-/// Returns the contributor-to-roles mapping.
+/// Returns the party-to-roles mapping.
 public fun credits<RecordingShare>(
     self: &Recording<RecordingShare>,
-): &VecMap<ID, Credit<RecordingContributorRole>> {
+): &VecMap<ID, Credit<RecordingPartyRole>> {
     &self.credits
 }
 
@@ -664,17 +664,17 @@ public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverAr
 /// Returns whether the provided ID is a primary artist on the recording.
 public fun is_primary_artist<RecordingShare>(
     self: &Recording<RecordingShare>,
-    contributor_id: ID,
+    party_id: ID,
 ): bool {
-    self.primary_artist_ids.contains(&contributor_id)
+    self.primary_artist_ids.contains(&party_id)
 }
 
-/// Returns whether the contributor is a featured artist on the recording.
+/// Returns whether the party is a featured artist on the recording.
 public fun is_featured_artist<RecordingShare>(
     self: &Recording<RecordingShare>,
-    contributor_id: ID,
+    party_id: ID,
 ): bool {
-    self.featured_artist_ids.contains(&contributor_id)
+    self.featured_artist_ids.contains(&party_id)
 }
 
 //=== UID Functions ===

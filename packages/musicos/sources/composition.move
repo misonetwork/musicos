@@ -9,15 +9,15 @@
 ///
 /// Key features:
 /// - Share token initialization with fixed supply (100M tokens, 6 decimals)
-/// - Contributor management with role assignments (Composer, Lyricist, Songwriter)
+/// - Party management with role assignments (Composer, Lyricist, Songwriter)
 /// - State machine: Initialized -> Published (immutable after publish)
 /// - Revenue and reward pool creation for reward distribution
 /// - Deterministic addresses via derived object pattern
 module musicos::composition;
 
 use interest_bps::bps::{Self, BPS};
-use musicos::composition_contributor_role::CompositionContributorRole;
-use musicos::contributor::Contributor;
+use musicos::composition_party_role::CompositionPartyRole;
+use musicos::party::Party;
 use musicos::credit::Credit;
 use musicos::extension;
 use musicos::share;
@@ -44,8 +44,8 @@ public struct Composition<phantom CompositionShare> has key {
     title: String,
     /// Additional titles (translations, alternate names).
     alternate_titles: vector<String>,
-    /// Map of contributor IDs to their roles on this composition.
-    credits: VecMap<ID, Credit<CompositionContributorRole>>,
+    /// Map of party IDs to their roles on this composition.
+    credits: VecMap<ID, Credit<CompositionPartyRole>>,
     /// Revenue split rate allocated to this composition vs recording (in basis points).
     split_bps: BPS,
     /// Optional lyrics data reference.
@@ -92,12 +92,12 @@ public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop
     composition_id: ID,
 }
 
-/// Emitted when a contributor is added to a composition.
-public struct CompositionContributorAddedEvent has copy, drop {
+/// Emitted when a party is added to a composition.
+public struct CompositionPartyAddedEvent has copy, drop {
     /// ID of the composition.
     composition_id: ID,
-    /// ID of the added contributor.
-    contributor_id: ID,
+    /// ID of the added party.
+    party_id: ID,
 }
 
 /// Emitted when the composition split is updated.
@@ -110,21 +110,21 @@ public struct CompositionSplitSetEvent has copy, drop {
 
 //=== Constants ===
 
-/// Minimum number of roles a contributor must have.
-const MIN_ROLES_PER_CONTRIBUTOR: u64 = 1;
-/// Maximum number of roles a contributor can have.
-const MAX_ROLES_PER_CONTRIBUTOR: u64 = 20;
+/// Minimum number of roles a party must have.
+const MIN_ROLES_PER_PARTY: u64 = 1;
+/// Maximum number of roles a party can have.
+const MAX_ROLES_PER_PARTY: u64 = 20;
 
 //=== Errors ===
 
 /// Operation requires Initialized state but composition is created.
 const ENotInitializedState: u64 = 1;
-/// Contributor has too many roles.
+/// Party has too many roles.
 const EExceedsMaxRoles: u64 = 10;
-/// Contributor must have at least one role.
+/// Party must have at least one role.
 const EMinRolesNotMet: u64 = 11;
-/// Composition must have at least one contributor to publish.
-const ENoContributors: u64 = 20;
+/// Composition must have at least one party to publish.
+const ENoParties: u64 = 20;
 
 //=== Public Functions ===
 
@@ -174,7 +174,7 @@ public fun new<CompositionShare>(
 }
 
 /// Publishes the composition, making it immutable.
-/// Requires at least one contributor.
+/// Requires at least one party.
 /// Required State: Initialized
 public fun publish<CompositionShare>(
     mut self: Composition<CompositionShare>,
@@ -183,7 +183,7 @@ public fun publish<CompositionShare>(
 ) {
     match (self.state) {
         CompositionState::Initialized => {
-            assert!(!self.credits.is_empty(), ENoContributors);
+            assert!(!self.credits.is_empty(), ENoParties);
 
             self.state = CompositionState::Published(clock.timestamp_ms());
 
@@ -216,25 +216,25 @@ public fun add_alternate_title<CompositionShare>(
 
 // --- People ---
 
-/// Adds a contributor to the composition with specified roles.
-/// Each contributor must have 1-20 roles.
+/// Adds a party to the composition with specified roles.
+/// Each party must have 1-20 roles.
 /// Required State: Initialized
 public fun add_credit<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
-    contributor: &Contributor,
-    credit: Credit<CompositionContributorRole>,
+    party: &Party,
+    credit: Credit<CompositionPartyRole>,
 ) {
     match (self.state) {
         CompositionState::Initialized => {
-            assert!(credit.roles().length() >= MIN_ROLES_PER_CONTRIBUTOR, EMinRolesNotMet);
-            assert!(credit.roles().length() <= MAX_ROLES_PER_CONTRIBUTOR, EExceedsMaxRoles);
+            assert!(credit.roles().length() >= MIN_ROLES_PER_PARTY, EMinRolesNotMet);
+            assert!(credit.roles().length() <= MAX_ROLES_PER_PARTY, EExceedsMaxRoles);
 
-            self.credits.insert(contributor.id(), credit);
+            self.credits.insert(party.id(), credit);
 
-            emit(CompositionContributorAddedEvent {
+            emit(CompositionPartyAddedEvent {
                 composition_id: self.id(),
-                contributor_id: contributor.id(),
+                party_id: party.id(),
             });
         },
         _ => abort ENotInitializedState,
@@ -307,10 +307,10 @@ public fun alternate_titles<CompositionShare>(
     &self.alternate_titles
 }
 
-/// Returns the contributor-to-credit mapping.
+/// Returns the party-to-credit mapping.
 public fun credits<CompositionShare>(
     self: &Composition<CompositionShare>,
-): &VecMap<ID, Credit<CompositionContributorRole>> {
+): &VecMap<ID, Credit<CompositionPartyRole>> {
     &self.credits
 }
 
