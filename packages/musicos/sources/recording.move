@@ -284,7 +284,11 @@ public fun publish<RecordingShare>(
 
 /// Sets the primary title of the recording.
 /// Required State: Initialized
-public fun set_title<RecordingShare>(self: &mut Recording<RecordingShare>, title: String) {
+public fun set_title<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
+    title: String,
+) {
     match (self.state) {
         RecordingState::Initialized => {
             self.title = title;
@@ -297,6 +301,7 @@ public fun set_title<RecordingShare>(self: &mut Recording<RecordingShare>, title
 /// Required State: Initialized
 public fun set_title_version<RecordingShare>(
     self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     title_version: String,
 ) {
     match (self.state) {
@@ -309,7 +314,11 @@ public fun set_title_version<RecordingShare>(
 
 /// Sets the subtitle of the recording.
 /// Required State: Initialized
-public fun set_subtitle<RecordingShare>(self: &mut Recording<RecordingShare>, subtitle: String) {
+public fun set_subtitle<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
+    subtitle: String,
+) {
     match (self.state) {
         RecordingState::Initialized => {
             self.subtitle.swap_or_fill(subtitle);
@@ -322,6 +331,7 @@ public fun set_subtitle<RecordingShare>(self: &mut Recording<RecordingShare>, su
 /// Required State: Initialized
 public fun set_language<RecordingShare>(
     self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     language: LanguageCode,
 ) {
     match (self.state) {
@@ -339,6 +349,7 @@ public fun set_language<RecordingShare>(
 /// Required State: Initialized
 public fun add_credit<RecordingShare>(
     self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     contributor: &Contributor,
     credit: Credit<RecordingContributorRole>,
 ) {
@@ -361,6 +372,7 @@ public fun add_credit<RecordingShare>(
 
 public fun add_primary_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     contributor: &Contributor,
 ) {
     match (self.state) {
@@ -379,6 +391,7 @@ public fun add_primary_artist<RecordingShare>(
 
 public fun add_featured_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     contributor: &Contributor,
 ) {
     match (self.state) {
@@ -399,6 +412,7 @@ public fun add_featured_artist<RecordingShare>(
 /// Required State: Initialized
 public fun remove_primary_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     contributor_id: ID,
 ) {
     match (self.state) {
@@ -413,6 +427,7 @@ public fun remove_primary_artist<RecordingShare>(
 /// Required State: Initialized
 public fun remove_featured_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     contributor_id: ID,
 ) {
     match (self.state) {
@@ -427,7 +442,11 @@ public fun remove_featured_artist<RecordingShare>(
 
 /// Sets the primary genre of the recording.
 /// Required State: Initialized
-public fun set_primary_genre<RecordingShare>(self: &mut Recording<RecordingShare>, genre: &Genre) {
+public fun set_primary_genre<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
+    genre: &Genre,
+) {
     match (self.state) {
         RecordingState::Initialized => {
             assert!(
@@ -444,6 +463,7 @@ public fun set_primary_genre<RecordingShare>(self: &mut Recording<RecordingShare
 /// Required State: Initialized
 public fun add_secondary_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     genre: &Genre,
 ) {
     match (self.state) {
@@ -459,6 +479,7 @@ public fun add_secondary_genre<RecordingShare>(
 /// Required State: Initialized
 public fun remove_secondary_genre<RecordingShare>(
     self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     genre_id: ID,
 ) {
     match (self.state) {
@@ -475,6 +496,7 @@ public fun remove_secondary_genre<RecordingShare>(
 /// Required State: Initialized
 public fun set_musical_key<RecordingShare>(
     self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     musical_key: MusicalKey,
 ) {
     match (self.state) {
@@ -489,6 +511,7 @@ public fun set_musical_key<RecordingShare>(
 /// Required State: Initialized
 public fun set_time_signature<RecordingShare>(
     self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     time_signature: TimeSignature,
 ) {
     match (self.state) {
@@ -501,7 +524,11 @@ public fun set_time_signature<RecordingShare>(
 
 /// Sets the tempo in beats per minute.
 /// Required State: Initialized
-public fun set_tempo_bpm<RecordingShare>(self: &mut Recording<RecordingShare>, tempo_bpm: u16) {
+public fun set_tempo_bpm<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
+    tempo_bpm: u16,
+) {
     match (self.state) {
         RecordingState::Initialized => {
             self.tempo_bpm.swap_or_fill(tempo_bpm);
@@ -510,7 +537,11 @@ public fun set_tempo_bpm<RecordingShare>(self: &mut Recording<RecordingShare>, t
     }
 }
 
-public fun add_stem<RecordingShare>(self: &mut Recording<RecordingShare>, stem: Stem) {
+public fun add_stem<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
+    stem: Stem,
+) {
     match (self.state) {
         RecordingState::Initialized => {
             self.stems.push_back(stem);

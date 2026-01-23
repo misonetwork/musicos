@@ -203,6 +203,7 @@ public fun publish<CompositionShare>(
 /// Required State: Initialized
 public fun add_alternate_title<CompositionShare>(
     self: &mut Composition<CompositionShare>,
+    _: &CompositionAdminCap<CompositionShare>,
     alternate_title: String,
 ) {
     match (self.state) {
@@ -220,6 +221,7 @@ public fun add_alternate_title<CompositionShare>(
 /// Required State: Initialized
 public fun add_credit<CompositionShare>(
     self: &mut Composition<CompositionShare>,
+    _: &CompositionAdminCap<CompositionShare>,
     contributor: &Contributor,
     credit: Credit<CompositionContributorRole>,
 ) {
@@ -248,6 +250,7 @@ public fun add_credit<CompositionShare>(
 /// Required State: Initialized
 public fun set_split_bps<CompositionShare>(
     self: &mut Composition<CompositionShare>,
+    _: &CompositionAdminCap<CompositionShare>,
     split_value: u64,
 ) {
     match (self.state) {
@@ -269,6 +272,7 @@ public fun set_split_bps<CompositionShare>(
 /// Required State: Initialized
 public fun set_lyrics<CompositionShare>(
     self: &mut Composition<CompositionShare>,
+    _: &CompositionAdminCap<CompositionShare>,
     data: WalrusData,
 ) {
     match (self.state) {
