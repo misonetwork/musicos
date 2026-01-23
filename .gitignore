@@ -3,3 +3,8 @@ packages/*/build/*
 .trace
 .coverage*
 .DS_Store
+
+# SDK
+node_modules/
+dist/
+*.lock
