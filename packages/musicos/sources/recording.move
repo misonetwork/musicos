@@ -25,6 +25,7 @@ use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
 use musicos::recording_contributor_role::RecordingContributorRole;
 use musicos::share;
+use musicos::stem::Stem;
 use musicos::time_signature::TimeSignature;
 use std::string::String;
 use std::type_name::{TypeName, with_defining_ids};
@@ -82,6 +83,8 @@ public struct Recording<phantom RecordingShare> has key {
     tempo_bpm: Option<u16>,
     /// The final mixed/mastered audio file.
     master: Audio,
+    /// The stems of the recording.
+    stems: vector<Stem>,
     /// Cover art for the recording.
     cover_art: CoverArt,
 }
@@ -104,6 +107,19 @@ public struct RecordingKey(
     /// Digest of the master audio file.
     vector<u8>,
 ) has copy, drop, store;
+
+//=== Enums ===
+
+/// Lifecycle state of a recording.
+public enum RecordingState has copy, drop, store {
+    /// Recording is being set up and can be modified.
+    Initialized,
+    /// Recording is published and immutable. Includes publication timestamp.
+    Published(
+        /// Timestamp (ms) when published.
+        u64,
+    ),
+}
 
 //=== Events ===
 
@@ -131,19 +147,6 @@ public struct RecordingContributorAddedEvent has copy, drop {
     recording_id: ID,
     /// ID of the added contributor.
     contributor_id: ID,
-}
-
-//=== Enums ===
-
-/// Lifecycle state of a recording.
-public enum RecordingState has copy, drop, store {
-    /// Recording is being set up and can be modified.
-    Initialized,
-    /// Recording is published and immutable. Includes publication timestamp.
-    Published(
-        /// Timestamp (ms) when published.
-        u64,
-    ),
 }
 
 //=== Constants ===
@@ -220,6 +223,7 @@ public fun new<RecordingShare, CS>(
         time_signature: option::none(),
         tempo_bpm: option::none(),
         master,
+        stems: vector[],
         cover_art,
     };
 
@@ -504,6 +508,15 @@ public fun set_tempo_bpm<RecordingShare>(self: &mut Recording<RecordingShare>, t
     }
 }
 
+public fun add_stem<RecordingShare>(self: &mut Recording<RecordingShare>, stem: Stem) {
+    match (self.state) {
+        RecordingState::Initialized => {
+            self.stems.push_back(stem);
+        },
+        _ => abort ENotInitializedState,
+    }
+}
+
 //=== Public View Functions ===
 
 /// Returns the recording's object ID.
@@ -546,13 +559,6 @@ public fun composition_split_bps<RecordingShare>(self: &Recording<RecordingShare
     self.composition_split_bps
 }
 
-/// Returns the contributor-to-roles mapping.
-public fun credits<RecordingShare>(
-    self: &Recording<RecordingShare>,
-): &VecMap<ID, Credit<RecordingContributorRole>> {
-    &self.credits
-}
-
 /// Returns the primary genre ID.
 public fun primary_genre_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
     self.primary_genre_id
@@ -561,6 +567,23 @@ public fun primary_genre_id<RecordingShare>(self: &Recording<RecordingShare>): I
 /// Returns the set of secondary genre IDs.
 public fun secondary_genre_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
     &self.secondary_genre_ids
+}
+
+/// Returns a reference to the primary artist IDs.
+public fun primary_artist_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
+    &self.primary_artist_ids
+}
+
+/// Returns a reference to the featured artist IDs.
+public fun featured_artist_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
+    &self.featured_artist_ids
+}
+
+/// Returns the contributor-to-roles mapping.
+public fun credits<RecordingShare>(
+    self: &Recording<RecordingShare>,
+): &VecMap<ID, Credit<RecordingContributorRole>> {
+    &self.credits
 }
 
 /// Returns the optional language code.
@@ -613,22 +636,12 @@ public fun is_primary_artist<RecordingShare>(
     self.primary_artist_ids.contains(&contributor_id)
 }
 
-/// Returns whether the s is a featured artist on the recording.
+/// Returns whether the contributor is a featured artist on the recording.
 public fun is_featured_artist<RecordingShare>(
     self: &Recording<RecordingShare>,
     contributor_id: ID,
 ): bool {
     self.featured_artist_ids.contains(&contributor_id)
-}
-
-/// Returns a reference to the primary artist IDs.
-public fun primary_artist_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
-    &self.primary_artist_ids
-}
-
-/// Returns a reference to the featured artist IDs.
-public fun featured_artist_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
-    &self.featured_artist_ids
 }
 
 //=== UID Functions ===

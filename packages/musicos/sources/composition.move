@@ -63,6 +63,19 @@ public struct CompositionAdminCap<phantom CompositionShare> has key, store {
 /// Key for deriving the admin capability's deterministic address from the composition.
 public struct CompositionAdminCapKey() has copy, drop, store;
 
+//=== Enums ===
+
+/// Lifecycle state of a composition.
+public enum CompositionState has copy, drop, store {
+    /// Composition is initialized but not published.
+    Initialized,
+    /// Composition is published and immutable. Includes publication timestamp.
+    Published(
+        /// Timestamp (ms) when published.
+        u64,
+    ),
+}
+
 //=== Events ===
 
 /// Emitted when a new composition is created.
@@ -91,19 +104,6 @@ public struct CompositionSplitSetEvent has copy, drop {
     composition_id: ID,
     /// New split value in basis points.
     split_value: u64,
-}
-
-//=== Enums ===
-
-/// Lifecycle state of a composition.
-public enum CompositionState has copy, drop, store {
-    /// Composition is initialized but not published.
-    Initialized,
-    /// Composition is published and immutable. Includes publication timestamp.
-    Published(
-        /// Timestamp (ms) when published.
-        u64,
-    ),
 }
 
 //=== Constants ===

@@ -5,13 +5,13 @@ module musicos::extension;
 
 use sui::dynamic_field as df;
 
-//=== Errors ===
-
-const EUnauthorizedExtension: u64 = 0;
-
 //=== Structs ===
 
 public struct Extension<phantom E: drop>() has copy, drop, store;
+
+//=== Errors ===
+
+const EUnauthorizedExtension: u64 = 0;
 
 //=== Public Functions ===
 

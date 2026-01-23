@@ -185,11 +185,6 @@ public fun id(self: &Contributor): ID {
     self.id.to_inner()
 }
 
-/// Returns the human-readable name of this contributor.
-public fun name(self: &Contributor): String {
-    self.name
-}
-
 /// Returns true if this contributor is an individual.
 public fun is_individual_kind(self: &Contributor): bool {
     match (&self.kind) {
@@ -204,6 +199,11 @@ public fun is_group_kind(self: &Contributor): bool {
         ContributorKind::Group(_) => true,
         _ => false,
     }
+}
+
+/// Returns the human-readable name of this contributor.
+public fun name(self: &Contributor): String {
+    self.name
 }
 
 /// Aborts if this contributor is not an individual.

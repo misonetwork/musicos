@@ -83,6 +83,29 @@ public struct TrackSplit has copy, drop, store {
     recording_split_value: u64,
 }
 
+//=== Enums ===
+
+/// The type of music release.
+public enum ReleaseKind has copy, drop, store {
+    /// Full-length album (typically 7+ tracks).
+    Album,
+    /// Extended play (typically 3-6 tracks).
+    EP,
+    /// Single release (typically 1-2 tracks).
+    Single,
+}
+
+/// Lifecycle state of a release.
+public enum ReleaseState has copy, drop, store {
+    /// Release is initialized but not yet created.
+    Initialized,
+    /// Release is published and immutable. Includes publication timestamp.
+    Published(
+        /// Timestamp (ms) when published.
+        u64,
+    ),
+}
+
 //=== Events ===
 
 /// Emitted when a release is published.
@@ -116,29 +139,6 @@ public struct ReleaseTrackPaidEvent<phantom C, phantom CS, phantom RecordingShar
     release_id: ID,
     /// Total value distributed.
     distribution_value: u64,
-}
-
-//=== Enums ===
-
-/// The type of music release.
-public enum ReleaseKind has copy, drop, store {
-    /// Full-length album (typically 7+ tracks).
-    Album,
-    /// Extended play (typically 3-6 tracks).
-    EP,
-    /// Single release (typically 1-2 tracks).
-    Single,
-}
-
-/// Lifecycle state of a release.
-public enum ReleaseState has copy, drop, store {
-    /// Release is initialized but not yet created.
-    Initialized,
-    /// Release is published and immutable. Includes publication timestamp.
-    Published(
-        /// Timestamp (ms) when published.
-        u64,
-    ),
 }
 
 //=== Constants ===
@@ -321,6 +321,16 @@ public fun id(self: &Release): ID {
     self.id.to_inner()
 }
 
+/// Returns the release kind (Album, EP, or Single).
+public fun kind(self: &Release): ReleaseKind {
+    self.kind
+}
+
+/// Returns the release state.
+public fun state(self: &Release): ReleaseState {
+    self.state
+}
+
 /// Returns the release title.
 public fun title(self: &Release): &String {
     &self.title
@@ -344,16 +354,6 @@ public fun track_sequence(self: &Release): &TrackSequence {
 /// Returns a reference to the track splits in basis points.
 public fun track_splits_bps(self: &Release): &vector<BPS> {
     &self.track_splits_bps
-}
-
-/// Returns the release kind (Album, EP, or Single).
-public fun kind(self: &Release): ReleaseKind {
-    self.kind
-}
-
-/// Returns the release state.
-public fun state(self: &Release): ReleaseState {
-    self.state
 }
 
 /// Returns a reference to the cover art.
