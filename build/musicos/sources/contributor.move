@@ -67,6 +67,22 @@ public struct ContributorCreatedEvent has copy, drop {
     contributor_id: ID,
 }
 
+/// Emitted when a contributor is added to a group.
+public struct ContributorAddedToGroupEvent has copy, drop {
+    /// ID of the group.
+    group_id: ID,
+    /// ID of the contributor added to the group.
+    contributor_id: ID,
+}
+
+/// Emitted when a contributor is removed from a group.
+public struct ContributorRemovedFromGroupEvent has copy, drop {
+    /// ID of the group.
+    group_id: ID,
+    /// ID of the contributor removed from the group.
+    contributor_id: ID,
+}
+
 //=== Errors ===
 
 /// The provided admin capability does not match this contributor.
@@ -123,6 +139,11 @@ public fun add_contributor(
             assert!(!contributors.contains(&contributor.id()), EDuplicateContributor);
             // Add the contributor to the group.
             contributors.insert(contributor.id());
+
+            emit(ContributorAddedToGroupEvent {
+                group_id: self.id(),
+                contributor_id: contributor.id(),
+            });
         },
         _ => abort ENotGroupKind,
     }
@@ -140,6 +161,11 @@ public fun remove_contributor(
     match (&mut self.kind) {
         ContributorKind::Group(members) => {
             members.remove(&contributor_id);
+
+            emit(ContributorRemovedFromGroupEvent {
+                group_id: self.id(),
+                contributor_id,
+            });
         },
         _ => abort ENotGroupKind,
     }

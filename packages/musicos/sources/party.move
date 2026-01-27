@@ -76,6 +76,22 @@ public struct PartyCreatedEvent has copy, drop {
     name: String,
 }
 
+/// Emitted when a party is added to a group.
+public struct PartyAddedToGroupEvent has copy, drop {
+    /// ID of the group.
+    group_id: ID,
+    /// ID of the party added to the group.
+    party_id: ID,
+}
+
+/// Emitted when a party is removed from a group.
+public struct PartyRemovedFromGroupEvent has copy, drop {
+    /// ID of the group.
+    group_id: ID,
+    /// ID of the party removed from the group.
+    party_id: ID,
+}
+
 //=== Errors ===
 
 /// The provided admin capability does not match this party.
@@ -148,6 +164,11 @@ public fun add_party(
             assert!(!parties.contains(&party.id()), EDuplicateParty);
             // Add the party to the group.
             parties.insert(party.id());
+
+            emit(PartyAddedToGroupEvent {
+                group_id: self.id(),
+                party_id: party.id(),
+            });
         },
         _ => abort ENotGroupKind,
     }
@@ -165,6 +186,11 @@ public fun remove_party(
     match (&mut self.kind) {
         PartyKind::Group(members) => {
             members.remove(&party_id);
+
+            emit(PartyRemovedFromGroupEvent {
+                group_id: self.id(),
+                party_id,
+            });
         },
         _ => abort ENotGroupKind,
     }

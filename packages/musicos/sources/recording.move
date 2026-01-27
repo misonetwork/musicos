@@ -19,12 +19,11 @@ use interest_bps::bps::BPS;
 use language_code::language_code::LanguageCode;
 use musicos::audio::Audio;
 use musicos::composition::Composition;
-use musicos::party::Party;
 use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
-use musicos::extension;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
+use musicos::party::Party;
 use musicos::recording_party_role::RecordingPartyRole;
 use musicos::share;
 use musicos::stem::Stem;
@@ -124,18 +123,6 @@ public enum RecordingState has copy, drop, store {
 }
 
 //=== Events ===
-
-/// Emitted when a new recording is created.
-public struct RecordingInitializedEvent has copy, drop {
-    /// ID of the created recording.
-    recording_id: ID,
-    /// Type of the recording's share token.
-    recording_share_type: TypeName,
-    /// ID of the underlying composition.
-    composition_id: ID,
-    /// ID of the recording's genre.
-    primary_genre_id: ID,
-}
 
 /// Emitted when a recording is published.
 public struct RecordingPublishedEvent has copy, drop {
@@ -241,13 +228,6 @@ public fun new<RecordingShare, CS>(
         share_currency,
         share_treasury_cap,
     );
-
-    emit(RecordingInitializedEvent {
-        recording_id: recording.id(),
-        recording_share_type: with_defining_ids<RecordingShare>(),
-        composition_id,
-        primary_genre_id,
-    });
 
     (recording, recording_admin_cap, recording_shares)
 }
@@ -662,10 +642,7 @@ public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverAr
 }
 
 /// Returns whether the provided ID is a primary artist on the recording.
-public fun is_primary_artist<RecordingShare>(
-    self: &Recording<RecordingShare>,
-    party_id: ID,
-): bool {
+public fun is_primary_artist<RecordingShare>(self: &Recording<RecordingShare>, party_id: ID): bool {
     self.primary_artist_ids.contains(&party_id)
 }
 
@@ -690,16 +667,6 @@ public fun uid_mut<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
 ): &mut UID {
-    &mut self.id
-}
-
-/// Returns a mutable reference to the recording's UID for authorized extensions.
-/// Requires a witness from the extension module.
-public fun uid_mut_authorized<RecordingShare, E: drop>(
-    self: &mut Recording<RecordingShare>,
-    witness: E,
-): &mut UID {
-    extension::assert_authorized(&self.id, witness);
     &mut self.id
 }
 

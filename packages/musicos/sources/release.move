@@ -18,7 +18,6 @@ module musicos::release;
 use interest_bps::bps::{Self, BPS};
 use musicos::cover_art::CoverArt;
 use musicos::disc::Disc;
-use musicos::extension;
 use musicos::track_position::TrackPosition;
 use musicos::track_sequence::{Self, TrackSequence};
 use std::string::String;
@@ -379,13 +378,6 @@ public fun uid(self: &Release): &UID {
 /// Requires the admin capability.
 public fun uid_mut(self: &mut Release, cap: &ReleaseAdminCap): &mut UID {
     self.authorize(cap);
-    &mut self.id
-}
-
-/// Returns a mutable reference to the release's UID for authorized extensions.
-/// Requires a witness from the extension module.
-public fun uid_mut_authorized<Extension: drop>(self: &mut Release, witness: Extension): &mut UID {
-    extension::assert_authorized(&self.id, witness);
     &mut self.id
 }
 

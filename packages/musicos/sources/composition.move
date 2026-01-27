@@ -17,9 +17,8 @@ module musicos::composition;
 
 use interest_bps::bps::{Self, BPS};
 use musicos::composition_party_role::CompositionPartyRole;
-use musicos::party::Party;
 use musicos::credit::Credit;
-use musicos::extension;
+use musicos::party::Party;
 use musicos::share;
 use std::string::String;
 use sui::balance::Balance;
@@ -337,16 +336,6 @@ public fun uid_mut<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
 ): &mut UID {
-    &mut self.id
-}
-
-/// Returns a mutable reference to the composition's UID for authorized extensions.
-/// Requires a witness from the extension module.
-public fun uid_mut_authorized<CompositionShare, Extension: drop>(
-    self: &mut Composition<CompositionShare>,
-    witness: Extension,
-): &mut UID {
-    extension::assert_authorized(&self.id, witness);
     &mut self.id
 }
 
