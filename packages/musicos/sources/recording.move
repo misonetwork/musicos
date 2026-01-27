@@ -16,7 +16,7 @@
 module musicos::recording;
 
 use interest_bps::bps::BPS;
-use language_code::language_code::LanguageCode;
+use language_code::language_code::{Self, LanguageCode};
 use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
@@ -262,21 +262,6 @@ public fun publish<RecordingShare>(
 
 // --- Title ---
 
-/// Sets the primary title of the recording.
-/// Required State: Initialized
-public fun set_title<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    title: String,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.title = title;
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
 /// Sets the title version (e.g., "Radio Edit", "Extended Mix").
 /// Required State: Initialized
 public fun set_title_version<RecordingShare>(
@@ -383,36 +368,6 @@ public fun add_featured_artist<RecordingShare>(
             assert!(!self.primary_artist_ids.contains(&party_id), EAlreadyPrimaryArtist);
 
             self.featured_artist_ids.insert(party_id);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Removes a primary artist from the recording.
-/// Required State: Initialized
-public fun remove_primary_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    party_id: ID,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.primary_artist_ids.remove(&party_id);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Removes a featured artist from the recording.
-/// Required State: Initialized
-public fun remove_featured_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    party_id: ID,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.featured_artist_ids.remove(&party_id);
         },
         _ => abort ENotInitializedState,
     }
