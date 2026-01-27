@@ -151,30 +151,22 @@ public fun new_instrumentalist_role(
 }
 
 /// Creates a new Mastering Engineer role with optional level.
-public fun new_mastering_engineer_role(
-    level: Option<RecordingPartyLevel>,
-): RecordingPartyRole {
+public fun new_mastering_engineer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
     RecordingPartyRole::MasteringEngineer(level)
 }
 
 /// Creates a new Mixing Engineer role with optional level.
-public fun new_mixing_engineer_role(
-    level: Option<RecordingPartyLevel>,
-): RecordingPartyRole {
+public fun new_mixing_engineer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
     RecordingPartyRole::MixingEngineer(level)
 }
 
 /// Creates a new Music Director role with optional level.
-public fun new_music_director_role(
-    level: Option<RecordingPartyLevel>,
-): RecordingPartyRole {
+public fun new_music_director_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
     RecordingPartyRole::MusicDirector(level)
 }
 
 /// Creates a new Music Supervisor role with optional level.
-public fun new_music_supervisor_role(
-    level: Option<RecordingPartyLevel>,
-): RecordingPartyRole {
+public fun new_music_supervisor_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
     RecordingPartyRole::MusicSupervisor(level)
 }
 
@@ -189,9 +181,7 @@ public fun new_orchestra_role(level: Option<RecordingPartyLevel>): RecordingPart
 }
 
 /// Creates a new Orchestrator role with optional level.
-public fun new_orchestrator_role(
-    level: Option<RecordingPartyLevel>,
-): RecordingPartyRole {
+public fun new_orchestrator_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
     RecordingPartyRole::Orchestrator(level)
 }
 
@@ -206,23 +196,17 @@ public fun new_programmer_role(level: Option<RecordingPartyLevel>): RecordingPar
 }
 
 /// Creates a new Recording Engineer role with optional level.
-public fun new_recording_engineer_role(
-    level: Option<RecordingPartyLevel>,
-): RecordingPartyRole {
+public fun new_recording_engineer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
     RecordingPartyRole::RecordingEngineer(level)
 }
 
 /// Creates a new Remixing Engineer role with optional level.
-public fun new_remixing_engineer_role(
-    level: Option<RecordingPartyLevel>,
-): RecordingPartyRole {
+public fun new_remixing_engineer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
     RecordingPartyRole::RemixingEngineer(level)
 }
 
 /// Creates a new Sound Designer role with optional level.
-public fun new_sound_designer_role(
-    level: Option<RecordingPartyLevel>,
-): RecordingPartyRole {
+public fun new_sound_designer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
     RecordingPartyRole::SoundDesigner(level)
 }
 

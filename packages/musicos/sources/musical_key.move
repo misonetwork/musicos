@@ -8,10 +8,16 @@
 /// and a mode (major/minor). For example: C Major, F# Minor, Bb Major.
 module musicos::musical_key;
 
+use std::string::String;
+
+//=== Structs ===
+
 /// A musical key combining a root note, accidental, and mode.
 /// Examples: MusicalKey(C, Natural, Major) = C Major
 ///           MusicalKey(F, Sharp, Minor) = F# Minor
 public struct MusicalKey(Note, Accidental, Mode) has copy, drop, store;
+
+//=== Enums ===
 
 /// The seven natural note letters in Western music.
 public enum Note has copy, drop, store {
@@ -37,6 +43,114 @@ public enum Mode has copy, drop, store {
     Major,
     /// Minor mode, typically perceived as dark or sad.
     Minor,
+}
+
+//=== Errors ===
+
+const EInvalidNote: u64 = 0;
+const EInvalidAccidental: u64 = 1;
+const EInvalidMode: u64 = 2;
+
+//=== Public Functions ===
+
+public fun new(note: Note, accidental: Accidental, mode: Mode): MusicalKey {
+    MusicalKey(note, accidental, mode)
+}
+
+public fun new_from_strings(
+    note_string: String,
+    accidental_string: String,
+    mode_string: String,
+): MusicalKey {
+    let mut note = option::none<Note>();
+    let mut accidental = option::none<Accidental>();
+    let mut mode = option::none<Mode>();
+
+    if (note_string == "c") {
+        note.fill(Note::C);
+    } else if (note_string == "d") {
+        note.fill(Note::D);
+    } else if (note_string == "e") {
+        note.fill(Note::E);
+    } else if (note_string == "f") {
+        note.fill(Note::F);
+    } else if (note_string == "g") {
+        note.fill(Note::G);
+    } else if (note_string == "a") {
+        note.fill(Note::A);
+    } else if (note_string == "b") {
+        note.fill(Note::B);
+    } else {
+        abort EInvalidNote
+    };
+
+    if (accidental_string == "sharp") {
+        accidental.fill(Accidental::Sharp);
+    } else if (accidental_string == "flat") {
+        accidental.fill(Accidental::Flat);
+    } else if (accidental_string == "natural") {
+        accidental.fill(Accidental::Natural);
+    } else {
+        abort EInvalidAccidental
+    };
+
+    if (mode_string == "major") {
+        mode.fill(Mode::Major);
+    } else if (mode_string == "minor") {
+        mode.fill(Mode::Minor);
+    } else {
+        abort EInvalidMode
+    };
+
+    MusicalKey(note.destroy_some(), accidental.destroy_some(), mode.destroy_some())
+}
+
+public fun new_note_c(): Note {
+    Note::C
+}
+
+public fun new_note_d(): Note {
+    Note::D
+}
+
+public fun new_note_e(): Note {
+    Note::E
+}
+
+public fun new_note_f(): Note {
+    Note::F
+}
+
+public fun new_note_g(): Note {
+    Note::G
+}
+
+public fun new_note_a(): Note {
+    Note::A
+}
+
+public fun new_note_b(): Note {
+    Note::B
+}
+
+public fun new_accidental_natural(): Accidental {
+    Accidental::Natural
+}
+
+public fun new_accidental_sharp(): Accidental {
+    Accidental::Sharp
+}
+
+public fun new_accidental_flat(): Accidental {
+    Accidental::Flat
+}
+
+public fun new_mode_major(): Mode {
+    Mode::Major
+}
+
+public fun new_mode_minor(): Mode {
+    Mode::Minor
 }
 
 //=== Public View Functions ===
