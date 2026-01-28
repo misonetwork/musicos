@@ -17,57 +17,57 @@ use std::string::String;
 /// Most roles include an optional level to indicate seniority.
 public enum RecordingPartyRole has copy, drop, store {
     /// Performed voice acting or spoken word performance.
-    Actor(Option<RecordingPartyLevel>),
+    Actor(Option<RecordingPartyRoleLevel>),
     /// Arranged the musical parts for the recording.
-    Arranger(Option<RecordingPartyLevel>),
+    Arranger(Option<RecordingPartyRoleLevel>),
     /// A&R representative who discovered or developed the artist.
     ArtistsAndRepertoire,
     /// Performed as part of a choir.
-    Choir(Option<RecordingPartyLevel>),
+    Choir(Option<RecordingPartyRoleLevel>),
     /// Directed the choir performance.
-    ChoirMaster(Option<RecordingPartyLevel>),
+    ChoirMaster(Option<RecordingPartyRoleLevel>),
     /// Conducted the orchestra or ensemble.
-    Conductor(Option<RecordingPartyLevel>),
+    Conductor(Option<RecordingPartyRoleLevel>),
     /// Hired and managed session musicians.
-    Contractor(Option<RecordingPartyLevel>),
+    Contractor(Option<RecordingPartyRoleLevel>),
     /// Prepared written music parts for performers.
     Copyist,
     /// Edited and compiled audio takes.
-    Editor(Option<RecordingPartyLevel>),
+    Editor(Option<RecordingPartyRoleLevel>),
     /// Performed as part of a musical ensemble.
-    Ensemble(Option<RecordingPartyLevel>),
+    Ensemble(Option<RecordingPartyRoleLevel>),
     /// Played an instrument on the recording. Includes instrument name.
-    Instrumentalist(String, Option<RecordingPartyLevel>),
+    Instrumentalist(String, Option<RecordingPartyRoleLevel>),
     /// Mastered the final audio for distribution.
-    MasteringEngineer(Option<RecordingPartyLevel>),
+    MasteringEngineer(Option<RecordingPartyRoleLevel>),
     /// Mixed the multitrack recording into stereo/surround.
-    MixingEngineer(Option<RecordingPartyLevel>),
+    MixingEngineer(Option<RecordingPartyRoleLevel>),
     /// Directed the musical performance.
-    MusicDirector(Option<RecordingPartyLevel>),
+    MusicDirector(Option<RecordingPartyRoleLevel>),
     /// Oversaw music selection and licensing.
-    MusicSupervisor(Option<RecordingPartyLevel>),
+    MusicSupervisor(Option<RecordingPartyRoleLevel>),
     /// Narrated spoken content.
-    Narrator(Option<RecordingPartyLevel>),
+    Narrator(Option<RecordingPartyRoleLevel>),
     /// Performed as part of an orchestra.
-    Orchestra(Option<RecordingPartyLevel>),
+    Orchestra(Option<RecordingPartyRoleLevel>),
     /// Created orchestral arrangements.
-    Orchestrator(Option<RecordingPartyLevel>),
+    Orchestrator(Option<RecordingPartyRoleLevel>),
     /// Oversaw the creative and technical aspects of the recording.
-    Producer(Option<RecordingPartyLevel>),
+    Producer(Option<RecordingPartyRoleLevel>),
     /// Programmed beats, synths, or electronic elements.
-    Programmer(Option<RecordingPartyLevel>),
+    Programmer(Option<RecordingPartyRoleLevel>),
     /// Operated recording equipment during sessions.
-    RecordingEngineer(Option<RecordingPartyLevel>),
+    RecordingEngineer(Option<RecordingPartyRoleLevel>),
     /// Created a remix of the recording.
-    RemixingEngineer(Option<RecordingPartyLevel>),
+    RemixingEngineer(Option<RecordingPartyRoleLevel>),
     /// Created sound effects or sonic textures.
-    SoundDesigner(Option<RecordingPartyLevel>),
+    SoundDesigner(Option<RecordingPartyRoleLevel>),
     /// Provided vocals on the recording.
-    Vocalist(Option<RecordingPartyLevel>),
+    Vocalist(Option<RecordingPartyRoleLevel>),
 }
 
 /// Indicates the seniority or prominence level of a party.
-public enum RecordingPartyLevel has copy, drop, store {
+public enum RecordingPartyRoleLevel has copy, drop, store {
     /// Additional/supplementary party.
     Additional,
     /// Assistant to the primary party.
@@ -91,12 +91,12 @@ public enum RecordingPartyLevel has copy, drop, store {
 //=== Public Functions ===
 
 /// Creates a new Actor role with optional level.
-public fun new_actor_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_actor_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Actor(level)
 }
 
 /// Creates a new Arranger role with optional level.
-public fun new_arranger_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_arranger_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Arranger(level)
 }
 
@@ -106,22 +106,22 @@ public fun new_artists_and_repertoire_role(): RecordingPartyRole {
 }
 
 /// Creates a new Choir role with optional level.
-public fun new_choir_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_choir_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Choir(level)
 }
 
 /// Creates a new Choir Master role with optional level.
-public fun new_choir_master_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_choir_master_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::ChoirMaster(level)
 }
 
 /// Creates a new Conductor role with optional level.
-public fun new_conductor_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_conductor_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Conductor(level)
 }
 
 /// Creates a new Contractor role with optional level.
-public fun new_contractor_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_contractor_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Contractor(level)
 }
 
@@ -131,132 +131,132 @@ public fun new_copyist_role(): RecordingPartyRole {
 }
 
 /// Creates a new Editor role with optional level.
-public fun new_editor_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_editor_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Editor(level)
 }
 
 /// Creates a new Ensemble role with optional level.
-public fun new_ensemble_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_ensemble_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Ensemble(level)
 }
 
 /// Creates a new Instrumentalist role with instrument name and optional level.
 public fun new_instrumentalist_role(
     instrument: String,
-    level: Option<RecordingPartyLevel>,
+    level: Option<RecordingPartyRoleLevel>,
 ): RecordingPartyRole {
     RecordingPartyRole::Instrumentalist(instrument, level)
 }
 
 /// Creates a new Mastering Engineer role with optional level.
-public fun new_mastering_engineer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_mastering_engineer_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::MasteringEngineer(level)
 }
 
 /// Creates a new Mixing Engineer role with optional level.
-public fun new_mixing_engineer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_mixing_engineer_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::MixingEngineer(level)
 }
 
 /// Creates a new Music Director role with optional level.
-public fun new_music_director_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_music_director_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::MusicDirector(level)
 }
 
 /// Creates a new Music Supervisor role with optional level.
-public fun new_music_supervisor_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_music_supervisor_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::MusicSupervisor(level)
 }
 
 /// Creates a new Narrator role with optional level.
-public fun new_narrator_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_narrator_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Narrator(level)
 }
 
 /// Creates a new Orchestra role with optional level.
-public fun new_orchestra_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_orchestra_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Orchestra(level)
 }
 
 /// Creates a new Orchestrator role with optional level.
-public fun new_orchestrator_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_orchestrator_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Orchestrator(level)
 }
 
 /// Creates a new Producer role with optional level.
-public fun new_producer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_producer_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Producer(level)
 }
 
 /// Creates a new Programmer role with optional level.
-public fun new_programmer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_programmer_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Programmer(level)
 }
 
 /// Creates a new Recording Engineer role with optional level.
-public fun new_recording_engineer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_recording_engineer_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::RecordingEngineer(level)
 }
 
 /// Creates a new Remixing Engineer role with optional level.
-public fun new_remixing_engineer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_remixing_engineer_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::RemixingEngineer(level)
 }
 
 /// Creates a new Sound Designer role with optional level.
-public fun new_sound_designer_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_sound_designer_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::SoundDesigner(level)
 }
 
 /// Creates a new Vocalist role with optional level.
-public fun new_vocalist_role(level: Option<RecordingPartyLevel>): RecordingPartyRole {
+public fun new_vocalist_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
     RecordingPartyRole::Vocalist(level)
 }
 
 /// Creates an Additional level.
-public fun new_additional_level(): RecordingPartyLevel {
-    RecordingPartyLevel::Additional
+public fun new_additional_role_level(): RecordingPartyRoleLevel {
+    RecordingPartyRoleLevel::Additional
 }
 
 /// Creates an Assistant level.
-public fun new_assistant_level(): RecordingPartyLevel {
-    RecordingPartyLevel::Assistant
+public fun new_assistant_role_level(): RecordingPartyRoleLevel {
+    RecordingPartyRoleLevel::Assistant
 }
 
 /// Creates an Associate level.
-public fun new_associate_level(): RecordingPartyLevel {
-    RecordingPartyLevel::Associate
+public fun new_associate_role_level(): RecordingPartyRoleLevel {
+    RecordingPartyRoleLevel::Associate
 }
 
 /// Creates a Backing level.
-public fun new_backing_level(): RecordingPartyLevel {
-    RecordingPartyLevel::Backing
+public fun new_backing_role_level(): RecordingPartyRoleLevel {
+    RecordingPartyRoleLevel::Backing
 }
 
 /// Creates an Executive level.
-public fun new_executive_level(): RecordingPartyLevel {
-    RecordingPartyLevel::Executive
+public fun new_executive_role_level(): RecordingPartyRoleLevel {
+    RecordingPartyRoleLevel::Executive
 }
 
 /// Creates a Featured level.
-public fun new_featured_level(): RecordingPartyLevel {
-    RecordingPartyLevel::Featured
+public fun new_featured_role_level(): RecordingPartyRoleLevel {
+    RecordingPartyRoleLevel::Featured
 }
 
 /// Creates a Lead level.
-public fun new_lead_level(): RecordingPartyLevel {
-    RecordingPartyLevel::Lead
+public fun new_lead_role_level(): RecordingPartyRoleLevel {
+    RecordingPartyRoleLevel::Lead
 }
 
 /// Creates a Principal level.
-public fun new_principal_level(): RecordingPartyLevel {
-    RecordingPartyLevel::Principal
+public fun new_principal_role_level(): RecordingPartyRoleLevel {
+    RecordingPartyRoleLevel::Principal
 }
 
 //=== Public View Functions ===
 
 /// Returns the optional level associated with this role.
-public fun level(self: &RecordingPartyRole): Option<RecordingPartyLevel> {
+public fun level(self: &RecordingPartyRole): Option<RecordingPartyRoleLevel> {
     match (self) {
         RecordingPartyRole::Actor(level) => *level,
         RecordingPartyRole::Arranger(level) => *level,
@@ -512,73 +512,73 @@ public fun is_vocalist_role(self: &RecordingPartyRole): bool {
 //=== Level Check Functions ===
 
 /// Returns true if this is an Additional level.
-public fun is_additional_level(self: &RecordingPartyLevel): bool {
+public fun is_additional_role_level(self: &RecordingPartyRoleLevel): bool {
     match (self) {
-        RecordingPartyLevel::Additional => true,
+        RecordingPartyRoleLevel::Additional => true,
         _ => false,
     }
 }
 
 /// Returns true if this is an Assistant level.
-public fun is_assistant_level(self: &RecordingPartyLevel): bool {
+public fun is_assistant_role_level(self: &RecordingPartyRoleLevel): bool {
     match (self) {
-        RecordingPartyLevel::Assistant => true,
+        RecordingPartyRoleLevel::Assistant => true,
         _ => false,
     }
 }
 
 /// Returns true if this is an Associate level.
-public fun is_associate_level(self: &RecordingPartyLevel): bool {
+public fun is_associate_role_level(self: &RecordingPartyRoleLevel): bool {
     match (self) {
-        RecordingPartyLevel::Associate => true,
+        RecordingPartyRoleLevel::Associate => true,
         _ => false,
     }
 }
 
 /// Returns true if this is a Backing level.
-public fun is_backing_level(self: &RecordingPartyLevel): bool {
+public fun is_backing_role_level(self: &RecordingPartyRoleLevel): bool {
     match (self) {
-        RecordingPartyLevel::Backing => true,
+        RecordingPartyRoleLevel::Backing => true,
         _ => false,
     }
 }
 
 /// Returns true if this is an Executive level.
-public fun is_executive_level(self: &RecordingPartyLevel): bool {
+public fun is_executive_role_level(self: &RecordingPartyRoleLevel): bool {
     match (self) {
-        RecordingPartyLevel::Executive => true,
+        RecordingPartyRoleLevel::Executive => true,
         _ => false,
     }
 }
 
 /// Returns true if this is a Featured level.
-public fun is_featured_level(self: &RecordingPartyLevel): bool {
+public fun is_featured_role_level(self: &RecordingPartyRoleLevel): bool {
     match (self) {
-        RecordingPartyLevel::Featured => true,
+        RecordingPartyRoleLevel::Featured => true,
         _ => false,
     }
 }
 
 /// Returns true if this is a Lead level.
-public fun is_lead_level(self: &RecordingPartyLevel): bool {
+public fun is_lead_role_level(self: &RecordingPartyRoleLevel): bool {
     match (self) {
-        RecordingPartyLevel::Lead => true,
+        RecordingPartyRoleLevel::Lead => true,
         _ => false,
     }
 }
 
 /// Returns true if this is a Primary level.
-public fun is_primary_level(self: &RecordingPartyLevel): bool {
+public fun is_primary_role_level(self: &RecordingPartyRoleLevel): bool {
     match (self) {
-        RecordingPartyLevel::Primary => true,
+        RecordingPartyRoleLevel::Primary => true,
         _ => false,
     }
 }
 
 /// Returns true if this is a Principal level.
-public fun is_principal_level(self: &RecordingPartyLevel): bool {
+public fun is_principal_role_level(self: &RecordingPartyRoleLevel): bool {
     match (self) {
-        RecordingPartyLevel::Principal => true,
+        RecordingPartyRoleLevel::Principal => true,
         _ => false,
     }
 }

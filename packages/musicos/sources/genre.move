@@ -26,8 +26,6 @@ public struct Genre has key {
     id: UID,
     /// Human-readable name of the genre.
     name: String,
-    // Whether the genre can be assigned as a primary genre.
-    is_primary: bool,
 }
 
 /// Key used for deriving deterministic genre addresses from the registry.
@@ -91,7 +89,7 @@ fun init(_otw: GENRE, ctx: &mut TxContext) {
 
     // Create and share the default genres.
     DEFAULT_GENRES.destroy!(|genre| {
-        let genre = new_impl(genre.to_string(), false, &mut genre_registry);
+        let genre = new_impl(genre.to_string(), &mut genre_registry);
         transfer::share_object(genre);
     });
 
@@ -103,8 +101,8 @@ fun init(_otw: GENRE, ctx: &mut TxContext) {
 /// Creates a new genre with the given name.
 /// Requires admin capability and registers the genre in the shared registry.
 /// Emits a GenreCreatedEvent upon successful creation.
-public fun new(name: String, is_primary: bool, genre_registry: &mut GenreRegistry) {
-    let genre = new_impl(name, is_primary, genre_registry);
+public fun new(name: String, genre_registry: &mut GenreRegistry) {
+    let genre = new_impl(name, genre_registry);
     transfer::share_object(genre);
 }
 
@@ -120,20 +118,14 @@ public fun name(self: &Genre): &String {
     &self.name
 }
 
-/// Returns whether the genre can be assigned as a primary genre.
-public fun is_primary(self: &Genre): bool {
-    self.is_primary
-}
-
 //=== Private Functions ===
 
-fun new_impl(name: String, is_primary: bool, genre_registry: &mut GenreRegistry): Genre {
+fun new_impl(name: String, genre_registry: &mut GenreRegistry): Genre {
     assert_valid_name(&name);
 
     let genre = Genre {
         id: claim(&mut genre_registry.id, GenreKey(name)),
         name,
-        is_primary,
     };
 
     emit(GenreCreatedEvent {

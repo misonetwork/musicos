@@ -14,7 +14,7 @@
 module musicos::recording;
 
 use interest_bps::bps::BPS;
-use language_code::language_code::{Self, LanguageCode};
+use language_code::language_code::LanguageCode;
 use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;

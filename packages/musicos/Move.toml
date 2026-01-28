@@ -10,4 +10,4 @@ language_code = { local = "../../../language_code" }
 walrus_data = { local = "../../../walrus_data" }
 
 [environments]
-mirainet = "f1eb94c0"
+mirainet = "c463eff3"
