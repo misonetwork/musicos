@@ -16,7 +16,6 @@ module musicos::composition;
 use interest_bps::bps::{Self, BPS};
 use musicos::composition_party_role::CompositionPartyRole;
 use musicos::credit::Credit;
-use musicos::lyric_line::LyricLine;
 use musicos::party::Party;
 use musicos::share;
 use std::string::String;
