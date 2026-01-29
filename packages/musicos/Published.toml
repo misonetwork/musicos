@@ -3,10 +3,10 @@
 # This file SHOULD be committed to source control
 
 [published.mirainet]
-chain-id = "c463eff3"
-published-at = "0x9032185cd11f4fb18e321e17d3b1387d1755c6fe68a6d9ba60f4539cdc2d644d"
-original-id = "0x9032185cd11f4fb18e321e17d3b1387d1755c6fe68a6d9ba60f4539cdc2d644d"
+chain-id = "11235922"
+published-at = "0xedb2ec835731d6cfed33d41fddaece6123a2f5f6f786622bfd6434d077d6eb59"
+original-id = "0xedb2ec835731d6cfed33d41fddaece6123a2f5f6f786622bfd6434d077d6eb59"
 version = 1
 toolchain-version = "1.63.4"
 build-config = { flavor = "sui", edition = "2024" }
-upgrade-capability = "0xcced527e53ca4f3b2b81cb0aac1482ad4343cf7af2810fd5967e5b96f0f3e7c0"
+upgrade-capability = "0x2cce9fcb91a8b50f3025a44623db9e4c30bbe72eabee53ce5f5a8337aca2ed53"

@@ -20,6 +20,7 @@ use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
 use musicos::genre::Genre;
+use musicos::lyric_line::LyricLine;
 use musicos::musical_key::MusicalKey;
 use musicos::party::Party;
 use musicos::recording_party_role::RecordingPartyRole;
@@ -74,6 +75,8 @@ public struct Recording<phantom RecordingShare> has key {
     is_explicit: bool,
     /// Whether the recording is instrumental (no vocals).
     is_instrumental: bool,
+    /// Optional lyrics for the recording.
+    lyrics: vector<LyricLine>,
     /// Musical key of the recording.
     musical_key: Option<MusicalKey>,
     /// Time signature of the recording.
@@ -165,6 +168,10 @@ const EAlreadyPrimaryArtist: u64 = 24;
 const EAlreadyAssignedAsSecondaryGenre: u64 = 25;
 /// Genre is already assigned as a primary genre.
 const EAlreadyAssignedAsPrimaryGenre: u64 = 26;
+/// Instrumental recording has lyrics.
+const ELyricsInstrumentalConflict: u64 = 27;
+/// Lyric timestamp is out of bounds.
+const ELyricTimestampOutOfBounds: u64 = 28;
 
 //=== Public Functions ===
 
@@ -206,6 +213,7 @@ public fun new<RecordingShare, CS>(
         language: option::none(),
         is_explicit,
         is_instrumental,
+        lyrics: vector[],
         musical_key: option::none(),
         time_signature: option::none(),
         tempo_bpm: option::none(),
@@ -244,6 +252,8 @@ public fun publish<RecordingShare>(
             assert!(!self.credits.is_empty(), ENoParties);
             // Assert the recording has at least one primary artist.
             assert!(!self.primary_artist_ids.is_empty(), ENoPrimaryArtistAssigned);
+            // Assert the recording has no lyrics if it is instrumental.
+            assert!(self.is_instrumental == self.lyrics.is_empty(), ELyricsInstrumentalConflict);
 
             // Set the recording's publish timestamp.
             self.state = RecordingState::Published(clock.timestamp_ms());
@@ -300,6 +310,28 @@ public fun set_language<RecordingShare>(
     match (self.state) {
         RecordingState::Initialized => {
             self.language.swap_or_fill(language);
+        },
+        _ => abort ENotInitializedState,
+    }
+}
+
+/// Adds lyric lines to the recording.
+/// Required State: Initialized
+public fun add_lyrics<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
+    lyrics: vector<LyricLine>,
+) {
+    match (self.state) {
+        RecordingState::Initialized => {
+            let recording_duration_ms = self.master.duration_ms();
+            lyrics.do_ref!(|lyric_line| {
+                assert!(
+                    lyric_line.start_pos_ms() <= recording_duration_ms,
+                    ELyricTimestampOutOfBounds,
+                );
+            });
+            self.lyrics.append(lyrics);
         },
         _ => abort ENotInitializedState,
     }
@@ -477,6 +509,12 @@ public fun add_stem<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
+            // If the stem has assigned contributors, assert that each contributor
+            // is credited in the recording's credits.
+            stem.contributors().do_ref!(|contributor_id| {
+                assert!(self.credits.contains(contributor_id), EPartyNotCredited);
+            });
+            // Add the stem to the recording.
             self.stems.push_back(stem);
         },
         _ => abort ENotInitializedState,

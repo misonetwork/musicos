@@ -16,6 +16,7 @@ module musicos::composition;
 use interest_bps::bps::{Self, BPS};
 use musicos::composition_party_role::CompositionPartyRole;
 use musicos::credit::Credit;
+use musicos::lyric_line::LyricLine;
 use musicos::party::Party;
 use musicos::share;
 use std::string::String;
@@ -26,7 +27,6 @@ use sui::coin_registry::Currency;
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
-use walrus_data::walrus_data::WalrusData;
 
 //=== Structs ===
 
@@ -46,7 +46,7 @@ public struct Composition<phantom CompositionShare> has key {
     /// Revenue split rate allocated to this composition vs recording (in basis points).
     split_bps: BPS,
     /// Optional lyrics data reference.
-    lyrics: Option<WalrusData>,
+    lyrics: vector<String>,
 }
 
 /// Capability that authorizes modifications to a specific composition.
@@ -151,7 +151,7 @@ public fun new<CompositionShare>(
         alternate_titles: vector[],
         credits: vec_map::empty(),
         split_bps: bps::new(split_value),
-        lyrics: option::none(),
+        lyrics: vector[],
     };
 
     let composition_admin_cap = CompositionAdminCap<CompositionShare> {
@@ -265,16 +265,17 @@ public fun set_split_bps<CompositionShare>(
 
 // --- Content ---
 
-/// Sets the lyrics data reference for the composition.
+/// Adds lyric lines to the composition.
+/// Composition lyrics have no timestamps, so we store them as a vector<String>.
 /// Required State: Initialized
-public fun set_lyrics<CompositionShare>(
+public fun add_lyric_lines<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
-    data: WalrusData,
+    lyric_lines: vector<String>,
 ) {
     match (self.state) {
         CompositionState::Initialized => {
-            self.lyrics.swap_or_fill(data);
+            self.lyrics.append(lyric_lines);
         },
         _ => abort ENotInitializedState,
     }
@@ -317,7 +318,7 @@ public fun split_bps<CompositionShare>(self: &Composition<CompositionShare>): BP
 }
 
 /// Returns the optional lyrics data reference.
-public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &Option<WalrusData> {
+public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &vector<String> {
     &self.lyrics
 }
 
