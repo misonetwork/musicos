@@ -3,6 +3,7 @@
 
 import { Transaction } from "@mysten/sui/transactions";
 import type { CreateGenreParams } from "../types/genre.js";
+import { CreateGenreParamsSchema } from "../schemas/genre.js";
 
 /**
  * Client for managing genres.
@@ -15,14 +16,14 @@ export class GenreClient {
    * The genre is automatically shared.
    */
   create(params: CreateGenreParams): Transaction {
+    const parsed = CreateGenreParamsSchema.parse(params);
     const tx = new Transaction();
 
     tx.moveCall({
       target: `${this.packageId}::genre::new`,
       arguments: [
-        tx.pure.string(params.name),
-        tx.pure.bool(params.isPrimary),
-        tx.object(params.registryId),
+        tx.pure.string(parsed.name),
+        tx.object(parsed.registryId),
       ],
     });
 

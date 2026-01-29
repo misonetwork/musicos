@@ -1,8 +1,6 @@
 // Copyright (c) Studio Mirai, LLC
 // SPDX-License-Identifier: Apache-2.0
 
-import type { WalrusData } from "./common.js";
-
 /**
  * Roles a contributor can have on a composition.
  */
@@ -99,13 +97,13 @@ export interface AddAlternateTitleParams {
 /**
  * Parameters for setting lyrics.
  */
-export interface SetLyricsParams {
+export interface AddLyricLinesParams {
   /** Composition object ID */
   compositionId: string;
   /** Admin capability object ID */
   adminCapId: string;
-  /** Lyrics data reference */
-  lyrics: WalrusData;
+  /** Lyric lines to append */
+  lines: string[];
   /** Share type string */
   shareType: string;
 }

@@ -8,10 +8,18 @@ import type {
   AddCompositionCreditParams,
   SetCompositionSplitParams,
   AddAlternateTitleParams,
-  SetLyricsParams,
+  AddLyricLinesParams,
 } from "../types/composition.js";
-import { makeCompositionCredit, makeWalrusData } from "../utils/move-call.js";
+import { makeCompositionCredit } from "../utils/move-call.js";
 import { SUI_CLOCK_OBJECT_ID } from "../utils/type-args.js";
+import {
+  AddAlternateTitleParamsSchema,
+  AddCompositionCreditParamsSchema,
+  AddLyricLinesParamsSchema,
+  CreateCompositionParamsSchema,
+  PublishCompositionParamsSchema,
+  SetCompositionSplitParamsSchema,
+} from "../schemas/composition.js";
 
 /**
  * Client for managing compositions.
@@ -26,23 +34,24 @@ export class CompositionClient {
    * Note: Caller must have already created the share currency and treasury cap.
    */
   create(params: CreateCompositionParams): Transaction {
+    const parsed = CreateCompositionParamsSchema.parse(params);
     const tx = new Transaction();
 
     const [composition, adminCap, shareBalance] = tx.moveCall({
       target: `${this.packageId}::composition::new`,
-      typeArguments: [params.shareType],
+      typeArguments: [parsed.shareType],
       arguments: [
-        tx.pure.string(params.title),
-        tx.pure.u64(params.splitBps),
-        tx.object(params.shareCurrencyId),
-        tx.object(params.shareTreasuryCapId),
+        tx.pure.string(parsed.title),
+        tx.pure.u64(parsed.splitBps),
+        tx.object(parsed.shareCurrencyId),
+        tx.object(parsed.shareTreasuryCapId),
       ],
     });
 
     // Convert balance to coin and transfer all to sender
     const shareCoin = tx.moveCall({
       target: "0x2::coin::from_balance",
-      typeArguments: [params.shareType],
+      typeArguments: [parsed.shareType],
       arguments: [shareBalance],
     });
 
@@ -56,14 +65,15 @@ export class CompositionClient {
    * Requires at least one contributor.
    */
   publish(params: PublishCompositionParams): Transaction {
+    const parsed = PublishCompositionParamsSchema.parse(params);
     const tx = new Transaction();
 
     tx.moveCall({
       target: `${this.packageId}::composition::publish`,
-      typeArguments: [params.shareType],
+      typeArguments: [parsed.shareType],
       arguments: [
-        tx.object(params.compositionId),
-        tx.object(params.adminCapId),
+        tx.object(parsed.compositionId),
+        tx.object(parsed.adminCapId),
         tx.object(SUI_CLOCK_OBJECT_ID),
       ],
     });
@@ -75,17 +85,18 @@ export class CompositionClient {
    * Add a credit (contributor with roles) to a composition.
    */
   addCredit(params: AddCompositionCreditParams): Transaction {
+    const parsed = AddCompositionCreditParamsSchema.parse(params);
     const tx = new Transaction();
 
-    const credit = makeCompositionCredit(tx, this.packageId, params.credit);
+    const credit = makeCompositionCredit(tx, this.packageId, parsed.credit);
 
     tx.moveCall({
       target: `${this.packageId}::composition::add_credit`,
-      typeArguments: [params.shareType],
+      typeArguments: [parsed.shareType],
       arguments: [
-        tx.object(params.compositionId),
-        tx.object(params.adminCapId),
-        tx.object(params.contributorId),
+        tx.object(parsed.compositionId),
+        tx.object(parsed.adminCapId),
+        tx.object(parsed.contributorId),
         credit,
       ],
     });
@@ -97,15 +108,16 @@ export class CompositionClient {
    * Set the revenue split for this composition.
    */
   setSplitBps(params: SetCompositionSplitParams): Transaction {
+    const parsed = SetCompositionSplitParamsSchema.parse(params);
     const tx = new Transaction();
 
     tx.moveCall({
       target: `${this.packageId}::composition::set_split_bps`,
-      typeArguments: [params.shareType],
+      typeArguments: [parsed.shareType],
       arguments: [
-        tx.object(params.compositionId),
-        tx.object(params.adminCapId),
-        tx.pure.u64(params.splitBps),
+        tx.object(parsed.compositionId),
+        tx.object(parsed.adminCapId),
+        tx.pure.u64(parsed.splitBps),
       ],
     });
 
@@ -116,15 +128,16 @@ export class CompositionClient {
    * Add an alternate title to the composition.
    */
   addAlternateTitle(params: AddAlternateTitleParams): Transaction {
+    const parsed = AddAlternateTitleParamsSchema.parse(params);
     const tx = new Transaction();
 
     tx.moveCall({
       target: `${this.packageId}::composition::add_alternate_title`,
-      typeArguments: [params.shareType],
+      typeArguments: [parsed.shareType],
       arguments: [
-        tx.object(params.compositionId),
-        tx.object(params.adminCapId),
-        tx.pure.string(params.title),
+        tx.object(parsed.compositionId),
+        tx.object(parsed.adminCapId),
+        tx.pure.string(parsed.title),
       ],
     });
 
@@ -132,20 +145,19 @@ export class CompositionClient {
   }
 
   /**
-   * Set the lyrics data reference.
+   * Add lyric lines.
    */
-  setLyrics(params: SetLyricsParams): Transaction {
+  addLyricLines(params: AddLyricLinesParams): Transaction {
+    const parsed = AddLyricLinesParamsSchema.parse(params);
     const tx = new Transaction();
 
-    const walrusData = makeWalrusData(tx, this.packageId, params.lyrics);
-
     tx.moveCall({
-      target: `${this.packageId}::composition::set_lyrics`,
-      typeArguments: [params.shareType],
+      target: `${this.packageId}::composition::add_lyric_lines`,
+      typeArguments: [parsed.shareType],
       arguments: [
-        tx.object(params.compositionId),
-        tx.object(params.adminCapId),
-        walrusData,
+        tx.object(parsed.compositionId),
+        tx.object(parsed.adminCapId),
+        tx.pure.vector("string", parsed.lines),
       ],
     });
 

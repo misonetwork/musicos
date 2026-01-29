@@ -28,6 +28,10 @@ const PCM_DIGEST_LENGTH: u64 = 32;
 //=== Public Functions ===
 
 const EInvalidPcmDigestLength: u64 = 0;
+const EInvalidChannels: u64 = 1;
+const EInvalidBitDepth: u64 = 2;
+const EInvalidSampleRate: u64 = 3;
+const EInvalidSamples: u64 = 4;
 
 /// Creates a new Audio object with the given parameters.
 public fun new(
@@ -39,6 +43,13 @@ public fun new(
     pcm_digest: vector<u8>,
 ): Audio {
     assert!(pcm_digest.length() == PCM_DIGEST_LENGTH, EInvalidPcmDigestLength);
+    assert!(channels > 0, EInvalidChannels);
+    assert!(
+        bit_depth == 8 || bit_depth == 16 || bit_depth == 24 || bit_depth == 32,
+        EInvalidBitDepth,
+    );
+    assert!(sample_rate_hz > 0, EInvalidSampleRate);
+    assert!(samples > 0, EInvalidSamples);
 
     Audio {
         channels,

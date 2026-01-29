@@ -36,8 +36,6 @@ export type DefaultGenre = (typeof DEFAULT_GENRES)[number];
 export interface CreateGenreParams {
   /** Genre name (A-Z, _, & only) */
   name: string;
-  /** Whether this can be a primary genre */
-  isPrimary: boolean;
   /** Genre registry object ID */
   registryId: string;
 }

@@ -10,8 +10,14 @@ import type {
   Disc,
   Track,
 } from "../types/release.js";
-import { makeCoverArt } from "../utils/move-call.js";
+import { makeCoverArt, makeReleaseKind } from "../utils/move-call.js";
 import { SUI_CLOCK_OBJECT_ID } from "../utils/type-args.js";
+import {
+  CreateReleaseParamsSchema,
+  DistributeRevenueParamsSchema,
+  PublishReleaseParamsSchema,
+  SetTrackSplitsParamsSchema,
+} from "../schemas/release.js";
 
 /**
  * Client for managing releases.
@@ -24,26 +30,24 @@ export class ReleaseClient {
    * Returns a transaction that creates the release and admin capability.
    */
   create(params: CreateReleaseParams): Transaction {
+    const parsed = CreateReleaseParamsSchema.parse(params);
     const tx = new Transaction();
 
-    const coverArt = makeCoverArt(tx, this.packageId, params.coverArt);
+    const coverArt = makeCoverArt(tx, this.packageId, parsed.coverArt);
 
     // Build discs
-    const discs = params.discs.map((disc) => this.makeDisc(tx, disc));
+    const discs = parsed.discs.map((disc) => this.makeDisc(tx, disc));
     const discsVec = tx.makeMoveVec({
       type: `${this.packageId}::disc::Disc`,
       elements: discs,
     });
 
     // Create release kind
-    const kindVariant = params.kind.charAt(0).toUpperCase() + params.kind.slice(1);
-    const kind = tx.moveCall({
-      target: `${this.packageId}::release::${kindVariant}`,
-    });
+    const kind = makeReleaseKind(tx, parsed.kind);
 
     const [release, adminCap] = tx.moveCall({
       target: `${this.packageId}::release::new`,
-      arguments: [kind, tx.pure.string(params.title), coverArt, discsVec],
+      arguments: [kind, tx.pure.string(parsed.title), coverArt, discsVec],
     });
 
     tx.transferObjects([release, adminCap], tx.pure.address("@sender"));
@@ -56,13 +60,14 @@ export class ReleaseClient {
    * Track splits must be set first.
    */
   publish(params: PublishReleaseParams): Transaction {
+    const parsed = PublishReleaseParamsSchema.parse(params);
     const tx = new Transaction();
 
     tx.moveCall({
       target: `${this.packageId}::release::publish`,
       arguments: [
-        tx.object(params.releaseId),
-        tx.object(params.adminCapId),
+        tx.object(parsed.releaseId),
+        tx.object(parsed.adminCapId),
         tx.object(SUI_CLOCK_OBJECT_ID),
       ],
     });
@@ -75,14 +80,15 @@ export class ReleaseClient {
    * Splits must sum to 10000 (100%).
    */
   setTrackSplitsBps(params: SetTrackSplitsParams): Transaction {
+    const parsed = SetTrackSplitsParamsSchema.parse(params);
     const tx = new Transaction();
 
     tx.moveCall({
       target: `${this.packageId}::release::set_track_splits_bps`,
       arguments: [
-        tx.object(params.releaseId),
-        tx.object(params.adminCapId),
-        tx.pure.vector("u64", params.splits),
+        tx.object(parsed.releaseId),
+        tx.object(parsed.adminCapId),
+        tx.pure.vector("u64", parsed.splits),
       ],
     });
 
@@ -93,12 +99,13 @@ export class ReleaseClient {
    * Distribute revenue from the release to composition and recording pools.
    */
   distributeRevenue(params: DistributeRevenueParams): Transaction {
+    const parsed = DistributeRevenueParamsSchema.parse(params);
     const tx = new Transaction();
 
     tx.moveCall({
       target: `${this.packageId}::release::distribute_revenue`,
-      typeArguments: [params.coinType],
-      arguments: [tx.object(params.releaseId), tx.pure.u64(params.amount)],
+      typeArguments: [parsed.coinType],
+      arguments: [tx.object(parsed.releaseId), tx.pure.u64(parsed.amount)],
     });
 
     return tx;

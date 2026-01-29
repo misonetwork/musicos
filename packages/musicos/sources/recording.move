@@ -250,8 +250,8 @@ public fun publish<RecordingShare>(
             assert!(!self.credits.is_empty(), ENoParties);
             // Assert the recording has at least one primary artist.
             assert!(!self.primary_artist_ids.is_empty(), ENoPrimaryArtistAssigned);
-            // Assert instrumental ↔ no lyrics
-            assert!(self.is_instrumental == self.lyrics.is_none(), ELyricsInstrumentalConflict);
+            // Assert instrumental => no lyrics
+            assert!(!self.is_instrumental || self.lyrics.is_none(), ELyricsInstrumentalConflict);
 
             // Set the recording's publish timestamp.
             self.state = RecordingState::Published(clock.timestamp_ms());

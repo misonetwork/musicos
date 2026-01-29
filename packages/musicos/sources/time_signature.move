@@ -19,8 +19,13 @@ public struct TimeSignature(
 
 //=== Public Functions ===
 
+const EInvalidBeatsPerMeasure: u64 = 0;
+const EInvalidBeatUnit: u64 = 1;
+
 /// Creates a new time signature with the specified beats per measure and beat unit.
 public fun new(beats_per_measure: u8, beat_unit: u8): TimeSignature {
+    assert!(beats_per_measure > 0, EInvalidBeatsPerMeasure);
+    assert!(beat_unit > 0, EInvalidBeatUnit);
     TimeSignature(beats_per_measure, beat_unit)
 }
 

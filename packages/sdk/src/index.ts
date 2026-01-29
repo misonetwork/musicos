@@ -50,7 +50,7 @@ export type {
   AddCompositionCreditParams,
   SetCompositionSplitParams,
   AddAlternateTitleParams,
-  SetLyricsParams,
+  AddLyricLinesParams,
   // Recording
   RecordingContributorLevel,
   RecordingRoleType,
@@ -58,7 +58,6 @@ export type {
   RecordingCredit,
   CreateRecordingParams,
   PublishRecordingParams,
-  SetRecordingTitleParams,
   SetTitleVersionParams,
   SetSubtitleParams,
   SetLanguageParams,
@@ -101,6 +100,7 @@ export {
   makeRecordingLevel,
   makeRecordingRole,
   makeRecordingCredit,
+  makeReleaseKind,
 } from "./utils/move-call.js";
 export {
   parseTypeString,

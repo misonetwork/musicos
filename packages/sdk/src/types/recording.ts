@@ -108,20 +108,6 @@ export interface PublishRecordingParams {
 }
 
 /**
- * Parameters for setting recording title.
- */
-export interface SetRecordingTitleParams {
-  /** Recording object ID */
-  recordingId: string;
-  /** Admin capability object ID */
-  adminCapId: string;
-  /** New title */
-  title: string;
-  /** Share type string */
-  shareType: string;
-}
-
-/**
  * Parameters for setting title version.
  */
 export interface SetTitleVersionParams {

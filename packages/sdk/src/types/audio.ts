@@ -9,7 +9,7 @@ import type { WalrusData } from "./common.js";
 export interface Audio {
   /** Number of channels (1 = mono, 2 = stereo) */
   channels: number;
-  /** Bit depth (16, 24, or 32) */
+  /** Bit depth (8, 16, 24, or 32) */
   bitDepth: number;
   /** Sample rate in Hz */
   sampleRateHz: number;
@@ -29,6 +29,8 @@ export interface Stem {
   audio: Audio;
   /** Description of the stem (e.g., "Vocals", "Drums") */
   description: string;
+  /** Optional contributor IDs associated with this stem */
+  contributors?: string[];
 }
 
 /**

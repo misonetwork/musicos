@@ -14,6 +14,16 @@ import {
   makeStem,
 } from "../utils/move-call.js";
 import { SUI_CLOCK_OBJECT_ID } from "../utils/type-args.js";
+import {
+  IdSchema,
+  MusicalKeySchema,
+  NonEmptyStringSchema,
+  RecordingBuilderParamsSchema,
+  RecordingCreditSchema,
+  StemSchema,
+  TimeSignatureSchema,
+  U16Schema,
+} from "../schemas/index.js";
 
 interface RecordingBuilderParams {
   packageId: string;
@@ -42,7 +52,6 @@ interface CreditToAdd {
  *   compositionId: "0x...",
  *   // ... other required params
  * })
- *   .title("My Song (Radio Edit)")
  *   .titleVersion("Radio Edit")
  *   .addCredit(artistId, { displayName: "Artist", roles: [{ type: "vocalist", level: "lead" }] })
  *   .addPrimaryArtist(artistId)
@@ -55,7 +64,6 @@ export class RecordingBuilder {
   private readonly params: RecordingBuilderParams;
   private _isExplicit = false;
   private _isInstrumental = false;
-  private _title?: string;
   private _titleVersion?: string;
   private _subtitle?: string;
   private _language?: string;
@@ -70,7 +78,7 @@ export class RecordingBuilder {
   private _stems: Stem[] = [];
 
   constructor(params: RecordingBuilderParams) {
-    this.params = params;
+    this.params = RecordingBuilderParamsSchema.parse(params);
   }
 
   /** Mark as explicit content. */
@@ -85,81 +93,82 @@ export class RecordingBuilder {
     return this;
   }
 
-  /** Set the title. */
-  title(title: string): this {
-    this._title = title;
-    return this;
-  }
-
   /** Set the title version (e.g., "Radio Edit"). */
   titleVersion(version: string): this {
-    this._titleVersion = version;
+    this._titleVersion = NonEmptyStringSchema.parse(version);
     return this;
   }
 
   /** Set the subtitle. */
   subtitle(subtitle: string): this {
-    this._subtitle = subtitle;
+    this._subtitle = NonEmptyStringSchema.parse(subtitle);
     return this;
   }
 
   /** Set the language (ISO 639-1 code). */
   language(code: string): this {
-    this._language = code;
+    this._language = NonEmptyStringSchema.parse(code);
     return this;
   }
 
   /** Add a credit for a contributor. */
   addCredit(contributorId: string, credit: RecordingCredit): this {
-    this._credits.push({ contributorId, credit });
+    const parsedContributorId = IdSchema.parse(contributorId);
+    const parsedCredit = RecordingCreditSchema.parse(credit);
+    this._credits.push({ contributorId: parsedContributorId, credit: parsedCredit });
     return this;
   }
 
   /** Add a primary artist (must be added as credit first). */
   addPrimaryArtist(contributorId: string): this {
-    this._primaryArtistIds.push(contributorId);
+    this._primaryArtistIds.push(IdSchema.parse(contributorId));
     return this;
   }
 
   /** Add a featured artist (must be added as credit first). */
   addFeaturedArtist(contributorId: string): this {
-    this._featuredArtistIds.push(contributorId);
+    this._featuredArtistIds.push(IdSchema.parse(contributorId));
     return this;
   }
 
   /** Override the primary genre. */
   primaryGenre(genreId: string): this {
-    this._primaryGenreId = genreId;
+    this._primaryGenreId = IdSchema.parse(genreId);
     return this;
   }
 
   /** Add a secondary genre. */
   addSecondaryGenre(genreId: string): this {
-    this._secondaryGenreIds.push(genreId);
+    this._secondaryGenreIds.push(IdSchema.parse(genreId));
     return this;
   }
 
   /** Set the musical key. */
   musicalKey(key: MusicalKey): this {
-    this._musicalKey = key;
+    this._musicalKey = MusicalKeySchema.parse(key);
     return this;
   }
 
   /** Set the time signature. */
   timeSignature(beats: number, unit: number): this {
-    this._timeSignature = { beatsPerMeasure: beats, beatUnit: unit };
+    this._timeSignature = TimeSignatureSchema.parse({
+      beatsPerMeasure: beats,
+      beatUnit: unit,
+    });
     return this;
   }
 
   /** Set the tempo in BPM. */
   tempoBpm(bpm: number): this {
-    this._tempoBpm = bpm;
+    this._tempoBpm = U16Schema.refine((value) => value > 0, {
+      message: "bpm must be > 0",
+    }).parse(bpm);
     return this;
   }
 
   /** Add an audio stem. */
   addStem(stem: Stem): this {
-    this._stems.push(stem);
+    this._stems.push(StemSchema.parse(stem));
     return this;
   }
 
@@ -261,15 +270,6 @@ export class RecordingBuilder {
   ): void {
     const pkg = this.params.packageId;
     const shareType = this.params.shareType;
-
-    // Title
-    if (this._title) {
-      tx.moveCall({
-        target: `${pkg}::recording::set_title`,
-        typeArguments: [shareType],
-        arguments: [recording, adminCap, tx.pure.string(this._title)],
-      });
-    }
 
     // Title version
     if (this._titleVersion) {

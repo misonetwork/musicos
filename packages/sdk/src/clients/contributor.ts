@@ -9,6 +9,13 @@ import type {
   AddGroupMemberParams,
   RemoveGroupMemberParams,
 } from "../types/contributor.js";
+import {
+  AddGroupMemberParamsSchema,
+  CreateContributorParamsSchema,
+  RemoveGroupMemberParamsSchema,
+  SetContributorNameParamsSchema,
+  ShareContributorParamsSchema,
+} from "../schemas/contributor.js";
 
 /**
  * Client for managing contributors (artists, producers, groups).
@@ -21,17 +28,18 @@ export class ContributorClient {
    * Returns a transaction that creates the contributor and admin capability.
    */
   create(params: CreateContributorParams): Transaction {
+    const parsed = CreateContributorParamsSchema.parse(params);
     const tx = new Transaction();
 
     // Create the contributor kind
     const kind = tx.moveCall({
-      target: `${this.packageId}::contributor::new_${params.kind}_kind`,
+      target: `${this.packageId}::party::new_${parsed.kind}_kind`,
     });
 
     // Create the contributor
     const [contributor, adminCap] = tx.moveCall({
-      target: `${this.packageId}::contributor::new`,
-      arguments: [kind, tx.pure.string(params.name)],
+      target: `${this.packageId}::party::new`,
+      arguments: [kind, tx.pure.string(parsed.name)],
     });
 
     // Transfer both to sender
@@ -44,13 +52,14 @@ export class ContributorClient {
    * Share a contributor object (make it a shared object).
    */
   share(params: ShareContributorParams): Transaction {
+    const parsed = ShareContributorParamsSchema.parse(params);
     const tx = new Transaction();
 
     tx.moveCall({
-      target: `${this.packageId}::contributor::share`,
+      target: `${this.packageId}::party::share`,
       arguments: [
-        tx.object(params.contributorId),
-        tx.object(params.adminCapId),
+        tx.object(parsed.contributorId),
+        tx.object(parsed.adminCapId),
       ],
     });
 
@@ -61,14 +70,15 @@ export class ContributorClient {
    * Set the contributor's name.
    */
   setName(params: SetContributorNameParams): Transaction {
+    const parsed = SetContributorNameParamsSchema.parse(params);
     const tx = new Transaction();
 
     tx.moveCall({
-      target: `${this.packageId}::contributor::set_name`,
+      target: `${this.packageId}::party::set_name`,
       arguments: [
-        tx.object(params.contributorId),
-        tx.object(params.adminCapId),
-        tx.pure.string(params.name),
+        tx.object(parsed.contributorId),
+        tx.object(parsed.adminCapId),
+        tx.pure.string(parsed.name),
       ],
     });
 
@@ -79,14 +89,15 @@ export class ContributorClient {
    * Add an individual contributor to a group.
    */
   addMember(params: AddGroupMemberParams): Transaction {
+    const parsed = AddGroupMemberParamsSchema.parse(params);
     const tx = new Transaction();
 
     tx.moveCall({
-      target: `${this.packageId}::contributor::add_contributor`,
+      target: `${this.packageId}::party::add_party`,
       arguments: [
-        tx.object(params.groupId),
-        tx.object(params.adminCapId),
-        tx.object(params.memberId),
+        tx.object(parsed.groupId),
+        tx.object(parsed.adminCapId),
+        tx.object(parsed.memberId),
       ],
     });
 
@@ -97,14 +108,15 @@ export class ContributorClient {
    * Remove a member from a group.
    */
   removeMember(params: RemoveGroupMemberParams): Transaction {
+    const parsed = RemoveGroupMemberParamsSchema.parse(params);
     const tx = new Transaction();
 
     tx.moveCall({
-      target: `${this.packageId}::contributor::remove_contributor`,
+      target: `${this.packageId}::party::remove_party`,
       arguments: [
-        tx.object(params.groupId),
-        tx.object(params.adminCapId),
-        tx.pure.id(params.memberId),
+        tx.object(parsed.groupId),
+        tx.object(parsed.adminCapId),
+        tx.pure.id(parsed.memberId),
       ],
     });
 
