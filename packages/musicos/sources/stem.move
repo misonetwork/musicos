@@ -8,7 +8,7 @@ module musicos::stem;
 
 use musicos::audio::Audio;
 use std::string::String;
-use sui::vec_set::{Self, VecSet};
+use sui::vec_set;
 
 //=== Structs ===
 

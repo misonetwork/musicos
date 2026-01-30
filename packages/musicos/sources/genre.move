@@ -40,8 +40,9 @@ public struct GenreRegistry has key {
 
 //=== Errors ===
 
-/// Genre name contains an invalid character.
-const EInvalidCharacter: u64 = 0;
+// Validation errors (20-29)
+/// Genre name contains an invalid character (must be A-Z, _, or &).
+const EInvalidCharacter: u64 = 20;
 
 //=== Events ===
 

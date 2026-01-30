@@ -20,7 +20,6 @@ use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
 use musicos::genre::Genre;
-use walrus_data::walrus_data::WalrusData;
 use musicos::musical_key::MusicalKey;
 use musicos::party::Party;
 use musicos::recording_party_role::RecordingPartyRole;
@@ -37,6 +36,7 @@ use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
 use sui::vec_set::{Self, VecSet};
+use walrus_data::walrus_data::WalrusData;
 
 //=== Structs ===
 
@@ -148,28 +148,39 @@ const MAX_ROLES_PER_CREDIT: u64 = 10;
 
 //=== Errors ===
 
-/// Operation requires Initialized state but recording is created.
-const ENotInitializedState: u64 = 1;
-/// Party has too many roles.
-const EExceedsMaxRoles: u64 = 11;
+// State errors (10-19)
+/// Operation requires Initialized state but recording is in a different state.
+const ENotInitializedState: u64 = 10;
+
+// Validation errors (20-29)
 /// Party must have at least one role.
-const EMinRolesNotMet: u64 = 12;
-/// Recording must have at least one party to publish.
-const ENoParties: u64 = 20;
-/// Recording must have at least one primary artist to publish.
-const ENoPrimaryArtistAssigned: u64 = 21;
-/// Party is not credited on the recording.
-const EPartyNotCredited: u64 = 22;
-/// Party is already a featured artist.
-const EAlreadyFeaturedArtist: u64 = 23;
+const EMinRolesNotMet: u64 = 20;
+
+// Constraint errors (30-39)
+/// Party has too many roles.
+const EExceedsMaxRoles: u64 = 30;
+
+// Conflict errors (40-49)
+/// Party already has a credit on this recording.
+const EPartyAlreadyCredited: u64 = 40;
 /// Party is already a primary artist.
-const EAlreadyPrimaryArtist: u64 = 24;
+const EAlreadyPrimaryArtist: u64 = 41;
+/// Party is already a featured artist.
+const EAlreadyFeaturedArtist: u64 = 42;
+/// Genre is already assigned as the primary genre.
+const EAlreadyAssignedAsPrimaryGenre: u64 = 43;
 /// Genre is already assigned as a secondary genre.
-const EAlreadyAssignedAsSecondaryGenre: u64 = 25;
-/// Genre is already assigned as a primary genre.
-const EAlreadyAssignedAsPrimaryGenre: u64 = 26;
+const EAlreadyAssignedAsSecondaryGenre: u64 = 44;
 /// Lyrics/instrumental state conflict.
-const ELyricsInstrumentalConflict: u64 = 27;
+const ELyricsInstrumentalConflict: u64 = 45;
+
+// Reference errors (50-59)
+/// Recording must have at least one party to publish.
+const ENoParties: u64 = 50;
+/// Recording must have at least one primary artist to publish.
+const ENoPrimaryArtistAssigned: u64 = 51;
+/// Party is not credited on the recording.
+const EPartyNotCredited: u64 = 52;
 
 //=== Public Functions ===
 
@@ -228,7 +239,7 @@ public fun new<RecordingShare, CS>(
     description.append(recording.id().to_address().to_string());
     description.append(".");
 
-    let recording_shares = share::intialize<RecordingShare>(
+    let recording_shares = share::initialize<RecordingShare>(
         share_currency,
         share_treasury_cap,
     );
@@ -322,6 +333,8 @@ public fun set_lyrics<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
+            // Abort early if recording is instrumental - lyrics not allowed.
+            assert!(!self.is_instrumental, ELyricsInstrumentalConflict);
             self.lyrics.swap_or_fill(lyrics);
         },
         _ => abort ENotInitializedState,
@@ -345,6 +358,8 @@ public fun add_credit<RecordingShare>(
             assert!(credit.roles().length() <= MAX_ROLES_PER_CREDIT, EExceedsMaxRoles);
 
             let party_id = party.id();
+            // Abort early if party already has a credit on this recording.
+            assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
             self.credits.insert(party_id, credit);
 
             emit(RecordingPartyAddedEvent {
@@ -368,6 +383,8 @@ public fun add_primary_artist<RecordingShare>(
             assert!(self.credits.contains(&party_id), EPartyNotCredited);
             // Assert the party is not already a featured artist.
             assert!(!self.featured_artist_ids.contains(&party_id), EAlreadyFeaturedArtist);
+            // Assert the party is not already a primary artist.
+            assert!(!self.primary_artist_ids.contains(&party_id), EAlreadyPrimaryArtist);
 
             self.primary_artist_ids.insert(party_id);
         },
@@ -387,6 +404,8 @@ public fun add_featured_artist<RecordingShare>(
             assert!(self.credits.contains(&party_id), EPartyNotCredited);
             // Assert the party is not already a primary artist.
             assert!(!self.primary_artist_ids.contains(&party_id), EAlreadyPrimaryArtist);
+            // Assert the party is not already a featured artist.
+            assert!(!self.featured_artist_ids.contains(&party_id), EAlreadyFeaturedArtist);
 
             self.featured_artist_ids.insert(party_id);
         },
@@ -424,8 +443,11 @@ public fun add_secondary_genre<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
-            assert!(self.primary_genre_id != genre.id(), EAlreadyAssignedAsPrimaryGenre);
-            self.secondary_genre_ids.insert(genre.id());
+            let genre_id = genre.id();
+            assert!(self.primary_genre_id != genre_id, EAlreadyAssignedAsPrimaryGenre);
+            // Assert the genre is not already a secondary genre.
+            assert!(!self.secondary_genre_ids.contains(&genre_id), EAlreadyAssignedAsSecondaryGenre);
+            self.secondary_genre_ids.insert(genre_id);
         },
         _ => abort ENotInitializedState,
     }
@@ -626,6 +648,11 @@ public fun master<RecordingShare>(self: &Recording<RecordingShare>): &Audio {
 /// Returns a reference to the cover art.
 public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverArt {
     &self.cover_art
+}
+
+/// Returns a reference to the stems.
+public fun stems<RecordingShare>(self: &Recording<RecordingShare>): &vector<Stem> {
+    &self.stems
 }
 
 /// Returns whether the provided ID is a primary artist on the recording.

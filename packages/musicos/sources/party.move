@@ -92,14 +92,19 @@ public struct PartyRemovedFromGroupEvent has copy, drop {
 
 //=== Errors ===
 
+// Authorization errors (0-9)
 /// The provided admin capability does not match this party.
 const EUnauthorized: u64 = 0;
-/// Attempted to add a party that is already a member of the group.
-const EDuplicateParty: u64 = 30;
+
+// State errors (10-19)
 /// Operation requires an individual party, but a group was provided.
-const ENotIndividualKind: u64 = 31;
+const ENotIndividualKind: u64 = 10;
 /// Operation requires a group party, but an individual was provided.
-const ENotGroupKind: u64 = 32;
+const ENotGroupKind: u64 = 11;
+
+// Conflict errors (40-49)
+/// Attempted to add a party that is already a member of the group.
+const EDuplicateParty: u64 = 40;
 
 //=== Public Functions ===
 

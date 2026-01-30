@@ -45,9 +45,13 @@ public enum Mode has copy, drop, store {
 
 //=== Errors ===
 
-const EInvalidNote: u64 = 0;
-const EInvalidAccidental: u64 = 1;
-const EInvalidMode: u64 = 2;
+// Validation errors (20-29)
+/// Note string must be one of: c, d, e, f, g, a, b.
+const EInvalidNote: u64 = 20;
+/// Accidental string must be one of: natural, sharp, flat.
+const EInvalidAccidental: u64 = 21;
+/// Mode string must be one of: major, minor.
+const EInvalidMode: u64 = 22;
 
 //=== Public Functions ===
 

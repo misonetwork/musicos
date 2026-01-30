@@ -17,10 +17,15 @@ public struct TimeSignature(
     u8,
 ) has copy, drop, store;
 
-//=== Public Functions ===
+//=== Errors ===
 
-const EInvalidBeatsPerMeasure: u64 = 0;
-const EInvalidBeatUnit: u64 = 1;
+// Validation errors (20-29)
+/// Beats per measure must be greater than zero.
+const EInvalidBeatsPerMeasure: u64 = 20;
+/// Beat unit must be greater than zero.
+const EInvalidBeatUnit: u64 = 21;
+
+//=== Public Functions ===
 
 /// Creates a new time signature with the specified beats per measure and beat unit.
 public fun new(beats_per_measure: u8, beat_unit: u8): TimeSignature {

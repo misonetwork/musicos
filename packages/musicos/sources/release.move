@@ -61,7 +61,7 @@ public struct ReleaseAdminCap has key, store {
 }
 
 // Derivation key for ReleaseAdminCap.
-public struct RelaseAdminCapKey() has copy, drop, store;
+public struct ReleaseAdminCapKey() has copy, drop, store;
 
 /// Revenue split information for a single track.
 #[allow(unused_field)]
@@ -146,20 +146,29 @@ const MAX_DISCS: u64 = 20;
 
 //=== Errors ===
 
+// Authorization errors (0-9)
 /// The provided admin capability does not match this release.
 const EUnauthorized: u64 = 0;
+
+// State errors (10-19)
 /// Operation requires Initialized state.
-const ENotInitializedState: u64 = 1;
+const ENotInitializedState: u64 = 10;
 /// Operation requires Published state.
-const ENotPublishedState: u64 = 2;
-/// Too many discs in release.
-const EMaxDiscsReached: u64 = 10;
+const ENotPublishedState: u64 = 11;
+
+// Validation errors (20-29)
 /// Track splits count doesn't match track count.
 const EInvalidTrackSplitsLength: u64 = 20;
 /// Track splits don't sum to 100% (10,000 BPS).
 const EInvalidTrackSplitsSum: u64 = 21;
+
+// Constraint errors (30-39)
+/// Too many discs in release.
+const EMaxDiscsReached: u64 = 30;
+
+// Reference errors (50-59)
 /// Revenue pool has no funds to distribute.
-const ENoRevenueToDistribute: u64 = 22;
+const ENoRevenueToDistribute: u64 = 50;
 
 //=== Public Functions ===
 
@@ -190,7 +199,7 @@ public fun new(
     };
 
     let release_admin_cap = ReleaseAdminCap {
-        id: claim(&mut release.id, RelaseAdminCapKey()),
+        id: claim(&mut release.id, ReleaseAdminCapKey()),
         release_id: release.id(),
     };
 

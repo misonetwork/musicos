@@ -42,7 +42,7 @@ const EInvalidShareType: u64 = 24;
 /// Initializes a share currency for a composition or recording.
 /// Sets metadata, mints the fixed supply, and locks the supply.
 /// Returns the minted balance to be held by the creator.
-public(package) fun intialize<Share>(
+public(package) fun initialize<Share>(
     share_currency: &mut Currency<Share>,
     mut share_treasury_cap: TreasuryCap<Share>,
 ): Balance<Share> {

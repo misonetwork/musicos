@@ -113,14 +113,25 @@ const MAX_ROLES_PER_PARTY: u64 = 20;
 
 //=== Errors ===
 
-/// Operation requires Initialized state but composition is created.
-const ENotInitializedState: u64 = 1;
-/// Party has too many roles.
-const EExceedsMaxRoles: u64 = 10;
+// State errors (10-19)
+/// Operation requires Initialized state but composition is in a different state.
+const ENotInitializedState: u64 = 10;
+
+// Validation errors (20-29)
 /// Party must have at least one role.
-const EMinRolesNotMet: u64 = 11;
+const EMinRolesNotMet: u64 = 20;
+
+// Constraint errors (30-39)
+/// Party has too many roles.
+const EExceedsMaxRoles: u64 = 30;
+
+// Conflict errors (40-49)
+/// Party already has a credit on this composition.
+const EPartyAlreadyCredited: u64 = 40;
+
+// Reference errors (50-59)
 /// Composition must have at least one party to publish.
-const ENoParties: u64 = 20;
+const ENoParties: u64 = 50;
 
 //=== Public Functions ===
 
@@ -157,7 +168,7 @@ public fun new<CompositionShare>(
         id: claim(&mut composition.id, CompositionAdminCapKey()),
     };
 
-    let composition_shares = share::intialize<CompositionShare>(
+    let composition_shares = share::initialize<CompositionShare>(
         share_currency,
         share_treasury_cap,
     );
@@ -226,11 +237,14 @@ public fun add_credit<CompositionShare>(
             assert!(credit.roles().length() >= MIN_ROLES_PER_PARTY, EMinRolesNotMet);
             assert!(credit.roles().length() <= MAX_ROLES_PER_PARTY, EExceedsMaxRoles);
 
-            self.credits.insert(party.id(), credit);
+            let party_id = party.id();
+            // Abort early if party already has a credit on this composition.
+            assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
+            self.credits.insert(party_id, credit);
 
             emit(CompositionPartyAddedEvent {
                 composition_id: self.id(),
-                party_id: party.id(),
+                party_id,
             });
         },
         _ => abort ENotInitializedState,

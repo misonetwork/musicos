@@ -29,16 +29,21 @@ const MAX_TRACK_SEQUENCE_LENGTH: u64 = 255;
 
 //=== Errors ===
 
-/// Total track count exceeds the maximum allowed (255).
-const EMaxSequenceLengthExceeded: u64 = 10;
+// Validation errors (20-29)
 /// Disc index exceeds the number of discs in the release.
-const EDiscIndexOutOfBounds: u64 = 11;
+const EDiscIndexOutOfBounds: u64 = 20;
 /// Track index exceeds the number of tracks on the disc.
-const ETrackIndexOutOfBounds: u64 = 12;
+const ETrackIndexOutOfBounds: u64 = 21;
 /// Sequence index exceeds the total number of tracks.
-const ESequenceIndexOutOfBounds: u64 = 13;
+const ESequenceIndexOutOfBounds: u64 = 22;
+
+// Constraint errors (30-39)
+/// Total track count exceeds the maximum allowed (255).
+const EMaxSequenceLengthExceeded: u64 = 30;
+
+// Reference errors (50-59)
 /// Release must contain at least one disc.
-const ENoDiscs: u64 = 20;
+const ENoDiscs: u64 = 50;
 
 //=== Package Functions ===
 

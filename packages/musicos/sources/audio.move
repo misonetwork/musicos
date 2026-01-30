@@ -25,13 +25,21 @@ public struct Audio has drop, store {
 
 const PCM_DIGEST_LENGTH: u64 = 32;
 
-//=== Public Functions ===
+//=== Errors ===
 
-const EInvalidPcmDigestLength: u64 = 0;
-const EInvalidChannels: u64 = 1;
-const EInvalidBitDepth: u64 = 2;
-const EInvalidSampleRate: u64 = 3;
-const EInvalidSamples: u64 = 4;
+// Validation errors (20-29)
+/// PCM digest must be exactly 32 bytes.
+const EInvalidPcmDigestLength: u64 = 20;
+/// Audio must have at least one channel.
+const EInvalidChannels: u64 = 21;
+/// Bit depth must be 8, 16, 24, or 32.
+const EInvalidBitDepth: u64 = 22;
+/// Sample rate must be greater than zero.
+const EInvalidSampleRate: u64 = 23;
+/// Audio must have at least one sample.
+const EInvalidSamples: u64 = 24;
+
+//=== Public Functions ===
 
 /// Creates a new Audio object with the given parameters.
 public fun new(

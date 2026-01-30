@@ -15,7 +15,9 @@ public struct Credit<Role: copy + drop + store> has copy, drop, store {
 
 //=== Errors ===
 
-const EDuplicateRoles: u64 = 0;
+// Conflict errors (40-49)
+/// Credit contains duplicate roles.
+const EDuplicateRoles: u64 = 40;
 
 //=== Public Functions ===
 
