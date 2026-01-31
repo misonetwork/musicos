@@ -14,7 +14,7 @@
 module musicos::recording;
 
 use interest_bps::bps::BPS;
-use language_code::language_code::LanguageCode;
+use language_code::language_code::{Self, LanguageCode};
 use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
@@ -314,11 +314,11 @@ public fun set_subtitle<RecordingShare>(
 public fun set_language<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
-    language: LanguageCode,
+    language_code: String,
 ) {
     match (self.state) {
         RecordingState::Initialized => {
-            self.language.swap_or_fill(language);
+            self.language.swap_or_fill(language_code::new(language_code));
         },
         _ => abort ENotInitializedState,
     }
@@ -446,7 +446,10 @@ public fun add_secondary_genre<RecordingShare>(
             let genre_id = genre.id();
             assert!(self.primary_genre_id != genre_id, EAlreadyAssignedAsPrimaryGenre);
             // Assert the genre is not already a secondary genre.
-            assert!(!self.secondary_genre_ids.contains(&genre_id), EAlreadyAssignedAsSecondaryGenre);
+            assert!(
+                !self.secondary_genre_ids.contains(&genre_id),
+                EAlreadyAssignedAsSecondaryGenre,
+            );
             self.secondary_genre_ids.insert(genre_id);
         },
         _ => abort ENotInitializedState,
