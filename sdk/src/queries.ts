@@ -2,6 +2,63 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { SuiGrpcClient } from "@mysten/sui/grpc";
+import type { SuiGraphQLClient } from "@mysten/sui/graphql";
+import { graphql } from "@mysten/sui/graphql/schema";
+
+/** Represents a Genre object from MusicOS. */
+export interface Genre {
+  /** The object ID of the genre. */
+  id: string;
+  /** The name of the genre. */
+  name: string;
+}
+
+const GenresQuery = graphql(`
+  query GetGenres($type: String!) {
+    objects(filter: { type: $type }) {
+      nodes {
+        address
+        asMoveObject {
+          contents {
+            json
+          }
+        }
+      }
+    }
+  }
+`);
+
+/**
+ * Fetches all genres from the MusicOS protocol.
+ *
+ * @param client - A Sui GraphQL client
+ * @param musicOsPackageId - The MusicOS package ID
+ * @returns Array of genres with their IDs and names
+ */
+export async function getGenres(
+  client: SuiGraphQLClient,
+  musicOsPackageId: string
+): Promise<Genre[]> {
+  const genreType = `${musicOsPackageId}::genre::Genre`;
+
+  const result = await client.query({
+    query: GenresQuery,
+    variables: { type: genreType },
+  });
+
+  const genres: Genre[] = [];
+  for (const node of result.data?.objects?.nodes ?? []) {
+    const json = node.asMoveObject?.contents?.json as { name: string } | undefined;
+    if (json?.name && node.address) {
+      genres.push({
+        id: node.address,
+        name: json.name,
+      });
+    }
+  }
+
+  return genres.sort((a, b) => a.name.localeCompare(b.name));
+}
 
 /**
  * Extracts the share type from a Currency object.
