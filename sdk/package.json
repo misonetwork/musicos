@@ -12,6 +12,7 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@mysten/sui": "^2.1.0"
+    "@mysten/sui": "^2.1.0",
+    "zod": "^4.3.6"
   }
 }
