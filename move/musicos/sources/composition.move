@@ -62,7 +62,6 @@ public struct CompositionAdminCap<phantom CompositionShare> has key, store {
     /// Unique identifier for this capability.
     id: UID,
 }
-
 //=== Derivation Keys ===
 
 /// Key for deriving the admin capability's deterministic address from the composition.
@@ -206,10 +205,7 @@ public fun publish<CompositionShare>(
 
             // Assert the composition has at least one of lyrics, chart, score, or demo.
             assert!(
-                self.lyrics.is_some() ||
-                self.chart.is_some() ||
-                self.score.is_some() ||
-                self.demo.is_some(),
+                self.lyrics.is_some() || self.chart.is_some() || self.score.is_some() || self.demo.is_some(),
                 ENoContent,
             );
 

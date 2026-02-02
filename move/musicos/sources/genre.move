@@ -56,28 +56,17 @@ public struct GenreCreatedEvent has copy, drop {
 
 //=== Constants ===
 
-const DEFAULT_GENRES: vector<vector<u8>> = vector[
-    b"AFRICAN",
-    b"AFROBEATS",
-    b"ALTERNATIVE",
-    b"AMBIENT",
-    b"ANIME",
-    b"ARABIC",
-    b"ASIAN",
-    b"BLUES",
+const LAUNCH_GENRES: vector<vector<u8>> = vector[
     b"CLASSICAL",
-    b"COUNTRY",
     b"DANCE",
     b"ELECTRONIC",
-    b"FOLK",
+    b"GLOBAL",
     b"HIP_HOP",
     b"JAZZ",
-    b"LATIN",
-    b"METAL",
     b"POP",
     b"R&B",
-    b"REGGAE",
     b"ROCK",
+    b"SOUNDTRACK",
 ];
 
 //=== Init Function ===
@@ -89,7 +78,7 @@ fun init(_otw: GENRE, ctx: &mut TxContext) {
     };
 
     // Create and share the default genres.
-    DEFAULT_GENRES.destroy!(|genre| {
+    LAUNCH_GENRES.destroy!(|genre| {
         let genre = new_impl(genre.to_string(), &mut genre_registry);
         transfer::share_object(genre);
     });
