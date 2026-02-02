@@ -1,0 +1,6 @@
+{
+  "name": "musicos",
+  "private": true,
+  "workspaces": ["sdk"]
+}
+

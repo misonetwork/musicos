@@ -8,3 +8,8 @@ packages/*/build/*
 node_modules/
 dist/
 *.lock
+
+.claude
+.cursor
+
+build/
