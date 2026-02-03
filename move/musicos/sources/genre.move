@@ -64,7 +64,7 @@ const LAUNCH_GENRES: vector<vector<u8>> = vector[
     b"HIP_HOP",
     b"JAZZ",
     b"POP",
-    b"R&B",
+    b"RNB",
     b"ROCK",
     b"SOUNDTRACK",
 ];
@@ -126,11 +126,7 @@ fun new_impl(name: String, genre_registry: &mut GenreRegistry): Genre {
     genre
 }
 
-/// Asserts that the genre name contains only valid characters (A-Z, _, &).
+/// Asserts that the genre name contains only valid characters (A-Z, _).
 fun assert_valid_name(name: &String) {
-    let valid = name.as_bytes().all!(|c| {
-        // A-Z (65-90), _ (95), & (38)
-        (*c >= 65 && *c <= 90) || *c == 95 || *c == 38
-    });
-    assert!(valid, EInvalidCharacter);
+    assert!(name.as_bytes().all!(|c| (*c >= 65 && *c <= 90) || *c == 95), EInvalidCharacter);
 }
