@@ -119,3 +119,39 @@ export async function getShareCurrencyTreasuryCap(
 
   return result.objects[0]!.objectId;
 }
+
+const GenreRegistryQuery = graphql(`
+  query GetGenreRegistry($type: String!) {
+    objects(filter: { type: $type }) {
+      nodes {
+        address
+      }
+    }
+  }
+`);
+
+/**
+ * Fetches the GenreRegistry object ID.
+ *
+ * @param client - A Sui GraphQL client
+ * @param musicOsPackageId - The MusicOS package ID
+ * @returns The object ID of the GenreRegistry
+ */
+export async function getGenreRegistry(
+  client: SuiGraphQLClient,
+  musicOsPackageId: string
+): Promise<string> {
+  const registryType = `${musicOsPackageId}::genre::GenreRegistry`;
+
+  const result = await client.query({
+    query: GenreRegistryQuery,
+    variables: { type: registryType },
+  });
+
+  const node = result.data?.objects?.nodes?.[0];
+  if (!node?.address) {
+    throw new Error("GenreRegistry not found");
+  }
+
+  return node.address;
+}

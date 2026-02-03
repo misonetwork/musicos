@@ -96,6 +96,41 @@ export function createParty(params: CreatePartyParams): Transaction {
 }
 
 // ============================================================================
+// Genre
+// ============================================================================
+
+/** Parameters for creating a genre. */
+export interface CreateGenreParams {
+  /** Genre name (must be A-Z and _ only, e.g., "ALTERNATIVE", "HIP_HOP"). */
+  name: string;
+  /** The GenreRegistry object ID. */
+  genreRegistryId: string;
+  /** The MusicOS package ID. */
+  musicOsPackageId: string;
+}
+
+/**
+ * Builds a transaction that creates a new genre.
+ *
+ * The genre name must contain only uppercase letters (A-Z) and underscores (_).
+ * The genre will be created as a shared object and registered in the GenreRegistry.
+ *
+ * @returns Transaction that, when executed, creates and shares a new Genre.
+ */
+export function createGenre(params: CreateGenreParams): Transaction {
+  const { name, genreRegistryId, musicOsPackageId } = params;
+
+  const tx = new Transaction();
+
+  tx.moveCall({
+    target: `${musicOsPackageId}::genre::new`,
+    arguments: [tx.pure.string(name), tx.object(genreRegistryId)],
+  });
+
+  return tx;
+}
+
+// ============================================================================
 // Share
 // ============================================================================
 
