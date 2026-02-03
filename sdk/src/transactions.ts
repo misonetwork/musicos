@@ -16,6 +16,14 @@ import type {
 /** Sui Clock shared object address. */
 const SUI_CLOCK_OBJECT_ID = "0x6";
 
+/** Input for WalrusData - references a blob stored in Walrus. */
+export interface WalrusDataInput {
+  /** The blob ID as a u256 decimal string. */
+  blobId: string;
+  /** Optional quilt ID as a u256 decimal string. */
+  quiltId?: string;
+}
+
 // ============================================================================
 // Party
 // ============================================================================
@@ -187,8 +195,12 @@ export interface PublishCompositionParams {
   alternateTitles?: string[];
   /** Credits to add. At least one is required. */
   credits: CompositionCreditInput[];
-  /** Optional lyrics lines. */
-  lyrics?: string[];
+  /** Optional lyrics WalrusData reference. */
+  lyrics?: WalrusDataInput;
+  /** Optional demo WalrusData reference. */
+  demo?: WalrusDataInput;
+  /** The Walrus data package ID. */
+  walrusDataPackageId: string;
   /** The MusicOS package ID. */
   musicOsPackageId: string;
 }
@@ -216,6 +228,8 @@ export async function publishComposition(params: PublishCompositionParams): Prom
     alternateTitles,
     credits,
     lyrics,
+    demo,
+    walrusDataPackageId,
     musicOsPackageId,
   } = params;
 
@@ -281,11 +295,40 @@ export async function publishComposition(params: PublishCompositionParams): Prom
     });
   }
 
-  // Add lyrics
-  if (lyrics && lyrics.length > 0) {
+  // Set lyrics WalrusData
+  if (lyrics) {
+    const lyricsData = lyrics.quiltId
+      ? tx.moveCall({
+          target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+          arguments: [tx.pure.u256(lyrics.quiltId), tx.pure.u256(lyrics.blobId)],
+        })
+      : tx.moveCall({
+          target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+          arguments: [tx.pure.u256(lyrics.blobId)],
+        });
+
     tx.moveCall({
-      target: `${musicOsPackageId}::composition::add_lyric_lines`,
-      arguments: [composition, compositionAdminCap, tx.pure.vector("string", lyrics)],
+      target: `${musicOsPackageId}::composition::set_lyrics`,
+      arguments: [composition, compositionAdminCap, lyricsData],
+      typeArguments: [shareType],
+    });
+  }
+
+  // Set demo WalrusData
+  if (demo) {
+    const demoData = demo.quiltId
+      ? tx.moveCall({
+          target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+          arguments: [tx.pure.u256(demo.quiltId), tx.pure.u256(demo.blobId)],
+        })
+      : tx.moveCall({
+          target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+          arguments: [tx.pure.u256(demo.blobId)],
+        });
+
+    tx.moveCall({
+      target: `${musicOsPackageId}::composition::set_demo`,
+      arguments: [composition, compositionAdminCap, demoData],
       typeArguments: [shareType],
     });
   }
@@ -370,6 +413,16 @@ export interface CoverArtInput {
   animatedQuiltId?: string;
 }
 
+/** Stem input for a recording. */
+export interface StemInput {
+  /** Audio data for the stem. */
+  audio: AudioInput;
+  /** Description of the stem (e.g., "Vocals", "Drums", "Bass"). */
+  description: string;
+  /** Party IDs of contributors to this stem. */
+  contributorIds?: string[];
+}
+
 /** Input for adding a credit to a recording. */
 export interface RecordingCreditInput {
   /** The Party object ID. */
@@ -426,6 +479,8 @@ export interface PublishRecordingParams {
   timeSignature?: TimeSignature;
   /** Optional tempo in BPM. */
   tempoBpm?: number;
+  /** Optional stems to add to the recording. */
+  stems?: StemInput[];
   /** The MusicOS package ID. */
   musicOsPackageId: string;
   /** The walrus_data package ID. */
@@ -466,6 +521,7 @@ export async function publishRecording(params: PublishRecordingParams): Promise<
     musicalKey,
     timeSignature,
     tempoBpm,
+    stems,
     musicOsPackageId,
     walrusDataPackageId,
   } = params;
@@ -677,6 +733,48 @@ export async function publishRecording(params: PublishRecordingParams): Promise<
       arguments: [recording, recordingAdminCap, tx.pure.u16(tempoBpm)],
       typeArguments: [shareType],
     });
+  }
+
+  // Add stems
+  if (stems && stems.length > 0) {
+    for (const stemInput of stems) {
+      // Create the audio for this stem
+      const stemWalrusData = createWalrusData(stemInput.audio.blobId, stemInput.audio.quiltId);
+      const stemAudio = tx.moveCall({
+        target: `${musicOsPackageId}::audio::new`,
+        arguments: [
+          tx.pure.u8(stemInput.audio.channels),
+          tx.pure.u8(stemInput.audio.bitDepth),
+          tx.pure.u32(stemInput.audio.sampleRateHz),
+          tx.pure.u64(stemInput.audio.samples),
+          stemWalrusData,
+          tx.pure(bcs.vector(bcs.u8()).serialize(Array.from(stemInput.audio.pcmDigest)).toBytes()),
+        ],
+      });
+
+      // Create the stem with empty contributors
+      const stem = tx.moveCall({
+        target: `${musicOsPackageId}::stem::new`,
+        arguments: [stemAudio, tx.pure.string(stemInput.description)],
+      });
+
+      // Add contributors to the stem
+      if (stemInput.contributorIds && stemInput.contributorIds.length > 0) {
+        for (const contributorId of stemInput.contributorIds) {
+          tx.moveCall({
+            target: `${musicOsPackageId}::stem::add_contributor`,
+            arguments: [stem, tx.object(contributorId)],
+          });
+        }
+      }
+
+      // Add the stem to the recording
+      tx.moveCall({
+        target: `${musicOsPackageId}::recording::add_stem`,
+        arguments: [recording, recordingAdminCap, stem],
+        typeArguments: [shareType],
+      });
+    }
   }
 
   // Publish the recording (makes it a shared object)

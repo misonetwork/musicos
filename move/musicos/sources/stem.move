@@ -7,8 +7,8 @@
 module musicos::stem;
 
 use musicos::audio::Audio;
+use musicos::party::Party;
 use std::string::String;
-use sui::vec_set;
 
 //=== Structs ===
 
@@ -18,15 +18,36 @@ public struct Stem has drop, store {
     contributors: vector<ID>,
 }
 
+//=== Constants ===
+
+const MAX_CONTRIBUTORS: u64 = 10;
+
+//=== Errors ===
+
+const EMaxContributorsReached: u64 = 0;
+const EContributorExists: u64 = 1;
+const EContributorNotFound: u64 = 1;
+
 //=== Public Functions ===
 
-public fun new(audio: Audio, description: String, contributors: vector<ID>): Stem {
-    // Create a Stem. Use VecSet construction to ensure each contributor ID is unique.
+public fun new(audio: Audio, description: String): Stem {
     Stem {
         audio,
         description,
-        contributors: vec_set::from_keys(contributors).into_keys(),
+        contributors: vector[],
     }
+}
+
+public fun add_contributor(self: &mut Stem, contributor: &Party) {
+    assert!(self.contributors.length() < MAX_CONTRIBUTORS, EMaxContributorsReached);
+    let contributor_id = contributor.id();
+    assert!(!self.contributors.contains(&contributor_id), EContributorExists);
+    self.contributors.push_back(contributor_id);
+}
+
+public fun remove_contributor(self: &mut Stem, contributor_idx: u64) {
+    assert!(contributor_idx < self.contributors.length(), EContributorNotFound);
+    self.contributors.swap_remove(contributor_idx);
 }
 
 //=== Public View Functions ===
