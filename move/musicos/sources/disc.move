@@ -83,6 +83,11 @@ public fun duration_ms(self: &Disc): u64 {
     self.duration_ms
 }
 
+/// Returns the optional title of this disc.
+public fun title(self: &Disc): &Option<String> {
+    &self.title
+}
+
 //=== Package Functions ===
 
 public(package) fun tracks_mut(self: &mut Disc): &mut vector<Track> {

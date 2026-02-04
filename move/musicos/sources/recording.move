@@ -144,7 +144,7 @@ public struct RecordingPartyAddedEvent has copy, drop {
 /// Minimum number of roles a party must have.
 const MIN_ROLES_PER_CREDIT: u64 = 1;
 /// Maximum number of roles a party can have.
-const MAX_ROLES_PER_CREDIT: u64 = 10;
+const MAX_ROLES_PER_CREDIT: u64 = 20;
 
 //=== Errors ===
 
@@ -155,6 +155,8 @@ const ENotInitializedState: u64 = 10;
 // Validation errors (20-29)
 /// Party must have at least one role.
 const EMinRolesNotMet: u64 = 20;
+/// Tempo BPM must be at least 1.
+const EInvalidTempoBpm: u64 = 21;
 
 // Constraint errors (30-39)
 /// Party has too many roles.
@@ -512,6 +514,7 @@ public fun set_tempo_bpm<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
+            assert!(tempo_bpm >= 1, EInvalidTempoBpm);
             self.tempo_bpm.swap_or_fill(tempo_bpm);
         },
         _ => abort ENotInitializedState,

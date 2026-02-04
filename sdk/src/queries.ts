@@ -186,3 +186,39 @@ export async function getRecordingShareType(
 
   return match[1];
 }
+
+const ReleaseRegistryQuery = graphql(`
+  query GetReleaseRegistry($type: String!) {
+    objects(filter: { type: $type }) {
+      nodes {
+        address
+      }
+    }
+  }
+`);
+
+/**
+ * Fetches the ReleaseRegistry object ID.
+ *
+ * @param client - A Sui GraphQL client
+ * @param musicOsPackageId - The MusicOS package ID
+ * @returns The object ID of the ReleaseRegistry
+ */
+export async function getReleaseRegistry(
+  client: SuiGraphQLClient,
+  musicOsPackageId: string
+): Promise<string> {
+  const registryType = `${musicOsPackageId}::release::ReleaseRegistry`;
+
+  const result = await client.query({
+    query: ReleaseRegistryQuery,
+    variables: { type: registryType },
+  });
+
+  const node = result.data?.objects?.nodes?.[0];
+  if (!node?.address) {
+    throw new Error("ReleaseRegistry not found");
+  }
+
+  return node.address;
+}

@@ -26,7 +26,7 @@ const MAX_CONTRIBUTORS: u64 = 10;
 
 const EMaxContributorsReached: u64 = 0;
 const EContributorExists: u64 = 1;
-const EContributorNotFound: u64 = 1;
+const EContributorNotFound: u64 = 2;
 
 //=== Public Functions ===
 

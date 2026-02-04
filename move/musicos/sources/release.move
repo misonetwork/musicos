@@ -103,6 +103,21 @@ public enum ReleaseKind has copy, drop, store {
     Single,
 }
 
+/// Creates an Album release kind.
+public fun new_album_kind(): ReleaseKind {
+    ReleaseKind::Album
+}
+
+/// Creates an EP release kind.
+public fun new_ep_kind(): ReleaseKind {
+    ReleaseKind::EP
+}
+
+/// Creates a Single release kind.
+public fun new_single_kind(): ReleaseKind {
+    ReleaseKind::Single
+}
+
 /// Lifecycle state of a release.
 public enum ReleaseState has copy, drop, store {
     /// Release is initialized but not yet created.

@@ -41,7 +41,7 @@ public struct GenreRegistry has key {
 //=== Errors ===
 
 // Validation errors (20-29)
-/// Genre name contains an invalid character (must be A-Z, _, or &).
+/// Genre name contains an invalid character (must be A-Z or _).
 const EInvalidCharacter: u64 = 20;
 
 //=== Events ===
@@ -57,6 +57,7 @@ public struct GenreCreatedEvent has copy, drop {
 //=== Constants ===
 
 const LAUNCH_GENRES: vector<vector<u8>> = vector[
+    b"ALTERNATIVE",
     b"CLASSICAL",
     b"DANCE",
     b"ELECTRONIC",
@@ -128,5 +129,7 @@ fun new_impl(name: String, genre_registry: &mut GenreRegistry): Genre {
 
 /// Asserts that the genre name contains only valid characters (A-Z, _).
 fun assert_valid_name(name: &String) {
-    assert!(name.as_bytes().all!(|c| (*c >= 65 && *c <= 90) || *c == 95), EInvalidCharacter);
+    let bytes = name.as_bytes();
+    assert!(!bytes.is_empty(), EInvalidCharacter);
+    assert!(bytes.all!(|c| (*c >= 65 && *c <= 90) || *c == 95), EInvalidCharacter);
 }

@@ -93,6 +93,9 @@ fun assert_valid_share_type<Share>() {
     let bytes_len = bytes.length();
     let suffix_len = share_type.length();
 
+    // Ensure bytes_len is at least suffix_len to avoid underflow.
+    assert!(bytes_len >= suffix_len, EInvalidShareType);
+
     suffix_len.do!(|i| {
         assert!(bytes[bytes_len - suffix_len + i] == share_type[i], EInvalidShareType);
     });

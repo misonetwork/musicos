@@ -248,6 +248,11 @@ public fun new_lead_role_level(): RecordingPartyRoleLevel {
     RecordingPartyRoleLevel::Lead
 }
 
+/// Creates a Primary level.
+public fun new_primary_role_level(): RecordingPartyRoleLevel {
+    RecordingPartyRoleLevel::Primary
+}
+
 /// Creates a Principal level.
 public fun new_principal_role_level(): RecordingPartyRoleLevel {
     RecordingPartyRoleLevel::Principal

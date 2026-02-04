@@ -959,10 +959,159 @@ function recordingRoleToFunctionName(roleType: string): string {
 }
 
 // ============================================================================
+// Deal
+// ============================================================================
+
+/** Parameters for creating a deal. */
+export interface CreateDealParams {
+  /** The Recording object ID (must be a published/shared recording). */
+  recordingId: string;
+  /** The RecordingAdminCap object ID. */
+  recordingAdminCapId: string;
+  /** The type argument for the recording's share token. */
+  recordingShareType: string;
+  /** The pre-derived Release ID that this deal is for. */
+  releaseId: string;
+  /** Revenue split for this track in basis points (0-10000). */
+  trackSplitBps: number;
+  /** Optional display title for the track. Defaults to the recording's title. */
+  trackTitle?: string;
+  /** Optional cover art for the track. Defaults to the recording's cover art. */
+  trackCoverArt?: CoverArtInput;
+  /** The address to transfer the Deal to. */
+  recipientAddress: string;
+  /** The MusicOS package ID. */
+  musicOsPackageId: string;
+  /** The walrus_data package ID (required if trackCoverArt is provided). */
+  walrusDataPackageId?: string;
+}
+
+/**
+ * Builds a transaction that creates a Deal and transfers it to the recipient.
+ *
+ * A Deal represents an agreement to include a recording on a release with specific
+ * track information (title, split, cover art). The Deal is created by the recording
+ * admin cap owner and transferred to the release creator.
+ *
+ * The releaseId must be pre-derived client-side using deriveReleaseId() to match
+ * what release::new() will derive from the same inputs.
+ */
+export function createDeal(params: CreateDealParams): Transaction {
+  const {
+    recordingId,
+    recordingAdminCapId,
+    recordingShareType,
+    releaseId,
+    trackSplitBps,
+    trackTitle,
+    trackCoverArt,
+    recipientAddress,
+    musicOsPackageId,
+    walrusDataPackageId,
+  } = params;
+
+  const tx = new Transaction();
+
+  // Create Option<String> for title
+  const titleOption = trackTitle
+    ? tx.moveCall({
+        target: "0x1::option::some",
+        arguments: [tx.pure.string(trackTitle)],
+        typeArguments: ["0x1::string::String"],
+      })
+    : tx.moveCall({
+        target: "0x1::option::none",
+        arguments: [],
+        typeArguments: ["0x1::string::String"],
+      });
+
+  // Create Option<CoverArt> for cover art
+  let coverArtOption;
+  if (trackCoverArt && walrusDataPackageId) {
+    // Build cover art
+    const staticWalrusData = trackCoverArt.staticQuiltId
+      ? tx.moveCall({
+          target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+          arguments: [
+            tx.pure.u256(BigInt(trackCoverArt.staticQuiltId)),
+            tx.pure.u256(BigInt(trackCoverArt.staticBlobId)),
+          ],
+        })
+      : tx.moveCall({
+          target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+          arguments: [tx.pure.u256(BigInt(trackCoverArt.staticBlobId))],
+        });
+
+    let animatedOption;
+    if (trackCoverArt.animatedBlobId) {
+      const animatedWalrusData = trackCoverArt.animatedQuiltId
+        ? tx.moveCall({
+            target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+            arguments: [
+              tx.pure.u256(BigInt(trackCoverArt.animatedQuiltId)),
+              tx.pure.u256(BigInt(trackCoverArt.animatedBlobId)),
+            ],
+          })
+        : tx.moveCall({
+            target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+            arguments: [tx.pure.u256(BigInt(trackCoverArt.animatedBlobId))],
+          });
+      animatedOption = tx.moveCall({
+        target: "0x1::option::some",
+        arguments: [animatedWalrusData],
+        typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+      });
+    } else {
+      animatedOption = tx.moveCall({
+        target: "0x1::option::none",
+        arguments: [],
+        typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+      });
+    }
+
+    const coverArt = tx.moveCall({
+      target: `${musicOsPackageId}::cover_art::new`,
+      arguments: [staticWalrusData, animatedOption],
+    });
+
+    coverArtOption = tx.moveCall({
+      target: "0x1::option::some",
+      arguments: [coverArt],
+      typeArguments: [`${musicOsPackageId}::cover_art::CoverArt`],
+    });
+  } else {
+    coverArtOption = tx.moveCall({
+      target: "0x1::option::none",
+      arguments: [],
+      typeArguments: [`${musicOsPackageId}::cover_art::CoverArt`],
+    });
+  }
+
+  // Create the Deal
+  const deal = tx.moveCall({
+    target: `${musicOsPackageId}::deal::new`,
+    arguments: [
+      tx.object(recordingAdminCapId),
+      tx.object(recordingId),
+      tx.pure.id(releaseId),
+      tx.pure.u64(trackSplitBps),
+      titleOption,
+      coverArtOption,
+    ],
+    typeArguments: [recordingShareType],
+  });
+
+  // Transfer the Deal to the recipient
+  tx.transferObjects([deal], recipientAddress);
+
+  return tx;
+}
+
+// ============================================================================
 // Release
 // ============================================================================
 
-/** Input for a track on a release. */
+/** Input for a track on a release (Deal-based). */
 export interface TrackInput {
   /** The Recording object ID (must be a published/shared recording). */
   recordingId: string;
@@ -972,6 +1121,8 @@ export interface TrackInput {
   recordingShareType: string;
   /** Optional display title for the track. Defaults to the recording's title. */
   title?: string;
+  /** Revenue split for this track in basis points. */
+  splitBps: number;
 }
 
 /** Input for a disc on a release. */
@@ -995,26 +1146,30 @@ export interface PublishReleaseParams {
   title: string;
   /** Cover art for the release. */
   coverArt: CoverArtInput;
-  /** Discs containing tracks, in order. */
+  /** Discs containing tracks, in order. Each track must include its splitBps. */
   discs: DiscInput[];
-  /**
-   * Revenue split for each track in basis points.
-   * Must have one entry per track (across all discs) and sum to 10000 (100%).
-   */
-  trackSplitsBps: number[];
+  /** The ReleaseRegistry object ID. */
+  releaseRegistryId: string;
+  /** The pre-derived Release ID. Must match what release::new() will derive. */
+  releaseId: string;
   /** The MusicOS package ID. */
   musicOsPackageId: string;
+  /** Address to receive the ReleaseAdminCap. */
+  adminAddress: string;
 }
 
 /**
- * Builds a transaction that creates and publishes a release.
+ * Builds a transaction that creates and publishes a release using the Deal-based flow.
  *
  * This transaction:
- * 1. Creates Track objects from each recording
- * 2. Creates Disc objects from tracks
- * 3. Creates the Release with cover art
- * 4. Sets track revenue splits
+ * 1. Creates Deal objects for each recording with the pre-derived release ID
+ * 2. Creates Track objects from Deals
+ * 3. Creates Disc objects from Tracks
+ * 4. Creates the Release (which derives the same ID internally)
  * 5. Publishes the release
+ *
+ * Note: The releaseId must be pre-derived client-side using deriveReleaseId()
+ * to match what release::new() will derive from the same inputs.
  */
 export function publishRelease(params: PublishReleaseParams): Transaction {
   const {
@@ -1023,11 +1178,27 @@ export function publishRelease(params: PublishReleaseParams): Transaction {
     title,
     coverArt,
     discs,
-    trackSplitsBps,
+    releaseRegistryId,
+    releaseId,
     musicOsPackageId,
+    adminAddress,
   } = params;
 
   const tx = new Transaction();
+
+  // Helper to create WalrusData with or without quilt
+  const createWalrusData = (blobId: string, quiltId?: string) => {
+    if (quiltId) {
+      return tx.moveCall({
+        target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+        arguments: [tx.pure.u256(BigInt(quiltId)), tx.pure.u256(BigInt(blobId))],
+      });
+    }
+    return tx.moveCall({
+      target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+      arguments: [tx.pure.u256(BigInt(blobId))],
+    });
+  };
 
   // Build disc vector
   const discResults: ReturnType<typeof tx.moveCall>[] = [];
@@ -1057,16 +1228,24 @@ export function publishRelease(params: PublishReleaseParams): Transaction {
         typeArguments: [`${musicOsPackageId}::cover_art::CoverArt`],
       });
 
-      // Create the track
-      const track = tx.moveCall({
-        target: `${musicOsPackageId}::track::new`,
+      // Create the Deal with the pre-derived release ID
+      const deal = tx.moveCall({
+        target: `${musicOsPackageId}::deal::new`,
         arguments: [
           tx.object(trackInput.recordingAdminCapId),
           tx.object(trackInput.recordingId),
+          tx.pure.id(releaseId),
+          tx.pure.u64(trackInput.splitBps),
           titleOption,
           coverArtOption,
         ],
         typeArguments: [trackInput.recordingShareType],
+      });
+
+      // Create the Track from the Deal
+      const track = tx.moveCall({
+        target: `${musicOsPackageId}::track::new`,
+        arguments: [deal],
       });
 
       trackResults.push(track);
@@ -1106,20 +1285,6 @@ export function publishRelease(params: PublishReleaseParams): Transaction {
     elements: discResults,
   });
 
-  // Helper to create WalrusData with or without quilt
-  const createWalrusData = (blobId: string, quiltId?: string) => {
-    if (quiltId) {
-      return tx.moveCall({
-        target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
-        arguments: [tx.pure.u256(BigInt(quiltId)), tx.pure.u256(BigInt(blobId))],
-      });
-    }
-    return tx.moveCall({
-      target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
-      arguments: [tx.pure.u256(BigInt(blobId))],
-    });
-  };
-
   // Build cover art
   const staticWalrusData = createWalrusData(coverArt.staticBlobId, coverArt.staticQuiltId);
 
@@ -1145,21 +1310,22 @@ export function publishRelease(params: PublishReleaseParams): Transaction {
   });
 
   // Build ReleaseKind enum using BCS
-  const releaseKind = buildReleaseKind(tx, kind);
+  const releaseKind = buildReleaseKind(tx, kind, musicOsPackageId);
 
   // Create the release - returns (Release, ReleaseAdminCap)
+  // The release::new() will derive the same ID as releaseId from the ReleaseRegistry
   const releaseResult = tx.moveCall({
     target: `${musicOsPackageId}::release::new`,
-    arguments: [releaseKind, tx.pure.string(title), releaseCoverArt, discVec],
+    arguments: [
+      releaseKind,
+      tx.pure.string(title),
+      releaseCoverArt,
+      discVec,
+      tx.object(releaseRegistryId),
+    ],
   });
   const release = releaseResult[0]!;
   const releaseAdminCap = releaseResult[1]!;
-
-  // Set track splits
-  tx.moveCall({
-    target: `${musicOsPackageId}::release::set_track_splits_bps`,
-    arguments: [release, releaseAdminCap, tx.pure.vector("u64", trackSplitsBps)],
-  });
 
   // Publish the release
   tx.moveCall({
@@ -1167,18 +1333,196 @@ export function publishRelease(params: PublishReleaseParams): Transaction {
     arguments: [release, releaseAdminCap, tx.object(SUI_CLOCK_OBJECT_ID)],
   });
 
+  // Transfer the ReleaseAdminCap to the admin address
+  tx.transferObjects([releaseAdminCap], tx.pure.address(adminAddress));
+
   return tx;
 }
 
-/** BCS schema for ReleaseKind enum. */
-const ReleaseKindBcs = bcs.enum("ReleaseKind", {
-  Album: null,
-  EP: null,
-  Single: null,
-});
+/** Builds a ReleaseKind enum value using Move helper functions. */
+function buildReleaseKind(tx: Transaction, kind: ReleaseKindInput, musicOsPackageId: string) {
+  const kindFnName = kind === "Album" ? "new_album_kind" : kind === "EP" ? "new_ep_kind" : "new_single_kind";
+  return tx.moveCall({
+    target: `${musicOsPackageId}::release::${kindFnName}`,
+    arguments: [],
+  });
+}
 
-/** Builds a ReleaseKind enum value. */
-function buildReleaseKind(tx: Transaction, kind: ReleaseKindInput) {
-  const enumValue = { [kind]: true } as { Album: true } | { EP: true } | { Single: true };
-  return tx.pure(ReleaseKindBcs.serialize(enumValue).toBytes());
+/** Input for a pre-created deal to be used in a release. */
+export interface DealInput {
+  /** The Deal object ID. */
+  dealId: string;
+}
+
+/** Input for a disc using pre-created deals. */
+export interface DiscFromDealsInput {
+  /** Deals for tracks on this disc, in order. */
+  deals: DealInput[];
+  /** Optional title for the disc (e.g., for multi-disc sets). */
+  title?: string;
+}
+
+/** Parameters for publishing a release from pre-created deals. */
+export interface PublishReleaseFromDealsParams {
+  /** The walrus_data package ID. */
+  walrusDataPackageId: string;
+  /** Type of release (Album, EP, or Single). */
+  kind: ReleaseKindInput;
+  /** Title of the release. */
+  title: string;
+  /** Cover art for the release. */
+  coverArt: CoverArtInput;
+  /** Discs containing pre-created deals, in order. */
+  discs: DiscFromDealsInput[];
+  /** The ReleaseRegistry object ID. */
+  releaseRegistryId: string;
+  /** The MusicOS package ID. */
+  musicOsPackageId: string;
+  /** Address to receive the ReleaseAdminCap. */
+  adminAddress: string;
+}
+
+/**
+ * Builds a transaction that creates and publishes a release using pre-created Deal objects.
+ *
+ * This transaction:
+ * 1. Takes pre-created Deal objects (owned by the caller)
+ * 2. Creates Track objects from Deals
+ * 3. Creates Disc objects from Tracks
+ * 4. Creates the Release (deriving its ID from the tracks)
+ * 5. Publishes the release
+ *
+ * Note: The Deal objects must have been created with matching release IDs that will
+ * be derived from the same track configuration.
+ */
+export function publishReleaseFromDeals(params: PublishReleaseFromDealsParams): Transaction {
+  const {
+    walrusDataPackageId,
+    kind,
+    title,
+    coverArt,
+    discs,
+    releaseRegistryId,
+    musicOsPackageId,
+    adminAddress,
+  } = params;
+
+  const tx = new Transaction();
+
+  // Helper to create WalrusData with or without quilt
+  const createWalrusData = (blobId: string, quiltId?: string) => {
+    if (quiltId) {
+      return tx.moveCall({
+        target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+        arguments: [tx.pure.u256(BigInt(quiltId)), tx.pure.u256(BigInt(blobId))],
+      });
+    }
+    return tx.moveCall({
+      target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+      arguments: [tx.pure.u256(BigInt(blobId))],
+    });
+  };
+
+  // Build disc vector
+  const discResults: ReturnType<typeof tx.moveCall>[] = [];
+
+  for (const discInput of discs) {
+    // Build track vector for this disc
+    const trackResults: ReturnType<typeof tx.moveCall>[] = [];
+
+    for (const dealInput of discInput.deals) {
+      // Create the Track from the pre-existing Deal object
+      const track = tx.moveCall({
+        target: `${musicOsPackageId}::track::new`,
+        arguments: [tx.object(dealInput.dealId)],
+      });
+
+      trackResults.push(track);
+    }
+
+    // Create vector<Track> and push all tracks
+    const trackVec = tx.makeMoveVec({
+      type: `${musicOsPackageId}::track::Track`,
+      elements: trackResults,
+    });
+
+    // Create Option<String> for disc title
+    const discTitleOption = discInput.title
+      ? tx.moveCall({
+          target: "0x1::option::some",
+          arguments: [tx.pure.string(discInput.title)],
+          typeArguments: ["0x1::string::String"],
+        })
+      : tx.moveCall({
+          target: "0x1::option::none",
+          arguments: [],
+          typeArguments: ["0x1::string::String"],
+        });
+
+    // Create the disc
+    const disc = tx.moveCall({
+      target: `${musicOsPackageId}::disc::new`,
+      arguments: [trackVec, discTitleOption],
+    });
+
+    discResults.push(disc);
+  }
+
+  // Create vector<Disc>
+  const discVec = tx.makeMoveVec({
+    type: `${musicOsPackageId}::disc::Disc`,
+    elements: discResults,
+  });
+
+  // Build cover art
+  const staticWalrusData = createWalrusData(coverArt.staticBlobId, coverArt.staticQuiltId);
+
+  let animatedOption;
+  if (coverArt.animatedBlobId) {
+    const animatedWalrusData = createWalrusData(coverArt.animatedBlobId, coverArt.animatedQuiltId);
+    animatedOption = tx.moveCall({
+      target: "0x1::option::some",
+      arguments: [animatedWalrusData],
+      typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+    });
+  } else {
+    animatedOption = tx.moveCall({
+      target: "0x1::option::none",
+      arguments: [],
+      typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+    });
+  }
+
+  const releaseCoverArt = tx.moveCall({
+    target: `${musicOsPackageId}::cover_art::new`,
+    arguments: [staticWalrusData, animatedOption],
+  });
+
+  // Build ReleaseKind enum
+  const releaseKind = buildReleaseKind(tx, kind, musicOsPackageId);
+
+  // Create the release - returns (Release, ReleaseAdminCap)
+  const releaseResult = tx.moveCall({
+    target: `${musicOsPackageId}::release::new`,
+    arguments: [
+      releaseKind,
+      tx.pure.string(title),
+      releaseCoverArt,
+      discVec,
+      tx.object(releaseRegistryId),
+    ],
+  });
+  const release = releaseResult[0]!;
+  const releaseAdminCap = releaseResult[1]!;
+
+  // Publish the release
+  tx.moveCall({
+    target: `${musicOsPackageId}::release::publish`,
+    arguments: [release, releaseAdminCap, tx.object(SUI_CLOCK_OBJECT_ID)],
+  });
+
+  // Transfer the ReleaseAdminCap to the admin address
+  tx.transferObjects([releaseAdminCap], tx.pure.address(adminAddress));
+
+  return tx;
 }
