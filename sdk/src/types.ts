@@ -51,14 +51,15 @@ export interface PartyRemovedFromGroupEvent {
 // Walrus Storage
 // ============================================================================
 
-/** Reference to data stored on Walrus. */
+/**
+ * Reference to data stored on Walrus.
+ * Corresponds to Move tuple struct: WalrusData(Option<u256>, u256)
+ */
 export interface WalrusData {
-  /** Walrus blob ID. */
+  /** Optional quilt ID (u256 as string). */
+  quiltId?: string;
+  /** Walrus blob ID (u256 as string). */
   blobId: string;
-  /** Size of the data in bytes. */
-  size: number;
-  /** MIME type of the data. */
-  mimeType: string;
 }
 
 // ============================================================================
@@ -386,11 +387,16 @@ export interface RecordingPartyAddedEvent {
 // Track
 // ============================================================================
 
+/** Lifecycle state of a track on a release. */
+export type TrackState = "Pending" | "Assigned";
+
 /**
  * A track on a release, linking a recording to its position in the tracklist.
  * Captures metadata from the recording at the time of release creation.
  */
 export interface Track {
+  /** Current state of the track (Pending until deal is assigned, then Assigned). */
+  state: TrackState;
   /** ID of the underlying composition. */
   compositionId: string;
   /** Type of the composition's share token. */
@@ -401,10 +407,14 @@ export interface Track {
   recordingId: string;
   /** Type of the recording's share token. */
   recordingShareType: string;
+  /** Title of the track. */
+  title: string;
   /** Duration of the track in milliseconds. */
   durationMs: bigint;
   /** Cover art for the track (inherited from recording by default). */
   coverArt: CoverArt;
+  /** Revenue split for this track within the release (in basis points). */
+  splitBps: BPS;
 }
 
 /** Position of a track within a release (disc and track indices). */
@@ -438,6 +448,8 @@ export interface Disc {
   tracks: Track[];
   /** Optional disc-specific artwork (e.g., for multi-disc sets with different covers). */
   artwork?: CoverArt;
+  /** Optional disc title (e.g., for multi-disc sets). */
+  title?: string;
   /** Total duration of all tracks in milliseconds. */
   durationMs: bigint;
 }
@@ -471,6 +483,8 @@ export interface Release {
   state: ReleaseState;
   /** Title of the release. */
   title: string;
+  /** Description of the release (max 500 characters). */
+  description: string;
   /** Optional subtitle (e.g., "Deluxe Edition"). */
   subtitle?: string;
   /** Collection of discs containing tracks. */

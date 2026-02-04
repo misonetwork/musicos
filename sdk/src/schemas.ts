@@ -9,9 +9,8 @@ import { isValidSuiAddress, isValidSuiObjectId } from "@mysten/sui/utils";
 // ============================================================================
 
 export const WalrusDataSchema = z.object({
+  quiltId: z.string().regex(/^\d+$/, "Quilt ID must be a decimal string").optional(),
   blobId: z.string().regex(/^\d+$/, "Blob ID must be a decimal string"),
-  size: z.number().int().min(0),
-  mimeType: z.string().min(1),
 });
 
 // ============================================================================

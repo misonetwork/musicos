@@ -1370,6 +1370,8 @@ export interface PublishReleaseFromDealsParams {
   kind: ReleaseKindInput;
   /** Title of the release. */
   title: string;
+  /** Description of the release (max 500 characters). */
+  description: string;
   /** Cover art for the release. */
   coverArt: CoverArtInput;
   /** Discs containing pre-created deals, in order. */
@@ -1400,6 +1402,7 @@ export function publishReleaseFromDeals(params: PublishReleaseFromDealsParams): 
     walrusDataPackageId,
     kind,
     title,
+    description,
     coverArt,
     discs,
     releaseRegistryId,
@@ -1507,6 +1510,7 @@ export function publishReleaseFromDeals(params: PublishReleaseFromDealsParams): 
     arguments: [
       releaseKind,
       tx.pure.string(title),
+      tx.pure.string(description),
       releaseCoverArt,
       discVec,
       tx.object(releaseRegistryId),

@@ -44,12 +44,15 @@ public struct Release has key {
     title: String,
     /// Optional subtitle (e.g., "Deluxe Edition").
     subtitle: Option<String>,
+    /// Description of the release.
+    description: String,
     /// Collection of discs containing tracks.
     discs: vector<Disc>,
     /// Cover artwork for the release.
     cover_art: CoverArt,
 }
 
+/// Key for release UID derivation.
 public struct ReleaseKey(vector<u8>) has copy, drop, store;
 
 /// A registry that acts as a parent object for release UID derivation.
@@ -100,21 +103,6 @@ public enum ReleaseKind has copy, drop, store {
     Single,
 }
 
-/// Creates an Album release kind.
-public fun new_album_kind(): ReleaseKind {
-    ReleaseKind::Album
-}
-
-/// Creates an EP release kind.
-public fun new_ep_kind(): ReleaseKind {
-    ReleaseKind::EP
-}
-
-/// Creates a Single release kind.
-public fun new_single_kind(): ReleaseKind {
-    ReleaseKind::Single
-}
-
 /// Lifecycle state of a release.
 public enum ReleaseState has copy, drop, store {
     /// Release is initialized but not yet created.
@@ -163,6 +151,7 @@ public struct ReleaseTrackPaidEvent<phantom C, phantom CS, phantom RecordingShar
 
 //=== Constants ===
 
+const MAX_DESCRIPTION_LENGTH: u64 = 500;
 const MAX_DISCS: u64 = 20;
 const MAX_TRACKS: u64 = 255;
 
@@ -184,9 +173,11 @@ const EInvalidTrackSplitsSum: u64 = 20;
 
 // Constraint errors (30-39)
 /// Too many discs in release.
-const EMaxDiscsReached: u64 = 30;
+const EMaxDiscsExceeded: u64 = 30;
 /// Too many tracks in release.
-const EMaxTracksReached: u64 = 31;
+const EMaxTracksExceeded: u64 = 31;
+/// Too long description in release.
+const EMaxDescriptionLengthExceeded: u64 = 32;
 
 // Reference errors (50-59)
 /// Revenue pool has no funds to distribute.
@@ -211,19 +202,23 @@ fun init(_otw: RELEASE, ctx: &mut TxContext) {
 public fun new(
     kind: ReleaseKind,
     title: String,
+    description: String,
     cover_art: CoverArt,
     discs: vector<Disc>,
     registry: &mut ReleaseRegistry,
     ctx: &TxContext,
 ): (Release, ReleaseAdminCap) {
+    assert!(description.length() <= MAX_DESCRIPTION_LENGTH, EMaxDescriptionLengthExceeded);
+    // Assert that the release has at least one disc.
     assert!(!discs.is_empty(), ENoDiscs);
-    assert!(discs.length() <= MAX_DISCS, EMaxDiscsReached);
+    // Assert that the release doesn't have too many discs.
+    assert!(discs.length() <= MAX_DISCS, EMaxDiscsExceeded);
 
     // Extract digest inputs and validate splits
     let (recording_ids, track_split_values, split_sum) = extract_digest_inputs(&discs);
 
     // Assert total tracks don't exceed maximum
-    assert!(recording_ids.length() <= MAX_TRACKS, EMaxTracksReached);
+    assert!(recording_ids.length() <= MAX_TRACKS, EMaxTracksExceeded);
 
     // Assert that the track splits sum to 100% (10,000 BPS).
     assert!(split_sum == bps::max_value!(), EInvalidTrackSplitsSum);
@@ -238,6 +233,7 @@ public fun new(
         state: ReleaseState::Initialized,
         title,
         subtitle: option::none(),
+        description,
         discs,
         cover_art,
     };
@@ -337,6 +333,21 @@ public fun authorize(self: &Release, cap: &ReleaseAdminCap) {
     assert!(self.id() == cap.release_id, EUnauthorized);
 }
 
+/// Creates an Album release kind.
+public fun new_album_kind(): ReleaseKind {
+    ReleaseKind::Album
+}
+
+/// Creates an EP release kind.
+public fun new_ep_kind(): ReleaseKind {
+    ReleaseKind::EP
+}
+
+/// Creates a Single release kind.
+public fun new_single_kind(): ReleaseKind {
+    ReleaseKind::Single
+}
+
 //=== Public View Functions ===
 
 /// Returns the release's object ID.
@@ -362,6 +373,11 @@ public fun title(self: &Release): &String {
 /// Returns the optional subtitle.
 public fun subtitle(self: &Release): &Option<String> {
     &self.subtitle
+}
+
+/// Returns the release description.
+public fun description(self: &Release): &String {
+    &self.description
 }
 
 /// Returns a reference to all discs.
