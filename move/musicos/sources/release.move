@@ -13,7 +13,7 @@
 /// - State machine: Initialized -> Published
 module musicos::release;
 
-use interest_bps::bps::{Self, BPS};
+use interest_bps::bps;
 use musicos::cover_art::CoverArt;
 use musicos::disc::Disc;
 use musicos::track_position::TrackPosition;
@@ -21,13 +21,17 @@ use musicos::track_sequence::{Self, TrackSequence};
 use std::string::String;
 use std::type_name::TypeName;
 use sui::balance::{withdraw_funds_from_object, redeem_funds};
+use sui::bcs::to_bytes;
 use sui::clock::Clock;
 use sui::derived_object::claim;
 use sui::event::emit;
+use sui::hash::blake2b256;
 
 public use fun release_admin_cap_release_id as ReleaseAdminCap.release_id;
 
 //=== Structs ===
+
+public struct RELEASE() has drop;
 
 /// A music release containing one or more discs of tracks.
 public struct Release has key {
@@ -45,10 +49,15 @@ public struct Release has key {
     discs: vector<Disc>,
     /// Navigation structure for track ordering.
     track_sequence: TrackSequence,
-    /// Revenue split for each track in basis points (must sum to 100%).
-    track_splits_bps: vector<BPS>,
     /// Cover artwork for the release.
     cover_art: CoverArt,
+}
+
+public struct ReleaseKey(vector<u8>) has copy, drop, store;
+
+/// A registry that acts as a parent object for release UID derivation.
+public struct ReleaseRegistry has key {
+    id: UID,
 }
 
 /// Capability that authorizes modifications to a specific release.
@@ -157,10 +166,8 @@ const ENotInitializedState: u64 = 10;
 const ENotPublishedState: u64 = 11;
 
 // Validation errors (20-29)
-/// Track splits count doesn't match track count.
-const EInvalidTrackSplitsLength: u64 = 20;
 /// Track splits don't sum to 100% (10,000 BPS).
-const EInvalidTrackSplitsSum: u64 = 21;
+const EInvalidTrackSplitsSum: u64 = 20;
 
 // Constraint errors (30-39)
 /// Too many discs in release.
@@ -169,6 +176,16 @@ const EMaxDiscsReached: u64 = 30;
 // Reference errors (50-59)
 /// Revenue pool has no funds to distribute.
 const ENoRevenueToDistribute: u64 = 50;
+
+//=== Init Function ===
+
+fun init(_otw: RELEASE, ctx: &mut TxContext) {
+    let registry = ReleaseRegistry {
+        id: object::new(ctx),
+    };
+
+    transfer::share_object(registry);
+}
 
 //=== Public Functions ===
 
@@ -179,22 +196,32 @@ public fun new(
     title: String,
     cover_art: CoverArt,
     discs: vector<Disc>,
-    ctx: &mut TxContext,
+    registry: &mut ReleaseRegistry,
+    ctx: &TxContext,
 ): (Release, ReleaseAdminCap) {
     assert!(discs.length() <= MAX_DISCS, EMaxDiscsReached);
 
     // Build a track sequence for the release based on the number of discs.
-    let track_sequence = track_sequence::new(&discs);
+    // Also returns recording IDs, split values, and split sum for validation.
+    let (track_sequence, recording_ids, track_split_values, split_sum) = track_sequence::new(
+        &discs,
+    );
+
+    // Assert that the track splits sum to 100% (10,000 BPS).
+    assert!(split_sum == bps::max_value!(), EInvalidTrackSplitsSum);
+
+    // Calculate the release digest and claim the release UID.
+    let release_digest = calculate_release_digest(recording_ids, track_split_values, ctx);
+    let release_uid = claim(&mut registry.id, ReleaseKey(release_digest));
 
     let mut release = Release {
-        id: object::new(ctx),
+        id: release_uid,
         kind,
         state: ReleaseState::Initialized,
         title,
         subtitle: option::none(),
         discs,
         track_sequence,
-        track_splits_bps: vector[],
         cover_art,
     };
 
@@ -214,10 +241,8 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
 
     match (self.state) {
         ReleaseState::Initialized => {
-            // Assert that the number of track splits matches the number of tracks.
-            assert_track_splits_bps_length(self.track_splits_bps, &self.track_sequence);
-            // Assert that the track splits sum to 100% (10,000 BPS).
-            assert_track_splits_bps_sum(self.track_splits_bps);
+            // Assert that the tracks are assigned to the release.
+            self.assert_track_assignments();
 
             let timestamp_ms = clock.timestamp_ms();
 
@@ -231,29 +256,6 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
             });
 
             transfer::share_object(self);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Sets the revenue splits for each track.
-/// The number of splits must match the track count, and they must sum to 100%.
-/// Required State: Initialized
-public fun set_track_splits_bps(
-    self: &mut Release,
-    cap: &ReleaseAdminCap,
-    track_splits_bps_values: vector<u64>,
-) {
-    self.authorize(cap);
-
-    match (self.state) {
-        ReleaseState::Initialized => {
-            let track_splits_bps = track_splits_bps_values.map!(|value| bps::new(value));
-
-            assert_track_splits_bps_length(track_splits_bps, &self.track_sequence);
-            assert_track_splits_bps_sum(track_splits_bps);
-
-            self.track_splits_bps = track_splits_bps;
         },
         _ => abort ENotInitializedState,
     }
@@ -288,7 +290,7 @@ public fun distribute_revenue<C>(self: &mut Release, value: u64) {
                 let track = &disc.tracks()[track_position.track_idx()];
 
                 // Fetch the track split rate for the given track sequence index.
-                let track_split_bps = self.track_splits_bps[i];
+                let track_split_bps = track.split_bps();
 
                 if (track_split_bps.value() > 0) {
                     let rec_split_value = track_split_bps.calc(distribution_value);
@@ -320,6 +322,11 @@ public fun distribute_revenue<C>(self: &mut Release, value: u64) {
         },
         _ => abort ENotPublishedState,
     }
+}
+
+/// Verifies that the admin capability matches this release.
+public fun authorize(self: &Release, cap: &ReleaseAdminCap) {
+    assert!(self.id() == cap.release_id, EUnauthorized);
 }
 
 //=== Public View Functions ===
@@ -359,11 +366,6 @@ public fun track_sequence(self: &Release): &TrackSequence {
     &self.track_sequence
 }
 
-/// Returns a reference to the track splits in basis points.
-public fun track_splits_bps(self: &Release): &vector<BPS> {
-    &self.track_splits_bps
-}
-
 /// Returns a reference to the cover art.
 public fun cover_art(self: &Release): &CoverArt {
     &self.cover_art
@@ -390,20 +392,21 @@ public fun uid_mut(self: &mut Release, cap: &ReleaseAdminCap): &mut UID {
 
 //=== Private Functions ===
 
-/// Verifies that the admin capability matches this release.
-fun authorize(self: &Release, cap: &ReleaseAdminCap) {
-    assert!(self.id() == cap.release_id, EUnauthorized);
+fun calculate_release_digest(
+    recording_ids: vector<ID>,
+    track_split_values: vector<u64>,
+    ctx: &TxContext,
+): vector<u8> {
+    let mut hash_input = vector<u8>[];
+    hash_input.append(to_bytes(&recording_ids));
+    hash_input.append(to_bytes(&track_split_values));
+    hash_input.append(to_bytes(&ctx.epoch()));
+
+    blake2b256(&hash_input)
 }
 
-/// Asserts that the number of track splits matches the number of tracks.
-fun assert_track_splits_bps_length(track_splits_bps: vector<BPS>, track_sequence: &TrackSequence) {
-    assert!(track_splits_bps.length() == track_sequence.length(), EInvalidTrackSplitsLength);
-}
-
-/// Asserts that the track splits sum to 100% (10,000 BPS).
-fun assert_track_splits_bps_sum(track_splits_bps: vector<BPS>) {
-    assert!(
-        track_splits_bps.fold!(0, |acc, split_bps| acc + split_bps.value()) == bps::max_value!(),
-        EInvalidTrackSplitsSum,
-    );
+fun assert_track_assignments(self: &mut Release) {
+    self.discs.do_mut!(|disc| {
+        disc.tracks_mut().do_mut!(|track| { track.assign(&self.id); });
+    });
 }

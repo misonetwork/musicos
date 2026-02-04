@@ -155,3 +155,34 @@ export async function getGenreRegistry(
 
   return node.address;
 }
+
+/**
+ * Extracts the share type from a Recording object.
+ *
+ * Given a Recording<T> object ID, fetches the object and extracts the type parameter T.
+ *
+ * @param client - A Sui gRPC client
+ * @param recordingId - The object ID of the Recording object
+ * @returns The full share type string (e.g., "0x...::share::Share")
+ */
+export async function getRecordingShareType(
+  client: SuiGrpcClient,
+  recordingId: string
+): Promise<string> {
+  const result = await client.getObject({ objectId: recordingId });
+
+  const objectType = result.object?.type;
+  if (!objectType) {
+    throw new Error(`Recording not found: ${recordingId}`);
+  }
+
+  // Type looks like: "0x...::recording::Recording<0x...::share::Share>"
+  // Extract the type parameter between < and >
+  const match = objectType.match(/<(.+)>$/);
+
+  if (!match || !match[1]) {
+    throw new Error(`Could not extract share type from: ${objectType}`);
+  }
+
+  return match[1];
+}

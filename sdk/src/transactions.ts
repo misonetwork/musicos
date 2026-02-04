@@ -970,12 +970,16 @@ export interface TrackInput {
   recordingAdminCapId: string;
   /** The type argument for the recording's share token. */
   recordingShareType: string;
+  /** Optional display title for the track. Defaults to the recording's title. */
+  title?: string;
 }
 
 /** Input for a disc on a release. */
 export interface DiscInput {
   /** Tracks on this disc, in order. */
   tracks: TrackInput[];
+  /** Optional title for the disc (e.g., for multi-disc sets). */
+  title?: string;
 }
 
 /** Type of release. */
@@ -1033,6 +1037,19 @@ export function publishRelease(params: PublishReleaseParams): Transaction {
     const trackResults: ReturnType<typeof tx.moveCall>[] = [];
 
     for (const trackInput of discInput.tracks) {
+      // Create Option<String> for title
+      const titleOption = trackInput.title
+        ? tx.moveCall({
+            target: "0x1::option::some",
+            arguments: [tx.pure.string(trackInput.title)],
+            typeArguments: ["0x1::string::String"],
+          })
+        : tx.moveCall({
+            target: "0x1::option::none",
+            arguments: [],
+            typeArguments: ["0x1::string::String"],
+          });
+
       // Create Option<CoverArt> as none (use recording's cover art)
       const coverArtOption = tx.moveCall({
         target: "0x1::option::none",
@@ -1046,6 +1063,7 @@ export function publishRelease(params: PublishReleaseParams): Transaction {
         arguments: [
           tx.object(trackInput.recordingAdminCapId),
           tx.object(trackInput.recordingId),
+          titleOption,
           coverArtOption,
         ],
         typeArguments: [trackInput.recordingShareType],
@@ -1060,10 +1078,23 @@ export function publishRelease(params: PublishReleaseParams): Transaction {
       elements: trackResults,
     });
 
+    // Create Option<String> for disc title
+    const discTitleOption = discInput.title
+      ? tx.moveCall({
+          target: "0x1::option::some",
+          arguments: [tx.pure.string(discInput.title)],
+          typeArguments: ["0x1::string::String"],
+        })
+      : tx.moveCall({
+          target: "0x1::option::none",
+          arguments: [],
+          typeArguments: ["0x1::string::String"],
+        });
+
     // Create the disc
     const disc = tx.moveCall({
       target: `${musicOsPackageId}::disc::new`,
-      arguments: [trackVec],
+      arguments: [trackVec, discTitleOption],
     });
 
     discResults.push(disc);

@@ -49,23 +49,31 @@ const ENoDiscs: u64 = 50;
 
 /// Creates a new track sequence from a vector of discs.
 /// Builds an ordered list of all track positions for navigation.
-/// Returns the track sequence and total duration in milliseconds (since we're looping through the tracks).
+/// Returns the track sequence along with recording IDs, split values, and split sum for validation.
 /// Aborts if there are no discs or if total tracks exceed 255.
-public(package) fun new(discs: &vector<Disc>): TrackSequence {
+public(package) fun new(discs: &vector<Disc>): (TrackSequence, vector<ID>, vector<u64>, u64) {
     assert!(!discs.is_empty(), ENoDiscs);
 
     let mut tracks_per_disc: vector<u64> = vector[];
     let mut track_positions: vector<TrackPosition> = vector[];
     let mut duration_ms: u64 = 0;
+    let mut recording_ids: vector<ID> = vector[];
+    let mut track_split_values: vector<u64> = vector[];
+    let mut split_sum: u64 = 0;
 
     discs.length().do!(|disc_idx| {
         let disc = &discs[disc_idx];
         let tracks = disc.tracks();
 
         tracks.length().do!(|track_idx| {
+            let track = &tracks[track_idx];
             let track_position = track_position::new(disc_idx, track_idx);
             track_positions.push_back(track_position);
-            duration_ms = duration_ms + tracks[track_idx].duration_ms();
+            duration_ms = duration_ms + track.duration_ms();
+            recording_ids.push_back(track.recording_id());
+            let split_value = track.split_bps().value();
+            track_split_values.push_back(split_value);
+            split_sum = split_sum + split_value;
         });
 
         tracks_per_disc.push_back(tracks.length());
@@ -83,7 +91,7 @@ public(package) fun new(discs: &vector<Disc>): TrackSequence {
         duration_ms,
     };
 
-    track_sequence
+    (track_sequence, recording_ids, track_split_values, split_sum)
 }
 
 //=== Public View Functions ===

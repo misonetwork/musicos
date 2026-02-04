@@ -26,11 +26,11 @@ public fun new(disc_index: u64, track_index: u64): TrackPosition {
 //=== Public View Functions ===
 
 /// Returns the disc index component of this identifier.
-public fun disc_idx(self: TrackPosition): u64 {
+public fun disc_idx(self: &TrackPosition): u64 {
     self.0
 }
 
 /// Returns the track index component of this identifier.
-public fun track_idx(self: TrackPosition): u64 {
+public fun track_idx(self: &TrackPosition): u64 {
     self.1
 }

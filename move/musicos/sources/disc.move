@@ -12,6 +12,7 @@ module musicos::disc;
 
 use musicos::cover_art::CoverArt;
 use musicos::track::Track;
+use std::string::String;
 
 //=== Structs ===
 
@@ -22,6 +23,8 @@ public struct Disc has drop, store {
     tracks: vector<Track>,
     /// Optional disc-specific artwork (e.g., for multi-disc sets with different covers).
     artwork: Option<CoverArt>,
+    /// Title of the disc.
+    title: Option<String>,
     /// Total duration of all tracks in milliseconds.
     duration_ms: u64,
 }
@@ -42,7 +45,7 @@ const EMaxTracksExceeded: u64 = 30;
 /// Creates a new disc from a vector of tracks.
 /// Automatically calculates the total duration.
 /// Aborts if more than 50 tracks are provided.
-public fun new(tracks: vector<Track>): Disc {
+public fun new(tracks: vector<Track>, title: Option<String>): Disc {
     assert!(tracks.length() <= MAX_TRACKS_PER_DISC, EMaxTracksExceeded);
 
     let mut duration_ms = 0;
@@ -53,6 +56,7 @@ public fun new(tracks: vector<Track>): Disc {
     Disc {
         tracks,
         artwork: option::none(),
+        title,
         duration_ms,
     }
 }
@@ -77,4 +81,10 @@ public fun artwork(self: &Disc): &Option<CoverArt> {
 /// Returns the total duration of this disc in milliseconds.
 public fun duration_ms(self: &Disc): u64 {
     self.duration_ms
+}
+
+//=== Package Functions ===
+
+public(package) fun tracks_mut(self: &mut Disc): &mut vector<Track> {
+    &mut self.tracks
 }
