@@ -17,7 +17,6 @@ use interest_bps::bps;
 use musicos::cover_art::CoverArt;
 use musicos::disc::Disc;
 use musicos::track_position::TrackPosition;
-use musicos::track_sequence::{Self, TrackSequence};
 use std::string::String;
 use std::type_name::TypeName;
 use sui::balance::{withdraw_funds_from_object, redeem_funds};
@@ -47,8 +46,6 @@ public struct Release has key {
     subtitle: Option<String>,
     /// Collection of discs containing tracks.
     discs: vector<Disc>,
-    /// Navigation structure for track ordering.
-    track_sequence: TrackSequence,
     /// Cover artwork for the release.
     cover_art: CoverArt,
 }
@@ -167,6 +164,7 @@ public struct ReleaseTrackPaidEvent<phantom C, phantom CS, phantom RecordingShar
 //=== Constants ===
 
 const MAX_DISCS: u64 = 20;
+const MAX_TRACKS: u64 = 255;
 
 //=== Errors ===
 
@@ -187,10 +185,14 @@ const EInvalidTrackSplitsSum: u64 = 20;
 // Constraint errors (30-39)
 /// Too many discs in release.
 const EMaxDiscsReached: u64 = 30;
+/// Too many tracks in release.
+const EMaxTracksReached: u64 = 31;
 
 // Reference errors (50-59)
 /// Revenue pool has no funds to distribute.
 const ENoRevenueToDistribute: u64 = 50;
+/// Release must contain at least one disc.
+const ENoDiscs: u64 = 51;
 
 //=== Init Function ===
 
@@ -205,7 +207,7 @@ fun init(_otw: RELEASE, ctx: &mut TxContext) {
 //=== Public Functions ===
 
 /// Creates a new release with the given configuration.
-/// Returns the release, admin capability, and a promise that must be consumed.
+/// Returns the release and admin capability.
 public fun new(
     kind: ReleaseKind,
     title: String,
@@ -214,13 +216,14 @@ public fun new(
     registry: &mut ReleaseRegistry,
     ctx: &TxContext,
 ): (Release, ReleaseAdminCap) {
+    assert!(!discs.is_empty(), ENoDiscs);
     assert!(discs.length() <= MAX_DISCS, EMaxDiscsReached);
 
-    // Build a track sequence for the release based on the number of discs.
-    // Also returns recording IDs, split values, and split sum for validation.
-    let (track_sequence, recording_ids, track_split_values, split_sum) = track_sequence::new(
-        &discs,
-    );
+    // Extract digest inputs and validate splits
+    let (recording_ids, track_split_values, split_sum) = extract_digest_inputs(&discs);
+
+    // Assert total tracks don't exceed maximum
+    assert!(recording_ids.length() <= MAX_TRACKS, EMaxTracksReached);
 
     // Assert that the track splits sum to 100% (10,000 BPS).
     assert!(split_sum == bps::max_value!(), EInvalidTrackSplitsSum);
@@ -236,7 +239,6 @@ public fun new(
         title,
         subtitle: option::none(),
         discs,
-        track_sequence,
         cover_art,
     };
 
@@ -283,9 +285,6 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
 public fun distribute_revenue<C>(self: &mut Release, value: u64) {
     match (self.state) {
         ReleaseState::Published(_) => {
-            // Acquire a mutable reference to the revenue pool's balance.
-            // This will abort if the provided revenue pool is not the correct one for the release
-            // because revenue_pool.balance_mut() performs an authorization check internally.
             let release_id = self.id();
 
             let withdrawal = withdraw_funds_from_object<C>(&mut self.id, value);
@@ -296,40 +295,34 @@ public fun distribute_revenue<C>(self: &mut Release, value: u64) {
             // Store the distribution's principal value.
             let distribution_value = revenue.value();
 
-            self.track_sequence.length().do!(|i| {
-                // Derive the track identifier for the given track sequence index.
-                let track_position = self.track_sequence.track_positions()[i];
+            // Iterate through all discs and tracks
+            self.discs.do_ref!(|disc| {
+                disc.tracks().do_ref!(|track| {
+                    let track_split_bps = track.split_bps();
 
-                // Fetch the disc and track with the track identifier.
-                let disc = &self.discs[track_position.disc_idx()];
-                let track = &disc.tracks()[track_position.track_idx()];
+                    if (track_split_bps.value() > 0) {
+                        let rec_split_value = track_split_bps.calc(distribution_value);
+                        let mut rec_split_balance = revenue.split(rec_split_value);
 
-                // Fetch the track split rate for the given track sequence index.
-                let track_split_bps = track.split_bps();
+                        // Calculate the composition's revenue share
+                        let comp_split_value = track.composition_split_bps().calc(rec_split_value);
+                        let comp_split_balance = rec_split_balance.split(comp_split_value);
 
-                if (track_split_bps.value() > 0) {
-                    let rec_split_value = track_split_bps.calc(distribution_value);
-                    let mut rec_split_balance = revenue.split(rec_split_value);
+                        let composition_id = track.composition_id();
+                        let recording_id = track.recording_id();
 
-                    // Calculate the composition's revenue share, and split the value from the recording's revenue.
-                    // Use rec_split_value directly since split() guarantees the exact amount requested.
-                    let comp_split_value = track.composition_split_bps().calc(rec_split_value);
-                    let comp_split_balance = rec_split_balance.split(comp_split_value);
+                        emit(ReleaseRevenueDistributedEvent<C> {
+                            release_id,
+                            composition_id,
+                            composition_split_value: comp_split_balance.value(),
+                            recording_id,
+                            recording_split_value: rec_split_balance.value(),
+                        });
 
-                    let composition_id = track.composition_id();
-                    let recording_id = track.recording_id();
-
-                    emit(ReleaseRevenueDistributedEvent<C> {
-                        release_id,
-                        composition_id,
-                        composition_split_value: comp_split_balance.value(),
-                        recording_id,
-                        recording_split_value: rec_split_balance.value(),
-                    });
-
-                    rec_split_balance.send_funds(recording_id.to_address());
-                    comp_split_balance.send_funds(composition_id.to_address());
-                };
+                        rec_split_balance.send_funds(recording_id.to_address());
+                        comp_split_balance.send_funds(composition_id.to_address());
+                    };
+                });
             });
 
             // Transfer dust back to the release.
@@ -376,14 +369,27 @@ public fun discs(self: &Release): &vector<Disc> {
     &self.discs
 }
 
-/// Returns a reference to the track sequence.
-public fun track_sequence(self: &Release): &TrackSequence {
-    &self.track_sequence
-}
-
 /// Returns a reference to the cover art.
 public fun cover_art(self: &Release): &CoverArt {
     &self.cover_art
+}
+
+/// Returns the total number of tracks across all discs.
+public fun total_tracks(self: &Release): u64 {
+    let mut count = 0;
+    self.discs.do_ref!(|disc| {
+        count = count + disc.tracks().length();
+    });
+    count
+}
+
+/// Returns the total duration of all tracks in milliseconds.
+public fun duration_ms(self: &Release): u64 {
+    let mut duration = 0;
+    self.discs.do_ref!(|disc| {
+        duration = duration + disc.duration_ms();
+    });
+    duration
 }
 
 /// Returns the release ID associated with the admin capability.
@@ -406,6 +412,25 @@ public fun uid_mut(self: &mut Release, cap: &ReleaseAdminCap): &mut UID {
 }
 
 //=== Private Functions ===
+
+/// Extracts the recording IDs, split values, and split sum from discs.
+/// Used for release digest calculation and split validation.
+fun extract_digest_inputs(discs: &vector<Disc>): (vector<ID>, vector<u64>, u64) {
+    let mut recording_ids: vector<ID> = vector[];
+    let mut track_split_values: vector<u64> = vector[];
+    let mut split_sum: u64 = 0;
+
+    discs.do_ref!(|disc| {
+        disc.tracks().do_ref!(|track| {
+            recording_ids.push_back(track.recording_id());
+            let split_value = track.split_bps().value();
+            track_split_values.push_back(split_value);
+            split_sum = split_sum + split_value;
+        });
+    });
+
+    (recording_ids, track_split_values, split_sum)
+}
 
 fun calculate_release_digest(
     recording_ids: vector<ID>,
