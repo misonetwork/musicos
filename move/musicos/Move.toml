@@ -1,13 +1,10 @@
 [package]
 name = "musicos"
-edition = "2024.beta"
+edition = "2024"
 license = "Apache 2.0"
-authors = ["Studio Mirai, LLC"]
+authors = ["Unconfirmed Labs, LLC (os@unconfirmed.com)"]
 
 [dependencies]
-interest_bps = { local = "../../../interest-mvr/bps" }
-language_code = { local = "../../../language_code" }
-walrus_data = { local = "../../../walrus_data" }
-
-[environments]
-mirainet = "11235922"
+interest_bps = { r.mvr = "@interest/bps" }
+language_code = { git = "https://github.com/unconfirmedlabs/language_code.git", rev = "main" }
+walrus_data = { git = "https://github.com/unconfirmedlabs/walrus_data.git", rev = "main" }
