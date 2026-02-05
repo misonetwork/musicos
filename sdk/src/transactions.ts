@@ -1530,3 +1530,39 @@ export function publishReleaseFromDeals(params: PublishReleaseFromDealsParams): 
 
   return tx;
 }
+
+// ============================================================================
+// Release Revenue Distribution
+// ============================================================================
+
+/** Parameters for distributing revenue from a release. */
+export interface DistributeReleaseRevenueParams {
+  /** The Release object ID. */
+  releaseId: string;
+  /** The amount to distribute. */
+  value: bigint;
+  /** The coin type to distribute (e.g., "0x2::sui::SUI"). */
+  coinType: string;
+  /** The MusicOS package ID. */
+  musicOsPackageId: string;
+}
+
+/**
+ * Builds a transaction that distributes revenue from a release to composition
+ * and recording royalty pools based on track splits.
+ *
+ * The release must be in the Published state and have funds deposited.
+ */
+export function distributeReleaseRevenue(params: DistributeReleaseRevenueParams): Transaction {
+  const { releaseId, value, coinType, musicOsPackageId } = params;
+
+  const tx = new Transaction();
+
+  tx.moveCall({
+    target: `${musicOsPackageId}::release::distribute_revenue`,
+    arguments: [tx.object(releaseId), tx.pure.u64(value)],
+    typeArguments: [coinType],
+  });
+
+  return tx;
+}

@@ -19,7 +19,7 @@ use musicos::disc::Disc;
 use musicos::track_position::TrackPosition;
 use std::string::String;
 use std::type_name::TypeName;
-use sui::balance::{withdraw_funds_from_object, redeem_funds};
+use sui::balance::Balance;
 use sui::bcs::to_bytes;
 use sui::clock::Clock;
 use sui::derived_object::claim;
@@ -274,17 +274,17 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
     }
 }
 
-/// Distributes revenue from the release's revenue pool to composition and recording royalty pools.
+/// Distributes revenue to the release's composition and recording.
 /// Splits revenue according to track splits.
 /// Each track's revenue is further split between its composition and recording based on their split ratio.
 /// Required State: Published
-public fun distribute_revenue<C>(self: &mut Release, value: u64) {
+public fun distribute_revenue<C>(self: &mut Release, mut revenue: Balance<C>) {
     match (self.state) {
         ReleaseState::Published(_) => {
             let release_id = self.id();
 
-            let withdrawal = withdraw_funds_from_object<C>(&mut self.id, value);
-            let mut revenue = redeem_funds(withdrawal);
+            //let withdrawal = withdraw_funds_from_object<C>(&mut self.id, value);
+            //let mut revenue = redeem_funds(withdrawal);
 
             assert!(revenue.value() > 0, ENoRevenueToDistribute);
 
