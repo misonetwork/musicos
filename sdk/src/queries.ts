@@ -6,6 +6,21 @@ import type { SuiGraphQLClient } from "@mysten/sui/graphql";
 import { graphql } from "@mysten/sui/graphql/schema";
 import type { Release, Recording } from "./types.ts";
 
+// Minimal client interface for Core API operations
+interface SuiClientLike {
+  getObject(params: {
+    objectId: string;
+    include?: { json?: boolean };
+  }): Promise<{
+    object?: {
+      type?: string;
+      json?: Record<string, unknown>;
+    };
+  }>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  getObjects(params: { objectIds: string[]; include?: { json?: boolean } }): Promise<{ objects: any[] }>;
+}
+
 /** Represents a Genre object from MusicOS. */
 export interface Genre {
   /** The object ID of the genre. */
@@ -490,13 +505,32 @@ const MultiObjectQuery = graphql(`
 `);
 
 /**
- * Fetches a release by its object ID.
+ * Fetches a release by its object ID using Core API.
  *
- * @param client - A Sui GraphQL client
+ * @param client - A Sui client with Core API (SuiGrpcClient or similar)
  * @param releaseId - The object ID of the Release
  * @returns The Release object
  */
 export async function getRelease(
+  client: SuiClientLike,
+  releaseId: string
+): Promise<Release> {
+  const result = await client.getObject({ objectId: releaseId, include: { json: true } });
+
+  const json = result.object?.json;
+  if (!json) {
+    throw new Error(`Release not found: ${releaseId}`);
+  }
+
+  const parsed = ReleaseResponseSchema.parse(json);
+  return { id: releaseId, ...parsed } as Release;
+}
+
+/**
+ * @deprecated Use getRelease with Core API client instead.
+ * Fetches a release by its object ID using GraphQL.
+ */
+export async function getReleaseGraphQL(
   client: SuiGraphQLClient,
   releaseId: string
 ): Promise<Release> {
@@ -515,13 +549,32 @@ export async function getRelease(
 }
 
 /**
- * Fetches a recording by its object ID.
+ * Fetches a recording by its object ID using Core API.
  *
- * @param client - A Sui GraphQL client
+ * @param client - A Sui client with Core API (SuiGrpcClient or similar)
  * @param recordingId - The object ID of the Recording
- * @returns The Recording object (raw JSON, needs proper parsing schema)
+ * @returns The Recording object
  */
 export async function getRecording(
+  client: SuiClientLike,
+  recordingId: string
+): Promise<Recording> {
+  const result = await client.getObject({ objectId: recordingId, include: { json: true } });
+
+  const json = result.object?.json;
+  if (!json) {
+    throw new Error(`Recording not found: ${recordingId}`);
+  }
+
+  const parsed = RecordingResponseSchema.parse(json);
+  return { id: recordingId, ...parsed } as Recording;
+}
+
+/**
+ * @deprecated Use getRecording with Core API client instead.
+ * Fetches a recording by its object ID using GraphQL.
+ */
+export async function getRecordingGraphQL(
   client: SuiGraphQLClient,
   recordingId: string
 ): Promise<Recording> {
@@ -540,13 +593,34 @@ export async function getRecording(
 }
 
 /**
- * Fetches a genre by its object ID.
+ * Fetches a genre by its object ID using Core API.
  *
- * @param client - A Sui GraphQL client
+ * @param client - A Sui client with Core API (SuiGrpcClient or similar)
  * @param genreId - The object ID of the Genre
  * @returns The Genre object
  */
 export async function getGenre(
+  client: SuiClientLike,
+  genreId: string
+): Promise<Genre> {
+  const result = await client.getObject({ objectId: genreId, include: { json: true } });
+
+  const json = result.object?.json as { name: string } | undefined;
+  if (!json?.name) {
+    throw new Error(`Genre not found: ${genreId}`);
+  }
+
+  return {
+    id: genreId,
+    name: json.name,
+  };
+}
+
+/**
+ * @deprecated Use getGenre with Core API client instead.
+ * Fetches a genre by its object ID using GraphQL.
+ */
+export async function getGenreGraphQL(
   client: SuiGraphQLClient,
   genreId: string
 ): Promise<Genre> {
@@ -567,13 +641,38 @@ export async function getGenre(
 }
 
 /**
- * Fetches multiple objects by their IDs in a single request.
+ * Fetches multiple objects by their IDs in a single request using Core API.
  *
- * @param client - A Sui GraphQL client
+ * @param client - A Sui client with Core API (SuiGrpcClient or similar)
  * @param objectIds - Array of object IDs to fetch
  * @returns Map of object ID to its JSON contents
  */
 export async function getObjects(
+  client: SuiClientLike,
+  objectIds: string[]
+): Promise<Map<string, unknown>> {
+  if (objectIds.length === 0) {
+    return new Map();
+  }
+
+  const result = await client.getObjects({ objectIds, include: { json: true } });
+
+  const objects = new Map<string, unknown>();
+  for (const obj of result.objects) {
+    const json = obj.object?.json;
+    if (json && obj.objectId) {
+      objects.set(obj.objectId, json);
+    }
+  }
+
+  return objects;
+}
+
+/**
+ * @deprecated Use getObjects with Core API client instead.
+ * Fetches multiple objects by their IDs in a single request using GraphQL.
+ */
+export async function getObjectsGraphQL(
   client: SuiGraphQLClient,
   objectIds: string[]
 ): Promise<Map<string, unknown>> {
@@ -598,17 +697,36 @@ export async function getObjects(
 }
 
 /**
- * Fetches multiple recordings by their IDs in a single request.
+ * Fetches multiple recordings by their IDs in a single request using Core API.
  *
- * @param client - A Sui GraphQL client
+ * @param client - A Sui client with Core API (SuiGrpcClient or similar)
  * @param recordingIds - Array of recording object IDs
  * @returns Map of recording ID to Recording object
  */
 export async function getRecordings(
-  client: SuiGraphQLClient,
+  client: SuiClientLike,
   recordingIds: string[]
 ): Promise<Map<string, Recording>> {
   const objects = await getObjects(client, recordingIds);
+  const recordings = new Map<string, Recording>();
+
+  for (const [id, json] of objects) {
+    const parsed = RecordingResponseSchema.parse(json);
+    recordings.set(id, { id, ...parsed } as Recording);
+  }
+
+  return recordings;
+}
+
+/**
+ * @deprecated Use getRecordings with Core API client instead.
+ * Fetches multiple recordings by their IDs in a single request using GraphQL.
+ */
+export async function getRecordingsGraphQL(
+  client: SuiGraphQLClient,
+  recordingIds: string[]
+): Promise<Map<string, Recording>> {
+  const objects = await getObjectsGraphQL(client, recordingIds);
   const recordings = new Map<string, Recording>();
 
   for (const [id, json] of objects) {
