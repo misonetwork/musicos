@@ -15,7 +15,10 @@ module musicos::release;
 
 use interest_bps::bps;
 use musicos::cover_art::CoverArt;
+use musicos::credit::Credit;
 use musicos::disc::Disc;
+use musicos::party::Party;
+use musicos::release_party_role::ReleasePartyRole;
 use musicos::track_position::TrackPosition;
 use std::string::String;
 use std::type_name::TypeName;
@@ -25,6 +28,7 @@ use sui::clock::Clock;
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::hash::blake2b256;
+use sui::vec_map::{Self, VecMap};
 
 public use fun release_admin_cap_release_id as ReleaseAdminCap.release_id;
 
@@ -46,6 +50,8 @@ public struct Release has key {
     subtitle: Option<String>,
     /// Description of the release.
     description: String,
+    /// Attribution information for the release.
+    credits: VecMap<ID, Credit<ReleasePartyRole>>,
     /// Collection of discs containing tracks.
     discs: vector<Disc>,
     /// Cover artwork for the release.
@@ -106,7 +112,10 @@ public enum ReleaseKind has copy, drop, store {
 /// Lifecycle state of a release.
 public enum ReleaseState has copy, drop, store {
     /// Release is initialized but not yet created.
-    Initialized,
+    Initialized(
+        /// Indicates if the release has a primary credit.
+        bool,
+    ),
     /// Release is published and immutable. Includes publication timestamp.
     Published(
         /// Timestamp (ms) when published.
@@ -151,6 +160,7 @@ public struct ReleaseTrackPaidEvent<phantom C, phantom CS, phantom RecordingShar
 
 //=== Constants ===
 
+const CREDIT_ROLE_COUNT: u64 = 1;
 const MAX_DESCRIPTION_LENGTH: u64 = 500;
 const MAX_DISCS: u64 = 20;
 const MAX_TRACKS: u64 = 255;
@@ -184,6 +194,10 @@ const EMaxDescriptionLengthExceeded: u64 = 32;
 const ENoRevenueToDistribute: u64 = 50;
 /// Release must contain at least one disc.
 const ENoDiscs: u64 = 51;
+/// Release must contain at least one credit.
+const ENoPrimaryCredit: u64 = 52;
+/// Invalid number of roles in credit.
+const EInvalidCreditRoleCount: u64 = 53;
 
 //=== Init Function ===
 
@@ -230,10 +244,11 @@ public fun new(
     let mut release = Release {
         id: release_uid,
         kind,
-        state: ReleaseState::Initialized,
+        state: ReleaseState::Initialized(false),
         title,
         subtitle: option::none(),
         description,
+        credits: vec_map::empty(),
         discs,
         cover_art,
     };
@@ -246,6 +261,34 @@ public fun new(
     (release, release_admin_cap)
 }
 
+public fun add_credit(
+    self: &mut Release,
+    cap: &ReleaseAdminCap,
+    party: &Party,
+    credit: Credit<ReleasePartyRole>,
+) {
+    self.authorize(cap);
+
+    match (&mut self.state) {
+        ReleaseState::Initialized(has_primary_credit) => {
+            // Assert the credit has a single role (releases only support "Primary" or "Featured").
+            assert!(credit.roles().length() == CREDIT_ROLE_COUNT, EInvalidCreditRoleCount);
+
+            // Loop through the credit roles and check if the credit has a primary role.
+            // If yes, set the has_primary_credit flag to true.
+            credit.roles().do_ref!(|role| {
+                if (role.is_primary_role()) {
+                    *has_primary_credit = true;
+                }
+            });
+
+            // Insert the credit into the release credits map.
+            self.credits.insert(party.id(), credit);
+        },
+        _ => abort ENotInitializedState,
+    }
+}
+
 /// Publishes the release, making it immutable.
 /// Track splits must be set and sum to 100% before publishing.
 /// Required State: Initialized
@@ -253,7 +296,9 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
     self.authorize(cap);
 
     match (self.state) {
-        ReleaseState::Initialized => {
+        ReleaseState::Initialized(has_primary_credit) => {
+            // Assert that the release has a primary credit.
+            assert!(has_primary_credit, ENoPrimaryCredit);
             // Assert that the tracks are assigned to the release.
             self.assert_track_assignments();
 
@@ -378,6 +423,11 @@ public fun subtitle(self: &Release): &Option<String> {
 /// Returns the release description.
 public fun description(self: &Release): &String {
     &self.description
+}
+
+/// Returns a reference to the release credits.
+public fun credits(self: &Release): &VecMap<ID, Credit<ReleasePartyRole>> {
+    &self.credits
 }
 
 /// Returns a reference to all discs.
