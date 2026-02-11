@@ -4,11 +4,6 @@ packages/*/build/*
 .coverage*
 .DS_Store
 
-# SDK
-node_modules/
-dist/
-*.lock
-
 .claude
 .cursor
 

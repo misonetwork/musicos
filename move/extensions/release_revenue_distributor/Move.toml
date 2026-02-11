@@ -5,4 +5,5 @@ license = "Apache 2.0"
 authors = ["Studio Mirai, LLC (build@sm.xyz)"]
 
 [dependencies]
+hikida = { git = "https://github.com/unconfirmedlabs/hikida.git", rev = "main" }
 musicos = { local = "../../musicos" }
