@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Studio Mirai, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// This module is deprecated and kept only for backwards compatibility.

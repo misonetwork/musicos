@@ -1,25 +1,12 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Studio Mirai, LLC
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiGrpcClient } from "@mysten/sui/grpc";
+import type { ClientWithCoreApi } from "@mysten/sui/client";
 import type { SuiGraphQLClient } from "@mysten/sui/graphql";
 import { graphql } from "@mysten/sui/graphql/schema";
 import type { Release, Recording } from "./types.ts";
 
-// Minimal client interface for Core API operations
-interface SuiClientLike {
-  getObject(params: {
-    objectId: string;
-    include?: { json?: boolean };
-  }): Promise<{
-    object?: {
-      type?: string;
-      json?: Record<string, unknown>;
-    };
-  }>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  getObjects(params: { objectIds: string[]; include?: { json?: boolean } }): Promise<{ objects: any[] }>;
-}
+type CoreClient = ClientWithCoreApi;
 
 /** Represents a Genre object from MusicOS. */
 export interface Genre {
@@ -81,7 +68,7 @@ export async function getGenres(
  *
  * Given a Currency<T> object ID, fetches the object and extracts the type parameter T.
  *
- * @param client - A Sui gRPC client
+ * @param client - A Sui client with Core API
  * @param shareCurrencyId - The object ID of the Currency object
  * @returns The full share type string (e.g., "0x...::share::SHARE")
  *
@@ -92,10 +79,10 @@ export async function getGenres(
  * ```
  */
 export async function getShareCurrencyType(
-  client: SuiGrpcClient,
+  client: CoreClient,
   shareCurrencyId: string
 ): Promise<string> {
-  const result = await client.getObject({ objectId: shareCurrencyId });
+  const result = await client.core.getObject({ objectId: shareCurrencyId });
 
   const objectType = result.object.type;
 
@@ -113,18 +100,18 @@ export async function getShareCurrencyType(
 /**
  * Finds the TreasuryCap for a share currency owned by a specific address.
  *
- * @param client - A Sui gRPC client
+ * @param client - A Sui client with Core API
  * @param shareCurrencyId - The object ID of the Currency object
  * @param owner - The address that should own the TreasuryCap
  * @returns The object ID of the TreasuryCap
  */
 export async function getShareCurrencyTreasuryCap(
-  client: SuiGrpcClient,
+  client: CoreClient,
   shareCurrencyId: string,
   owner: string
 ): Promise<string> {
   const shareCurrencyType = await getShareCurrencyType(client, shareCurrencyId);
-  const result = await client.listOwnedObjects({
+  const result = await client.core.listOwnedObjects({
     owner,
     type: `0x2::coin::TreasuryCap<${shareCurrencyType}>`,
   });
@@ -177,15 +164,15 @@ export async function getGenreRegistry(
  *
  * Given a Recording<T> object ID, fetches the object and extracts the type parameter T.
  *
- * @param client - A Sui gRPC client
+ * @param client - A Sui client with Core API
  * @param recordingId - The object ID of the Recording object
  * @returns The full share type string (e.g., "0x...::share::Share")
  */
 export async function getRecordingShareType(
-  client: SuiGrpcClient,
+  client: CoreClient,
   recordingId: string
 ): Promise<string> {
-  const result = await client.getObject({ objectId: recordingId });
+  const result = await client.core.getObject({ objectId: recordingId });
 
   const objectType = result.object?.type;
   if (!objectType) {
@@ -507,15 +494,15 @@ const MultiObjectQuery = graphql(`
 /**
  * Fetches a release by its object ID using Core API.
  *
- * @param client - A Sui client with Core API (SuiGrpcClient or similar)
+ * @param client - A Sui client with Core API
  * @param releaseId - The object ID of the Release
  * @returns The Release object
  */
 export async function getRelease(
-  client: SuiClientLike,
+  client: CoreClient,
   releaseId: string
 ): Promise<Release> {
-  const result = await client.getObject({ objectId: releaseId, include: { json: true } });
+  const result = await client.core.getObject({ objectId: releaseId, include: { json: true } });
 
   const json = result.object?.json;
   if (!json) {
@@ -551,15 +538,15 @@ export async function getReleaseGraphQL(
 /**
  * Fetches a recording by its object ID using Core API.
  *
- * @param client - A Sui client with Core API (SuiGrpcClient or similar)
+ * @param client - A Sui client with Core API
  * @param recordingId - The object ID of the Recording
  * @returns The Recording object
  */
 export async function getRecording(
-  client: SuiClientLike,
+  client: CoreClient,
   recordingId: string
 ): Promise<Recording> {
-  const result = await client.getObject({ objectId: recordingId, include: { json: true } });
+  const result = await client.core.getObject({ objectId: recordingId, include: { json: true } });
 
   const json = result.object?.json;
   if (!json) {
@@ -595,15 +582,15 @@ export async function getRecordingGraphQL(
 /**
  * Fetches a genre by its object ID using Core API.
  *
- * @param client - A Sui client with Core API (SuiGrpcClient or similar)
+ * @param client - A Sui client with Core API
  * @param genreId - The object ID of the Genre
  * @returns The Genre object
  */
 export async function getGenre(
-  client: SuiClientLike,
+  client: CoreClient,
   genreId: string
 ): Promise<Genre> {
-  const result = await client.getObject({ objectId: genreId, include: { json: true } });
+  const result = await client.core.getObject({ objectId: genreId, include: { json: true } });
 
   const json = result.object?.json as { name: string } | undefined;
   if (!json?.name) {
@@ -643,25 +630,27 @@ export async function getGenreGraphQL(
 /**
  * Fetches multiple objects by their IDs in a single request using Core API.
  *
- * @param client - A Sui client with Core API (SuiGrpcClient or similar)
+ * @param client - A Sui client with Core API
  * @param objectIds - Array of object IDs to fetch
  * @returns Map of object ID to its JSON contents
  */
 export async function getObjects(
-  client: SuiClientLike,
+  client: CoreClient,
   objectIds: string[]
 ): Promise<Map<string, unknown>> {
   if (objectIds.length === 0) {
     return new Map();
   }
 
-  const result = await client.getObjects({ objectIds, include: { json: true } });
+  const result = await client.core.getObjects({ objectIds, include: { json: true } });
 
   const objects = new Map<string, unknown>();
   for (const obj of result.objects) {
-    const json = obj.object?.json;
-    if (json && obj.objectId) {
-      objects.set(obj.objectId, json);
+    if (obj instanceof Error) {
+      continue;
+    }
+    if (obj.json) {
+      objects.set(obj.objectId, obj.json);
     }
   }
 
@@ -699,12 +688,12 @@ export async function getObjectsGraphQL(
 /**
  * Fetches multiple recordings by their IDs in a single request using Core API.
  *
- * @param client - A Sui client with Core API (SuiGrpcClient or similar)
+ * @param client - A Sui client with Core API
  * @param recordingIds - Array of recording object IDs
  * @returns Map of recording ID to Recording object
  */
 export async function getRecordings(
-  client: SuiClientLike,
+  client: CoreClient,
   recordingIds: string[]
 ): Promise<Map<string, Recording>> {
   const objects = await getObjects(client, recordingIds);

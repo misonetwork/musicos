@@ -1,8 +1,8 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Studio Mirai, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from "@mysten/sui/bcs";
-import type { SuiGrpcClient } from "@mysten/sui/grpc";
+import type { ClientWithCoreApi } from "@mysten/sui/client";
 import { Transaction } from "@mysten/sui/transactions";
 import { getShareCurrencyType, getShareCurrencyTreasuryCap } from "./queries.ts";
 import type {
@@ -55,43 +55,47 @@ export interface CreatePartyParams {
  *
  * @returns Transaction that, when executed, returns a PartyAdminCap to the sender.
  */
-export function createParty(params: CreatePartyParams): Transaction {
-  const { kind, name, memberIds, adminAddress, musicOsPackageId } = params;
+export function createPartyCall(params: CreatePartyParams) {
+  return (tx: Transaction) => {
+    const { kind, name, memberIds, adminAddress, musicOsPackageId } = params;
 
-  const tx = new Transaction();
+    // Create the PartyKind
+    const partyKind = tx.moveCall({
+      target: `${musicOsPackageId}::party::new_${kind.toLowerCase()}_kind`,
+      arguments: [],
+    });
 
-  // Create the PartyKind
-  const partyKind = tx.moveCall({
-    target: `${musicOsPackageId}::party::new_${kind.toLowerCase()}_kind`,
-    arguments: [],
-  });
+    // Create the party - returns (Party, PartyAdminCap)
+    const partyResult = tx.moveCall({
+      target: `${musicOsPackageId}::party::new`,
+      arguments: [partyKind, tx.pure.string(name)],
+    });
+    const party = partyResult[0]!;
+    const partyAdminCap = partyResult[1]!;
 
-  // Create the party - returns (Party, PartyAdminCap)
-  const partyResult = tx.moveCall({
-    target: `${musicOsPackageId}::party::new`,
-    arguments: [partyKind, tx.pure.string(name)],
-  });
-  const party = partyResult[0]!;
-  const partyAdminCap = partyResult[1]!;
-
-  // For groups, add member parties
-  if (kind === "Group" && memberIds && memberIds.length > 0) {
-    for (const memberId of memberIds) {
-      tx.moveCall({
-        target: `${musicOsPackageId}::party::add_party`,
-        arguments: [party, partyAdminCap, tx.object(memberId)],
-      });
+    // For groups, add member parties
+    if (kind === "Group" && memberIds && memberIds.length > 0) {
+      for (const memberId of memberIds) {
+        tx.moveCall({
+          target: `${musicOsPackageId}::party::add_party`,
+          arguments: [party, partyAdminCap, tx.object(memberId)],
+        });
+      }
     }
-  }
 
-  // Share the party
-  tx.moveCall({
-    target: `${musicOsPackageId}::party::share`,
-    arguments: [party, partyAdminCap],
-  });
+    // Share the party
+    tx.moveCall({
+      target: `${musicOsPackageId}::party::share`,
+      arguments: [party, partyAdminCap],
+    });
 
-  tx.transferObjects([partyAdminCap], tx.pure.address(adminAddress));
+    tx.transferObjects([partyAdminCap], tx.pure.address(adminAddress));
+  };
+}
 
+export function createParty(params: CreatePartyParams): Transaction {
+  const tx = new Transaction();
+  tx.add(createPartyCall(params));
   return tx;
 }
 
@@ -117,16 +121,20 @@ export interface CreateGenreParams {
  *
  * @returns Transaction that, when executed, creates and shares a new Genre.
  */
+export function createGenreCall(params: CreateGenreParams) {
+  return (tx: Transaction) => {
+    const { name, genreRegistryId, musicOsPackageId } = params;
+
+    tx.moveCall({
+      target: `${musicOsPackageId}::genre::new`,
+      arguments: [tx.pure.string(name), tx.object(genreRegistryId)],
+    });
+  };
+}
+
 export function createGenre(params: CreateGenreParams): Transaction {
-  const { name, genreRegistryId, musicOsPackageId } = params;
-
   const tx = new Transaction();
-
-  tx.moveCall({
-    target: `${musicOsPackageId}::genre::new`,
-    arguments: [tx.pure.string(name), tx.object(genreRegistryId)],
-  });
-
+  tx.add(createGenreCall(params));
   return tx;
 }
 
@@ -145,15 +153,19 @@ const SHARE_BYTECODE = { "modules": ["oRzrCwYAAAAKAQAMAgwgAywWBEIEBUY7B4EBuwEIvA
  *
  * @returns Transaction that, when executed, creates a new Share package.
  */
+export function publishShareCurrencyCall() {
+  return (tx: Transaction) => {
+    const upgradeCap = tx.publish(SHARE_BYTECODE);
+    tx.moveCall({
+      target: "0x2::package::make_immutable",
+      arguments: [upgradeCap],
+    });
+  };
+}
+
 export function publishShareCurrency(): Transaction {
   const tx = new Transaction();
-
-  const upgradeCap = tx.publish(SHARE_BYTECODE);
-  tx.moveCall({
-    target: "0x2::package::make_immutable",
-    arguments: [upgradeCap],
-  });
-
+  tx.add(publishShareCurrencyCall());
   return tx;
 }
 
@@ -173,18 +185,22 @@ export interface InitializeShareCurrencyParams {
  *
  * @returns Transaction that, when executed, initializes the share currency.
  */
+export function initializeShareCurrencyCall(params: InitializeShareCurrencyParams) {
+  return (tx: Transaction) => {
+    const { shareCurrencyPackageId, treasuryCapRecipient } = params;
+
+    const treasuryCap = tx.moveCall({
+      target: `${shareCurrencyPackageId}::share::initialize`,
+      arguments: [tx.object("0xc")],
+    });
+
+    tx.transferObjects([treasuryCap], treasuryCapRecipient);
+  };
+}
+
 export function initializeShareCurrency(params: InitializeShareCurrencyParams): Transaction {
-  const { shareCurrencyPackageId, treasuryCapRecipient } = params;
-
   const tx = new Transaction();
-
-  const treasuryCap = tx.moveCall({
-    target: `${shareCurrencyPackageId}::share::initialize`,
-    arguments: [tx.object("0xc")],
-  });
-
-  tx.transferObjects([treasuryCap], treasuryCapRecipient);
-
+  tx.add(initializeShareCurrencyCall(params));
   return tx;
 }
 
@@ -212,8 +228,8 @@ export interface ShareRecipient {
 
 /** Parameters for publishing a composition. */
 export interface PublishCompositionParams {
-  /** Sui gRPC client for querying share currency data. */
-  client: SuiGrpcClient;
+  /** Sui client with Core API for querying share currency data. */
+  client: ClientWithCoreApi;
   /** The Currency object ID for the share. */
   shareCurrencyId: string;
   /** The address that owns the TreasuryCap. */
@@ -251,153 +267,157 @@ export interface PublishCompositionParams {
  * 5. Publishes the composition
  * 6. Transfers the CompositionAdminCap to the admin address
  */
-export async function publishComposition(params: PublishCompositionParams): Promise<Transaction> {
-  const {
-    client,
-    shareCurrencyId,
-    treasuryCapOwner,
-    title,
-    splitBps,
-    shareRecipients,
-    adminAddress,
-    alternateTitles,
-    credits,
-    lyrics,
-    demo,
-    walrusDataPackageId,
-    musicOsPackageId,
-  } = params;
+export function publishCompositionCall(params: PublishCompositionParams) {
+  return async (tx: Transaction) => {
+    const {
+      client,
+      shareCurrencyId,
+      treasuryCapOwner,
+      title,
+      splitBps,
+      shareRecipients,
+      adminAddress,
+      alternateTitles,
+      credits,
+      lyrics,
+      demo,
+      walrusDataPackageId,
+      musicOsPackageId,
+    } = params;
 
-  // Query share currency data
-  const shareType = await getShareCurrencyType(client, shareCurrencyId);
-  const treasuryCapId = await getShareCurrencyTreasuryCap(client, shareCurrencyId, treasuryCapOwner);
+    // Query share currency data
+    const shareType = await getShareCurrencyType(client, shareCurrencyId);
+    const treasuryCapId = await getShareCurrencyTreasuryCap(client, shareCurrencyId, treasuryCapOwner);
 
-  const tx = new Transaction();
+    // Create the composition - returns (Composition, CompositionAdminCap, Balance<Share>)
+    const compositionResult = tx.moveCall({
+      target: `${musicOsPackageId}::composition::new`,
+      arguments: [
+        tx.pure.string(title),
+        tx.pure.u64(splitBps),
+        tx.object(shareCurrencyId),
+        tx.object(treasuryCapId),
+      ],
+      typeArguments: [shareType],
+    });
 
-  // Create the composition - returns (Composition, CompositionAdminCap, Balance<Share>)
-  const compositionResult = tx.moveCall({
-    target: `${musicOsPackageId}::composition::new`,
-    arguments: [
-      tx.pure.string(title),
-      tx.pure.u64(splitBps),
-      tx.object(shareCurrencyId),
-      tx.object(treasuryCapId),
-    ],
-    typeArguments: [shareType],
-  });
+    const composition = compositionResult[0]!;
+    const compositionAdminCap = compositionResult[1]!;
+    const shareBalance = compositionResult[2]!;
 
-  const composition = compositionResult[0]!;
-  const compositionAdminCap = compositionResult[1]!;
-  const shareBalance = compositionResult[2]!;
+    // Add alternate titles
+    if (alternateTitles && alternateTitles.length > 0) {
+      for (const altTitle of alternateTitles) {
+        tx.moveCall({
+          target: `${musicOsPackageId}::composition::add_alternate_title`,
+          arguments: [composition, compositionAdminCap, tx.pure.string(altTitle)],
+          typeArguments: [shareType],
+        });
+      }
+    }
 
-  // Add alternate titles
-  if (alternateTitles && alternateTitles.length > 0) {
-    for (const altTitle of alternateTitles) {
+    // Add credits
+    for (const creditInput of credits) {
+      const roleResults = creditInput.roles.map((roleType) => {
+        const roleFnName = compositionRoleToFunctionName(roleType);
+        return tx.moveCall({
+          target: `${musicOsPackageId}::composition_party_role::${roleFnName}`,
+          arguments: [],
+        });
+      });
+
+      const credit = tx.moveCall({
+        target: `${musicOsPackageId}::credit::new`,
+        arguments: [
+          tx.pure.string(creditInput.displayName),
+          tx.makeMoveVec({
+            type: `${musicOsPackageId}::composition_party_role::CompositionPartyRole`,
+            elements: roleResults,
+          }),
+        ],
+        typeArguments: [`${musicOsPackageId}::composition_party_role::CompositionPartyRole`],
+      });
+
       tx.moveCall({
-        target: `${musicOsPackageId}::composition::add_alternate_title`,
-        arguments: [composition, compositionAdminCap, tx.pure.string(altTitle)],
+        target: `${musicOsPackageId}::composition::add_credit`,
+        arguments: [composition, compositionAdminCap, tx.object(creditInput.partyId), credit],
         typeArguments: [shareType],
       });
     }
-  }
 
-  // Add credits
-  for (const creditInput of credits) {
-    const roleResults = creditInput.roles.map((roleType) => {
-      const roleFnName = compositionRoleToFunctionName(roleType);
-      return tx.moveCall({
-        target: `${musicOsPackageId}::composition_party_role::${roleFnName}`,
-        arguments: [],
+    // Set lyrics WalrusData
+    if (lyrics) {
+      const lyricsData = lyrics.quiltId
+        ? tx.moveCall({
+            target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+            arguments: [tx.pure.u256(lyrics.quiltId), tx.pure.u256(lyrics.blobId)],
+          })
+        : tx.moveCall({
+            target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+            arguments: [tx.pure.u256(lyrics.blobId)],
+          });
+
+      tx.moveCall({
+        target: `${musicOsPackageId}::composition::set_lyrics`,
+        arguments: [composition, compositionAdminCap, lyricsData],
+        typeArguments: [shareType],
       });
-    });
-
-    const credit = tx.moveCall({
-      target: `${musicOsPackageId}::credit::new`,
-      arguments: [
-        tx.pure.string(creditInput.displayName),
-        tx.makeMoveVec({
-          type: `${musicOsPackageId}::composition_party_role::CompositionPartyRole`,
-          elements: roleResults,
-        }),
-      ],
-      typeArguments: [`${musicOsPackageId}::composition_party_role::CompositionPartyRole`],
-    });
-
-    tx.moveCall({
-      target: `${musicOsPackageId}::composition::add_credit`,
-      arguments: [composition, compositionAdminCap, tx.object(creditInput.partyId), credit],
-      typeArguments: [shareType],
-    });
-  }
-
-  // Set lyrics WalrusData
-  if (lyrics) {
-    const lyricsData = lyrics.quiltId
-      ? tx.moveCall({
-          target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
-          arguments: [tx.pure.u256(lyrics.quiltId), tx.pure.u256(lyrics.blobId)],
-        })
-      : tx.moveCall({
-          target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
-          arguments: [tx.pure.u256(lyrics.blobId)],
-        });
-
-    tx.moveCall({
-      target: `${musicOsPackageId}::composition::set_lyrics`,
-      arguments: [composition, compositionAdminCap, lyricsData],
-      typeArguments: [shareType],
-    });
-  }
-
-  // Set demo WalrusData
-  if (demo) {
-    const demoData = demo.quiltId
-      ? tx.moveCall({
-          target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
-          arguments: [tx.pure.u256(demo.quiltId), tx.pure.u256(demo.blobId)],
-        })
-      : tx.moveCall({
-          target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
-          arguments: [tx.pure.u256(demo.blobId)],
-        });
-
-    tx.moveCall({
-      target: `${musicOsPackageId}::composition::set_demo`,
-      arguments: [composition, compositionAdminCap, demoData],
-      typeArguments: [shareType],
-    });
-  }
-
-  // Convert balance to coin for distribution
-  const shareCoin = tx.moveCall({
-    target: "0x2::coin::from_balance",
-    arguments: [shareBalance],
-    typeArguments: [shareType],
-  });
-
-  // Distribute shares to recipients
-  if (shareRecipients.length === 1) {
-    tx.transferObjects([shareCoin], shareRecipients[0]!.address);
-  } else if (shareRecipients.length > 1) {
-    const splitAmounts = shareRecipients.slice(0, -1).map((r) => tx.pure.u64(r.value));
-    const splitCoins = tx.splitCoins(shareCoin, splitAmounts);
-
-    for (let i = 0; i < shareRecipients.length - 1; i++) {
-      tx.transferObjects([splitCoins[i]!], shareRecipients[i]!.address);
     }
-    tx.transferObjects([shareCoin], shareRecipients[shareRecipients.length - 1]!.address);
-  }
 
-  // Publish the composition
-  tx.moveCall({
-    target: `${musicOsPackageId}::composition::publish`,
-    arguments: [composition, compositionAdminCap, tx.object(SUI_CLOCK_OBJECT_ID)],
-    typeArguments: [shareType],
-  });
+    // Set demo WalrusData
+    if (demo) {
+      const demoData = demo.quiltId
+        ? tx.moveCall({
+            target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+            arguments: [tx.pure.u256(demo.quiltId), tx.pure.u256(demo.blobId)],
+          })
+        : tx.moveCall({
+            target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+            arguments: [tx.pure.u256(demo.blobId)],
+          });
 
-  // Transfer admin cap to the specified address
-  tx.transferObjects([compositionAdminCap], adminAddress);
+      tx.moveCall({
+        target: `${musicOsPackageId}::composition::set_demo`,
+        arguments: [composition, compositionAdminCap, demoData],
+        typeArguments: [shareType],
+      });
+    }
 
+    // Convert balance to coin for distribution
+    const shareCoin = tx.moveCall({
+      target: "0x2::coin::from_balance",
+      arguments: [shareBalance],
+      typeArguments: [shareType],
+    });
+
+    // Distribute shares to recipients
+    if (shareRecipients.length === 1) {
+      tx.transferObjects([shareCoin], shareRecipients[0]!.address);
+    } else if (shareRecipients.length > 1) {
+      const splitAmounts = shareRecipients.slice(0, -1).map((r) => tx.pure.u64(r.value));
+      const splitCoins = tx.splitCoins(shareCoin, splitAmounts);
+
+      for (let i = 0; i < shareRecipients.length - 1; i++) {
+        tx.transferObjects([splitCoins[i]!], shareRecipients[i]!.address);
+      }
+      tx.transferObjects([shareCoin], shareRecipients[shareRecipients.length - 1]!.address);
+    }
+
+    // Publish the composition
+    tx.moveCall({
+      target: `${musicOsPackageId}::composition::publish`,
+      arguments: [composition, compositionAdminCap, tx.object(SUI_CLOCK_OBJECT_ID)],
+      typeArguments: [shareType],
+    });
+
+    // Transfer admin cap to the specified address
+    tx.transferObjects([compositionAdminCap], adminAddress);
+  };
+}
+
+export async function publishComposition(params: PublishCompositionParams): Promise<Transaction> {
+  const tx = new Transaction();
+  tx.add(publishCompositionCall(params));
   return tx;
 }
 
@@ -474,8 +494,8 @@ export interface RecordingCreditInput {
 
 /** Parameters for publishing a recording. */
 export interface PublishRecordingParams {
-  /** Sui gRPC client for querying share currency data. */
-  client: SuiGrpcClient;
+  /** Sui client with Core API for querying share currency data. */
+  client: ClientWithCoreApi;
   /** The Composition object ID that this recording is based on. */
   compositionId: string;
   /** The type argument for the composition's share token. */
@@ -534,314 +554,318 @@ export interface PublishRecordingParams {
  * 6. Distributes shares to recipients
  * 7. Transfers the RecordingAdminCap to the admin address
  */
-export async function publishRecording(params: PublishRecordingParams): Promise<Transaction> {
-  const {
-    client,
-    compositionId,
-    compositionShareType,
-    shareCurrencyId,
-    treasuryCapOwner,
-    primaryGenreId,
-    isExplicit,
-    isInstrumental,
-    master,
-    coverArt,
-    shareRecipients,
-    adminAddress,
-    credits,
-    titleVersion,
-    subtitle,
-    language,
-    secondaryGenreIds,
-    musicalKey,
-    timeSignature,
-    tempoBpm,
-    stems,
-    musicOsPackageId,
-    walrusDataPackageId,
-  } = params;
+export function publishRecordingCall(params: PublishRecordingParams) {
+  return async (tx: Transaction) => {
+    const {
+      client,
+      compositionId,
+      compositionShareType,
+      shareCurrencyId,
+      treasuryCapOwner,
+      primaryGenreId,
+      isExplicit,
+      isInstrumental,
+      master,
+      coverArt,
+      shareRecipients,
+      adminAddress,
+      credits,
+      titleVersion,
+      subtitle,
+      language,
+      secondaryGenreIds,
+      musicalKey,
+      timeSignature,
+      tempoBpm,
+      stems,
+      musicOsPackageId,
+      walrusDataPackageId,
+    } = params;
 
-  // Query share currency data
-  const shareType = await getShareCurrencyType(client, shareCurrencyId);
-  const treasuryCapId = await getShareCurrencyTreasuryCap(client, shareCurrencyId, treasuryCapOwner);
+    // Query share currency data
+    const shareType = await getShareCurrencyType(client, shareCurrencyId);
+    const treasuryCapId = await getShareCurrencyTreasuryCap(client, shareCurrencyId, treasuryCapOwner);
 
-  const tx = new Transaction();
-
-  // Helper to create WalrusData with or without quilt
-  const createWalrusData = (blobId: string, quiltId?: string) => {
-    if (quiltId) {
+    // Helper to create WalrusData with or without quilt
+    const createWalrusData = (blobId: string, quiltId?: string) => {
+      if (quiltId) {
+        return tx.moveCall({
+          target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+          arguments: [tx.pure.u256(BigInt(quiltId)), tx.pure.u256(BigInt(blobId))],
+        });
+      }
       return tx.moveCall({
-        target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
-        arguments: [tx.pure.u256(BigInt(quiltId)), tx.pure.u256(BigInt(blobId))],
+        target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+        arguments: [tx.pure.u256(BigInt(blobId))],
+      });
+    };
+
+    // Build the Audio struct
+    const walrusData = createWalrusData(master.blobId, master.quiltId);
+
+    const audio = tx.moveCall({
+      target: `${musicOsPackageId}::audio::new`,
+      arguments: [
+        tx.pure.u8(master.channels),
+        tx.pure.u8(master.bitDepth),
+        tx.pure.u32(master.sampleRateHz),
+        tx.pure.u64(master.samples),
+        walrusData,
+        tx.pure(bcs.vector(bcs.u8()).serialize(Array.from(master.pcmDigest)).toBytes()),
+      ],
+    });
+
+    // Build the CoverArt struct
+    const staticWalrusData = createWalrusData(coverArt.staticBlobId, coverArt.staticQuiltId);
+
+    let animatedOption;
+    if (coverArt.animatedBlobId) {
+      const animatedWalrusData = createWalrusData(coverArt.animatedBlobId, coverArt.animatedQuiltId);
+      animatedOption = tx.moveCall({
+        target: "0x1::option::some",
+        arguments: [animatedWalrusData],
+        typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+      });
+    } else {
+      animatedOption = tx.moveCall({
+        target: "0x1::option::none",
+        arguments: [],
+        typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
       });
     }
-    return tx.moveCall({
-      target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
-      arguments: [tx.pure.u256(BigInt(blobId))],
+
+    const recordingCoverArt = tx.moveCall({
+      target: `${musicOsPackageId}::cover_art::new`,
+      arguments: [staticWalrusData, animatedOption],
     });
-  };
 
-  // Build the Audio struct
-  const walrusData = createWalrusData(master.blobId, master.quiltId);
-
-  const audio = tx.moveCall({
-    target: `${musicOsPackageId}::audio::new`,
-    arguments: [
-      tx.pure.u8(master.channels),
-      tx.pure.u8(master.bitDepth),
-      tx.pure.u32(master.sampleRateHz),
-      tx.pure.u64(master.samples),
-      walrusData,
-      tx.pure(bcs.vector(bcs.u8()).serialize(Array.from(master.pcmDigest)).toBytes()),
-    ],
-  });
-
-  // Build the CoverArt struct
-  const staticWalrusData = createWalrusData(coverArt.staticBlobId, coverArt.staticQuiltId);
-
-  let animatedOption;
-  if (coverArt.animatedBlobId) {
-    const animatedWalrusData = createWalrusData(coverArt.animatedBlobId, coverArt.animatedQuiltId);
-    animatedOption = tx.moveCall({
-      target: "0x1::option::some",
-      arguments: [animatedWalrusData],
-      typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
-    });
-  } else {
-    animatedOption = tx.moveCall({
-      target: "0x1::option::none",
-      arguments: [],
-      typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
-    });
-  }
-
-  const recordingCoverArt = tx.moveCall({
-    target: `${musicOsPackageId}::cover_art::new`,
-    arguments: [staticWalrusData, animatedOption],
-  });
-
-  // Create the recording - returns (Recording, RecordingAdminCap, Balance<Share>)
-  const recordingResult = tx.moveCall({
-    target: `${musicOsPackageId}::recording::new`,
-    arguments: [
-      tx.object(compositionId),
-      tx.object(primaryGenreId),
-      tx.pure.bool(isExplicit),
-      tx.pure.bool(isInstrumental),
-      audio,
-      recordingCoverArt,
-      tx.object(shareCurrencyId),
-      tx.object(treasuryCapId),
-    ],
-    typeArguments: [shareType, compositionShareType],
-  });
-
-  const recording = recordingResult[0]!;
-  const recordingAdminCap = recordingResult[1]!;
-  const shareBalance = recordingResult[2]!;
-
-  // Set title version
-  if (titleVersion !== undefined) {
-    tx.moveCall({
-      target: `${musicOsPackageId}::recording::set_title_version`,
-      arguments: [recording, recordingAdminCap, tx.pure.string(titleVersion)],
-      typeArguments: [shareType],
-    });
-  }
-
-  // Set subtitle
-  if (subtitle !== undefined) {
-    tx.moveCall({
-      target: `${musicOsPackageId}::recording::set_subtitle`,
-      arguments: [recording, recordingAdminCap, tx.pure.string(subtitle)],
-      typeArguments: [shareType],
-    });
-  }
-
-  // Set language
-  if (language !== undefined) {
-    tx.moveCall({
-      target: `${musicOsPackageId}::recording::set_language`,
-      arguments: [recording, recordingAdminCap, tx.pure.string(language)],
-      typeArguments: [shareType],
-    });
-  }
-
-  // Add credits and track which parties need artist designation
-  const primaryArtistPartyIds: string[] = [];
-  const featuredArtistPartyIds: string[] = [];
-
-  for (const creditInput of credits) {
-    // Build the roles vector
-    const roleResults = creditInput.roles.map((role) =>
-      buildRecordingRole(tx, musicOsPackageId, role)
-    );
-
-    // Create the Credit struct
-    const credit = tx.moveCall({
-      target: `${musicOsPackageId}::credit::new`,
+    // Create the recording - returns (Recording, RecordingAdminCap, Balance<Share>)
+    const recordingResult = tx.moveCall({
+      target: `${musicOsPackageId}::recording::new`,
       arguments: [
-        tx.pure.string(creditInput.displayName),
-        tx.makeMoveVec({
-          type: `${musicOsPackageId}::recording_party_role::RecordingPartyRole`,
-          elements: roleResults,
-        }),
+        tx.object(compositionId),
+        tx.object(primaryGenreId),
+        tx.pure.bool(isExplicit),
+        tx.pure.bool(isInstrumental),
+        audio,
+        recordingCoverArt,
+        tx.object(shareCurrencyId),
+        tx.object(treasuryCapId),
       ],
-      typeArguments: [`${musicOsPackageId}::recording_party_role::RecordingPartyRole`],
+      typeArguments: [shareType, compositionShareType],
     });
 
-    // Add the credit to the recording
-    tx.moveCall({
-      target: `${musicOsPackageId}::recording::add_credit`,
-      arguments: [recording, recordingAdminCap, tx.object(creditInput.partyId), credit],
-      typeArguments: [shareType],
-    });
+    const recording = recordingResult[0]!;
+    const recordingAdminCap = recordingResult[1]!;
+    const shareBalance = recordingResult[2]!;
 
-    // Track artist designations
-    if (creditInput.isPrimaryArtist) {
-      primaryArtistPartyIds.push(creditInput.partyId);
-    }
-    if (creditInput.isFeaturedArtist) {
-      featuredArtistPartyIds.push(creditInput.partyId);
-    }
-  }
-
-  // Add primary artists (must be done after credits are added)
-  for (const partyId of primaryArtistPartyIds) {
-    tx.moveCall({
-      target: `${musicOsPackageId}::recording::add_primary_artist`,
-      arguments: [recording, recordingAdminCap, tx.object(partyId)],
-      typeArguments: [shareType],
-    });
-  }
-
-  // Add featured artists (must be done after credits are added)
-  for (const partyId of featuredArtistPartyIds) {
-    tx.moveCall({
-      target: `${musicOsPackageId}::recording::add_featured_artist`,
-      arguments: [recording, recordingAdminCap, tx.object(partyId)],
-      typeArguments: [shareType],
-    });
-  }
-
-  // Add secondary genres
-  if (secondaryGenreIds && secondaryGenreIds.length > 0) {
-    for (const genreId of secondaryGenreIds) {
+    // Set title version
+    if (titleVersion !== undefined) {
       tx.moveCall({
-        target: `${musicOsPackageId}::recording::add_secondary_genre`,
-        arguments: [recording, recordingAdminCap, tx.object(genreId)],
+        target: `${musicOsPackageId}::recording::set_title_version`,
+        arguments: [recording, recordingAdminCap, tx.pure.string(titleVersion)],
         typeArguments: [shareType],
       });
     }
-  }
 
-  // Set musical key
-  if (musicalKey !== undefined) {
-    const musicalKeyResult = buildMusicalKey(tx, musicOsPackageId, musicalKey);
-    tx.moveCall({
-      target: `${musicOsPackageId}::recording::set_musical_key`,
-      arguments: [recording, recordingAdminCap, musicalKeyResult],
-      typeArguments: [shareType],
-    });
-  }
+    // Set subtitle
+    if (subtitle !== undefined) {
+      tx.moveCall({
+        target: `${musicOsPackageId}::recording::set_subtitle`,
+        arguments: [recording, recordingAdminCap, tx.pure.string(subtitle)],
+        typeArguments: [shareType],
+      });
+    }
 
-  // Set time signature
-  if (timeSignature !== undefined) {
-    const timeSignatureResult = tx.moveCall({
-      target: `${musicOsPackageId}::time_signature::new`,
-      arguments: [
-        tx.pure.u8(timeSignature.beatsPerMeasure),
-        tx.pure.u8(timeSignature.beatUnit),
-      ],
-    });
-    tx.moveCall({
-      target: `${musicOsPackageId}::recording::set_time_signature`,
-      arguments: [recording, recordingAdminCap, timeSignatureResult],
-      typeArguments: [shareType],
-    });
-  }
+    // Set language
+    if (language !== undefined) {
+      tx.moveCall({
+        target: `${musicOsPackageId}::recording::set_language`,
+        arguments: [recording, recordingAdminCap, tx.pure.string(language)],
+        typeArguments: [shareType],
+      });
+    }
 
-  // Set tempo BPM
-  if (tempoBpm !== undefined) {
-    tx.moveCall({
-      target: `${musicOsPackageId}::recording::set_tempo_bpm`,
-      arguments: [recording, recordingAdminCap, tx.pure.u16(tempoBpm)],
-      typeArguments: [shareType],
-    });
-  }
+    // Add credits and track which parties need artist designation
+    const primaryArtistPartyIds: string[] = [];
+    const featuredArtistPartyIds: string[] = [];
 
-  // Add stems
-  if (stems && stems.length > 0) {
-    for (const stemInput of stems) {
-      // Create the audio for this stem
-      const stemWalrusData = createWalrusData(stemInput.audio.blobId, stemInput.audio.quiltId);
-      const stemAudio = tx.moveCall({
-        target: `${musicOsPackageId}::audio::new`,
+    for (const creditInput of credits) {
+      // Build the roles vector
+      const roleResults = creditInput.roles.map((role) =>
+        buildRecordingRole(tx, musicOsPackageId, role)
+      );
+
+      // Create the Credit struct
+      const credit = tx.moveCall({
+        target: `${musicOsPackageId}::credit::new`,
         arguments: [
-          tx.pure.u8(stemInput.audio.channels),
-          tx.pure.u8(stemInput.audio.bitDepth),
-          tx.pure.u32(stemInput.audio.sampleRateHz),
-          tx.pure.u64(stemInput.audio.samples),
-          stemWalrusData,
-          tx.pure(bcs.vector(bcs.u8()).serialize(Array.from(stemInput.audio.pcmDigest)).toBytes()),
+          tx.pure.string(creditInput.displayName),
+          tx.makeMoveVec({
+            type: `${musicOsPackageId}::recording_party_role::RecordingPartyRole`,
+            elements: roleResults,
+          }),
+        ],
+        typeArguments: [`${musicOsPackageId}::recording_party_role::RecordingPartyRole`],
+      });
+
+      // Add the credit to the recording
+      tx.moveCall({
+        target: `${musicOsPackageId}::recording::add_credit`,
+        arguments: [recording, recordingAdminCap, tx.object(creditInput.partyId), credit],
+        typeArguments: [shareType],
+      });
+
+      // Track artist designations
+      if (creditInput.isPrimaryArtist) {
+        primaryArtistPartyIds.push(creditInput.partyId);
+      }
+      if (creditInput.isFeaturedArtist) {
+        featuredArtistPartyIds.push(creditInput.partyId);
+      }
+    }
+
+    // Add primary artists (must be done after credits are added)
+    for (const partyId of primaryArtistPartyIds) {
+      tx.moveCall({
+        target: `${musicOsPackageId}::recording::add_primary_artist`,
+        arguments: [recording, recordingAdminCap, tx.object(partyId)],
+        typeArguments: [shareType],
+      });
+    }
+
+    // Add featured artists (must be done after credits are added)
+    for (const partyId of featuredArtistPartyIds) {
+      tx.moveCall({
+        target: `${musicOsPackageId}::recording::add_featured_artist`,
+        arguments: [recording, recordingAdminCap, tx.object(partyId)],
+        typeArguments: [shareType],
+      });
+    }
+
+    // Add secondary genres
+    if (secondaryGenreIds && secondaryGenreIds.length > 0) {
+      for (const genreId of secondaryGenreIds) {
+        tx.moveCall({
+          target: `${musicOsPackageId}::recording::add_secondary_genre`,
+          arguments: [recording, recordingAdminCap, tx.object(genreId)],
+          typeArguments: [shareType],
+        });
+      }
+    }
+
+    // Set musical key
+    if (musicalKey !== undefined) {
+      const musicalKeyResult = buildMusicalKey(tx, musicOsPackageId, musicalKey);
+      tx.moveCall({
+        target: `${musicOsPackageId}::recording::set_musical_key`,
+        arguments: [recording, recordingAdminCap, musicalKeyResult],
+        typeArguments: [shareType],
+      });
+    }
+
+    // Set time signature
+    if (timeSignature !== undefined) {
+      const timeSignatureResult = tx.moveCall({
+        target: `${musicOsPackageId}::time_signature::new`,
+        arguments: [
+          tx.pure.u8(timeSignature.beatsPerMeasure),
+          tx.pure.u8(timeSignature.beatUnit),
         ],
       });
-
-      // Create the stem with empty contributors
-      const stem = tx.moveCall({
-        target: `${musicOsPackageId}::stem::new`,
-        arguments: [stemAudio, tx.pure.string(stemInput.description)],
-      });
-
-      // Add contributors to the stem
-      if (stemInput.contributorIds && stemInput.contributorIds.length > 0) {
-        for (const contributorId of stemInput.contributorIds) {
-          tx.moveCall({
-            target: `${musicOsPackageId}::stem::add_contributor`,
-            arguments: [stem, tx.object(contributorId)],
-          });
-        }
-      }
-
-      // Add the stem to the recording
       tx.moveCall({
-        target: `${musicOsPackageId}::recording::add_stem`,
-        arguments: [recording, recordingAdminCap, stem],
+        target: `${musicOsPackageId}::recording::set_time_signature`,
+        arguments: [recording, recordingAdminCap, timeSignatureResult],
         typeArguments: [shareType],
       });
     }
-  }
 
-  // Publish the recording (makes it a shared object)
-  tx.moveCall({
-    target: `${musicOsPackageId}::recording::publish`,
-    arguments: [recording, recordingAdminCap, tx.object(SUI_CLOCK_OBJECT_ID)],
-    typeArguments: [shareType],
-  });
-
-  // Convert balance to coin for distribution
-  const shareCoin = tx.moveCall({
-    target: "0x2::coin::from_balance",
-    arguments: [shareBalance],
-    typeArguments: [shareType],
-  });
-
-  // Distribute shares to recipients
-  if (shareRecipients.length === 1) {
-    tx.transferObjects([shareCoin], shareRecipients[0]!.address);
-  } else if (shareRecipients.length > 1) {
-    const splitAmounts = shareRecipients.slice(0, -1).map((r) => tx.pure.u64(r.value));
-    const splitCoins = tx.splitCoins(shareCoin, splitAmounts);
-
-    for (let i = 0; i < shareRecipients.length - 1; i++) {
-      tx.transferObjects([splitCoins[i]!], shareRecipients[i]!.address);
+    // Set tempo BPM
+    if (tempoBpm !== undefined) {
+      tx.moveCall({
+        target: `${musicOsPackageId}::recording::set_tempo_bpm`,
+        arguments: [recording, recordingAdminCap, tx.pure.u16(tempoBpm)],
+        typeArguments: [shareType],
+      });
     }
-    tx.transferObjects([shareCoin], shareRecipients[shareRecipients.length - 1]!.address);
-  }
 
-  // Transfer admin cap to the specified address
-  tx.transferObjects([recordingAdminCap], adminAddress);
+    // Add stems
+    if (stems && stems.length > 0) {
+      for (const stemInput of stems) {
+        // Create the audio for this stem
+        const stemWalrusData = createWalrusData(stemInput.audio.blobId, stemInput.audio.quiltId);
+        const stemAudio = tx.moveCall({
+          target: `${musicOsPackageId}::audio::new`,
+          arguments: [
+            tx.pure.u8(stemInput.audio.channels),
+            tx.pure.u8(stemInput.audio.bitDepth),
+            tx.pure.u32(stemInput.audio.sampleRateHz),
+            tx.pure.u64(stemInput.audio.samples),
+            stemWalrusData,
+            tx.pure(bcs.vector(bcs.u8()).serialize(Array.from(stemInput.audio.pcmDigest)).toBytes()),
+          ],
+        });
 
+        // Create the stem with empty contributors
+        const stem = tx.moveCall({
+          target: `${musicOsPackageId}::stem::new`,
+          arguments: [stemAudio, tx.pure.string(stemInput.description)],
+        });
+
+        // Add contributors to the stem
+        if (stemInput.contributorIds && stemInput.contributorIds.length > 0) {
+          for (const contributorId of stemInput.contributorIds) {
+            tx.moveCall({
+              target: `${musicOsPackageId}::stem::add_contributor`,
+              arguments: [stem, tx.object(contributorId)],
+            });
+          }
+        }
+
+        // Add the stem to the recording
+        tx.moveCall({
+          target: `${musicOsPackageId}::recording::add_stem`,
+          arguments: [recording, recordingAdminCap, stem],
+          typeArguments: [shareType],
+        });
+      }
+    }
+
+    // Publish the recording (makes it a shared object)
+    tx.moveCall({
+      target: `${musicOsPackageId}::recording::publish`,
+      arguments: [recording, recordingAdminCap, tx.object(SUI_CLOCK_OBJECT_ID)],
+      typeArguments: [shareType],
+    });
+
+    // Convert balance to coin for distribution
+    const shareCoin = tx.moveCall({
+      target: "0x2::coin::from_balance",
+      arguments: [shareBalance],
+      typeArguments: [shareType],
+    });
+
+    // Distribute shares to recipients
+    if (shareRecipients.length === 1) {
+      tx.transferObjects([shareCoin], shareRecipients[0]!.address);
+    } else if (shareRecipients.length > 1) {
+      const splitAmounts = shareRecipients.slice(0, -1).map((r) => tx.pure.u64(r.value));
+      const splitCoins = tx.splitCoins(shareCoin, splitAmounts);
+
+      for (let i = 0; i < shareRecipients.length - 1; i++) {
+        tx.transferObjects([splitCoins[i]!], shareRecipients[i]!.address);
+      }
+      tx.transferObjects([shareCoin], shareRecipients[shareRecipients.length - 1]!.address);
+    }
+
+    // Transfer admin cap to the specified address
+    tx.transferObjects([recordingAdminCap], adminAddress);
+  };
+}
+
+export async function publishRecording(params: PublishRecordingParams): Promise<Transaction> {
+  const tx = new Transaction();
+  tx.add(publishRecordingCall(params));
   return tx;
 }
 
@@ -996,114 +1020,118 @@ export interface CreateDealParams {
  * The releaseId must be pre-derived client-side using deriveReleaseId() to match
  * what release::new() will derive from the same inputs.
  */
-export function createDeal(params: CreateDealParams): Transaction {
-  const {
-    recordingId,
-    recordingAdminCapId,
-    recordingShareType,
-    releaseId,
-    trackSplitBps,
-    trackTitle,
-    trackCoverArt,
-    recipientAddress,
-    musicOsPackageId,
-    walrusDataPackageId,
-  } = params;
+export function createDealCall(params: CreateDealParams) {
+  return (tx: Transaction) => {
+    const {
+      recordingId,
+      recordingAdminCapId,
+      recordingShareType,
+      releaseId,
+      trackSplitBps,
+      trackTitle,
+      trackCoverArt,
+      recipientAddress,
+      musicOsPackageId,
+      walrusDataPackageId,
+    } = params;
 
-  const tx = new Transaction();
-
-  // Create Option<String> for title
-  const titleOption = trackTitle
-    ? tx.moveCall({
-        target: "0x1::option::some",
-        arguments: [tx.pure.string(trackTitle)],
-        typeArguments: ["0x1::string::String"],
-      })
-    : tx.moveCall({
-        target: "0x1::option::none",
-        arguments: [],
-        typeArguments: ["0x1::string::String"],
-      });
-
-  // Create Option<CoverArt> for cover art
-  let coverArtOption;
-  if (trackCoverArt && walrusDataPackageId) {
-    // Build cover art
-    const staticWalrusData = trackCoverArt.staticQuiltId
+    // Create Option<String> for title
+    const titleOption = trackTitle
       ? tx.moveCall({
-          target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
-          arguments: [
-            tx.pure.u256(BigInt(trackCoverArt.staticQuiltId)),
-            tx.pure.u256(BigInt(trackCoverArt.staticBlobId)),
-          ],
+          target: "0x1::option::some",
+          arguments: [tx.pure.string(trackTitle)],
+          typeArguments: ["0x1::string::String"],
         })
       : tx.moveCall({
-          target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
-          arguments: [tx.pure.u256(BigInt(trackCoverArt.staticBlobId))],
+          target: "0x1::option::none",
+          arguments: [],
+          typeArguments: ["0x1::string::String"],
         });
 
-    let animatedOption;
-    if (trackCoverArt.animatedBlobId) {
-      const animatedWalrusData = trackCoverArt.animatedQuiltId
+    // Create Option<CoverArt> for cover art
+    let coverArtOption;
+    if (trackCoverArt && walrusDataPackageId) {
+      // Build cover art
+      const staticWalrusData = trackCoverArt.staticQuiltId
         ? tx.moveCall({
             target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
             arguments: [
-              tx.pure.u256(BigInt(trackCoverArt.animatedQuiltId)),
-              tx.pure.u256(BigInt(trackCoverArt.animatedBlobId)),
+              tx.pure.u256(BigInt(trackCoverArt.staticQuiltId)),
+              tx.pure.u256(BigInt(trackCoverArt.staticBlobId)),
             ],
           })
         : tx.moveCall({
             target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
-            arguments: [tx.pure.u256(BigInt(trackCoverArt.animatedBlobId))],
+            arguments: [tx.pure.u256(BigInt(trackCoverArt.staticBlobId))],
           });
-      animatedOption = tx.moveCall({
+
+      let animatedOption;
+      if (trackCoverArt.animatedBlobId) {
+        const animatedWalrusData = trackCoverArt.animatedQuiltId
+          ? tx.moveCall({
+              target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+              arguments: [
+                tx.pure.u256(BigInt(trackCoverArt.animatedQuiltId)),
+                tx.pure.u256(BigInt(trackCoverArt.animatedBlobId)),
+              ],
+            })
+          : tx.moveCall({
+              target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+              arguments: [tx.pure.u256(BigInt(trackCoverArt.animatedBlobId))],
+            });
+        animatedOption = tx.moveCall({
+          target: "0x1::option::some",
+          arguments: [animatedWalrusData],
+          typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+        });
+      } else {
+        animatedOption = tx.moveCall({
+          target: "0x1::option::none",
+          arguments: [],
+          typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+        });
+      }
+
+      const coverArt = tx.moveCall({
+        target: `${musicOsPackageId}::cover_art::new`,
+        arguments: [staticWalrusData, animatedOption],
+      });
+
+      coverArtOption = tx.moveCall({
         target: "0x1::option::some",
-        arguments: [animatedWalrusData],
-        typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+        arguments: [coverArt],
+        typeArguments: [`${musicOsPackageId}::cover_art::CoverArt`],
       });
     } else {
-      animatedOption = tx.moveCall({
+      coverArtOption = tx.moveCall({
         target: "0x1::option::none",
         arguments: [],
-        typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+        typeArguments: [`${musicOsPackageId}::cover_art::CoverArt`],
       });
     }
 
-    const coverArt = tx.moveCall({
-      target: `${musicOsPackageId}::cover_art::new`,
-      arguments: [staticWalrusData, animatedOption],
+    // Create the Deal
+    const deal = tx.moveCall({
+      target: `${musicOsPackageId}::deal::new`,
+      arguments: [
+        tx.object(recordingAdminCapId),
+        tx.object(recordingId),
+        tx.pure.id(releaseId),
+        tx.pure.u64(trackSplitBps),
+        titleOption,
+        coverArtOption,
+      ],
+      typeArguments: [recordingShareType],
     });
 
-    coverArtOption = tx.moveCall({
-      target: "0x1::option::some",
-      arguments: [coverArt],
-      typeArguments: [`${musicOsPackageId}::cover_art::CoverArt`],
-    });
-  } else {
-    coverArtOption = tx.moveCall({
-      target: "0x1::option::none",
-      arguments: [],
-      typeArguments: [`${musicOsPackageId}::cover_art::CoverArt`],
-    });
-  }
+    // Transfer the Deal to the recipient
+    tx.transferObjects([deal], recipientAddress);
+  };
+}
 
-  // Create the Deal
-  const deal = tx.moveCall({
-    target: `${musicOsPackageId}::deal::new`,
-    arguments: [
-      tx.object(recordingAdminCapId),
-      tx.object(recordingId),
-      tx.pure.id(releaseId),
-      tx.pure.u64(trackSplitBps),
-      titleOption,
-      coverArtOption,
-    ],
-    typeArguments: [recordingShareType],
-  });
-
-  // Transfer the Deal to the recipient
-  tx.transferObjects([deal], recipientAddress);
-
+export function createDeal(params: CreateDealParams): Transaction {
+  const tx = new Transaction();
+  tx.add(createDealCall(params));
   return tx;
 }
 
@@ -1171,48 +1199,96 @@ export interface PublishReleaseParams {
  * Note: The releaseId must be pre-derived client-side using deriveReleaseId()
  * to match what release::new() will derive from the same inputs.
  */
-export function publishRelease(params: PublishReleaseParams): Transaction {
-  const {
-    walrusDataPackageId,
-    kind,
-    title,
-    coverArt,
-    discs,
-    releaseRegistryId,
-    releaseId,
-    musicOsPackageId,
-    adminAddress,
-  } = params;
+export function publishReleaseCall(params: PublishReleaseParams) {
+  return (tx: Transaction) => {
+    const {
+      walrusDataPackageId,
+      kind,
+      title,
+      coverArt,
+      discs,
+      releaseRegistryId,
+      releaseId,
+      musicOsPackageId,
+      adminAddress,
+    } = params;
 
-  const tx = new Transaction();
-
-  // Helper to create WalrusData with or without quilt
-  const createWalrusData = (blobId: string, quiltId?: string) => {
-    if (quiltId) {
+    // Helper to create WalrusData with or without quilt
+    const createWalrusData = (blobId: string, quiltId?: string) => {
+      if (quiltId) {
+        return tx.moveCall({
+          target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+          arguments: [tx.pure.u256(BigInt(quiltId)), tx.pure.u256(BigInt(blobId))],
+        });
+      }
       return tx.moveCall({
-        target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
-        arguments: [tx.pure.u256(BigInt(quiltId)), tx.pure.u256(BigInt(blobId))],
+        target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+        arguments: [tx.pure.u256(BigInt(blobId))],
       });
-    }
-    return tx.moveCall({
-      target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
-      arguments: [tx.pure.u256(BigInt(blobId))],
-    });
-  };
+    };
 
-  // Build disc vector
-  const discResults: ReturnType<typeof tx.moveCall>[] = [];
+    // Build disc vector
+    const discResults: ReturnType<typeof tx.moveCall>[] = [];
 
-  for (const discInput of discs) {
-    // Build track vector for this disc
-    const trackResults: ReturnType<typeof tx.moveCall>[] = [];
+    for (const discInput of discs) {
+      // Build track vector for this disc
+      const trackResults: ReturnType<typeof tx.moveCall>[] = [];
 
-    for (const trackInput of discInput.tracks) {
-      // Create Option<String> for title
-      const titleOption = trackInput.title
+      for (const trackInput of discInput.tracks) {
+        // Create Option<String> for title
+        const titleOption = trackInput.title
+          ? tx.moveCall({
+              target: "0x1::option::some",
+              arguments: [tx.pure.string(trackInput.title)],
+              typeArguments: ["0x1::string::String"],
+            })
+          : tx.moveCall({
+              target: "0x1::option::none",
+              arguments: [],
+              typeArguments: ["0x1::string::String"],
+            });
+
+        // Create Option<CoverArt> as none (use recording's cover art)
+        const coverArtOption = tx.moveCall({
+          target: "0x1::option::none",
+          arguments: [],
+          typeArguments: [`${musicOsPackageId}::cover_art::CoverArt`],
+        });
+
+        // Create the Deal with the pre-derived release ID
+        const deal = tx.moveCall({
+          target: `${musicOsPackageId}::deal::new`,
+          arguments: [
+            tx.object(trackInput.recordingAdminCapId),
+            tx.object(trackInput.recordingId),
+            tx.pure.id(releaseId),
+            tx.pure.u64(trackInput.splitBps),
+            titleOption,
+            coverArtOption,
+          ],
+          typeArguments: [trackInput.recordingShareType],
+        });
+
+        // Create the Track from the Deal
+        const track = tx.moveCall({
+          target: `${musicOsPackageId}::track::new`,
+          arguments: [deal],
+        });
+
+        trackResults.push(track);
+      }
+
+      // Create vector<Track> and push all tracks
+      const trackVec = tx.makeMoveVec({
+        type: `${musicOsPackageId}::track::Track`,
+        elements: trackResults,
+      });
+
+      // Create Option<String> for disc title
+      const discTitleOption = discInput.title
         ? tx.moveCall({
             target: "0x1::option::some",
-            arguments: [tx.pure.string(trackInput.title)],
+            arguments: [tx.pure.string(discInput.title)],
             typeArguments: ["0x1::string::String"],
           })
         : tx.moveCall({
@@ -1221,121 +1297,77 @@ export function publishRelease(params: PublishReleaseParams): Transaction {
             typeArguments: ["0x1::string::String"],
           });
 
-      // Create Option<CoverArt> as none (use recording's cover art)
-      const coverArtOption = tx.moveCall({
-        target: "0x1::option::none",
-        arguments: [],
-        typeArguments: [`${musicOsPackageId}::cover_art::CoverArt`],
+      // Create the disc
+      const disc = tx.moveCall({
+        target: `${musicOsPackageId}::disc::new`,
+        arguments: [trackVec, discTitleOption],
       });
 
-      // Create the Deal with the pre-derived release ID
-      const deal = tx.moveCall({
-        target: `${musicOsPackageId}::deal::new`,
-        arguments: [
-          tx.object(trackInput.recordingAdminCapId),
-          tx.object(trackInput.recordingId),
-          tx.pure.id(releaseId),
-          tx.pure.u64(trackInput.splitBps),
-          titleOption,
-          coverArtOption,
-        ],
-        typeArguments: [trackInput.recordingShareType],
-      });
-
-      // Create the Track from the Deal
-      const track = tx.moveCall({
-        target: `${musicOsPackageId}::track::new`,
-        arguments: [deal],
-      });
-
-      trackResults.push(track);
+      discResults.push(disc);
     }
 
-    // Create vector<Track> and push all tracks
-    const trackVec = tx.makeMoveVec({
-      type: `${musicOsPackageId}::track::Track`,
-      elements: trackResults,
+    // Create vector<Disc>
+    const discVec = tx.makeMoveVec({
+      type: `${musicOsPackageId}::disc::Disc`,
+      elements: discResults,
     });
 
-    // Create Option<String> for disc title
-    const discTitleOption = discInput.title
-      ? tx.moveCall({
-          target: "0x1::option::some",
-          arguments: [tx.pure.string(discInput.title)],
-          typeArguments: ["0x1::string::String"],
-        })
-      : tx.moveCall({
-          target: "0x1::option::none",
-          arguments: [],
-          typeArguments: ["0x1::string::String"],
-        });
+    // Build cover art
+    const staticWalrusData = createWalrusData(coverArt.staticBlobId, coverArt.staticQuiltId);
 
-    // Create the disc
-    const disc = tx.moveCall({
-      target: `${musicOsPackageId}::disc::new`,
-      arguments: [trackVec, discTitleOption],
+    let animatedOption;
+    if (coverArt.animatedBlobId) {
+      const animatedWalrusData = createWalrusData(coverArt.animatedBlobId, coverArt.animatedQuiltId);
+      animatedOption = tx.moveCall({
+        target: "0x1::option::some",
+        arguments: [animatedWalrusData],
+        typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+      });
+    } else {
+      animatedOption = tx.moveCall({
+        target: "0x1::option::none",
+        arguments: [],
+        typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+      });
+    }
+
+    const releaseCoverArt = tx.moveCall({
+      target: `${musicOsPackageId}::cover_art::new`,
+      arguments: [staticWalrusData, animatedOption],
     });
 
-    discResults.push(disc);
-  }
+    // Build ReleaseKind enum using BCS
+    const releaseKind = buildReleaseKind(tx, kind, musicOsPackageId);
 
-  // Create vector<Disc>
-  const discVec = tx.makeMoveVec({
-    type: `${musicOsPackageId}::disc::Disc`,
-    elements: discResults,
-  });
-
-  // Build cover art
-  const staticWalrusData = createWalrusData(coverArt.staticBlobId, coverArt.staticQuiltId);
-
-  let animatedOption;
-  if (coverArt.animatedBlobId) {
-    const animatedWalrusData = createWalrusData(coverArt.animatedBlobId, coverArt.animatedQuiltId);
-    animatedOption = tx.moveCall({
-      target: "0x1::option::some",
-      arguments: [animatedWalrusData],
-      typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+    // Create the release - returns (Release, ReleaseAdminCap)
+    // The release::new() will derive the same ID as releaseId from the ReleaseRegistry
+    const releaseResult = tx.moveCall({
+      target: `${musicOsPackageId}::release::new`,
+      arguments: [
+        releaseKind,
+        tx.pure.string(title),
+        releaseCoverArt,
+        discVec,
+        tx.object(releaseRegistryId),
+      ],
     });
-  } else {
-    animatedOption = tx.moveCall({
-      target: "0x1::option::none",
-      arguments: [],
-      typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+    const release = releaseResult[0]!;
+    const releaseAdminCap = releaseResult[1]!;
+
+    // Publish the release
+    tx.moveCall({
+      target: `${musicOsPackageId}::release::publish`,
+      arguments: [release, releaseAdminCap, tx.object(SUI_CLOCK_OBJECT_ID)],
     });
-  }
 
-  const releaseCoverArt = tx.moveCall({
-    target: `${musicOsPackageId}::cover_art::new`,
-    arguments: [staticWalrusData, animatedOption],
-  });
+    // Transfer the ReleaseAdminCap to the admin address
+    tx.transferObjects([releaseAdminCap], tx.pure.address(adminAddress));
+  };
+}
 
-  // Build ReleaseKind enum using BCS
-  const releaseKind = buildReleaseKind(tx, kind, musicOsPackageId);
-
-  // Create the release - returns (Release, ReleaseAdminCap)
-  // The release::new() will derive the same ID as releaseId from the ReleaseRegistry
-  const releaseResult = tx.moveCall({
-    target: `${musicOsPackageId}::release::new`,
-    arguments: [
-      releaseKind,
-      tx.pure.string(title),
-      releaseCoverArt,
-      discVec,
-      tx.object(releaseRegistryId),
-    ],
-  });
-  const release = releaseResult[0]!;
-  const releaseAdminCap = releaseResult[1]!;
-
-  // Publish the release
-  tx.moveCall({
-    target: `${musicOsPackageId}::release::publish`,
-    arguments: [release, releaseAdminCap, tx.object(SUI_CLOCK_OBJECT_ID)],
-  });
-
-  // Transfer the ReleaseAdminCap to the admin address
-  tx.transferObjects([releaseAdminCap], tx.pure.address(adminAddress));
-
+export function publishRelease(params: PublishReleaseParams): Transaction {
+  const tx = new Transaction();
+  tx.add(publishReleaseCall(params));
   return tx;
 }
 
@@ -1397,137 +1429,141 @@ export interface PublishReleaseFromDealsParams {
  * Note: The Deal objects must have been created with matching release IDs that will
  * be derived from the same track configuration.
  */
-export function publishReleaseFromDeals(params: PublishReleaseFromDealsParams): Transaction {
-  const {
-    walrusDataPackageId,
-    kind,
-    title,
-    description,
-    coverArt,
-    discs,
-    releaseRegistryId,
-    musicOsPackageId,
-    adminAddress,
-  } = params;
+export function publishReleaseFromDealsCall(params: PublishReleaseFromDealsParams) {
+  return (tx: Transaction) => {
+    const {
+      walrusDataPackageId,
+      kind,
+      title,
+      description,
+      coverArt,
+      discs,
+      releaseRegistryId,
+      musicOsPackageId,
+      adminAddress,
+    } = params;
 
-  const tx = new Transaction();
-
-  // Helper to create WalrusData with or without quilt
-  const createWalrusData = (blobId: string, quiltId?: string) => {
-    if (quiltId) {
+    // Helper to create WalrusData with or without quilt
+    const createWalrusData = (blobId: string, quiltId?: string) => {
+      if (quiltId) {
+        return tx.moveCall({
+          target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
+          arguments: [tx.pure.u256(BigInt(quiltId)), tx.pure.u256(BigInt(blobId))],
+        });
+      }
       return tx.moveCall({
-        target: `${walrusDataPackageId}::walrus_data::new_with_quilt`,
-        arguments: [tx.pure.u256(BigInt(quiltId)), tx.pure.u256(BigInt(blobId))],
+        target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
+        arguments: [tx.pure.u256(BigInt(blobId))],
       });
-    }
-    return tx.moveCall({
-      target: `${walrusDataPackageId}::walrus_data::new_without_quilt`,
-      arguments: [tx.pure.u256(BigInt(blobId))],
-    });
-  };
+    };
 
-  // Build disc vector
-  const discResults: ReturnType<typeof tx.moveCall>[] = [];
+    // Build disc vector
+    const discResults: ReturnType<typeof tx.moveCall>[] = [];
 
-  for (const discInput of discs) {
-    // Build track vector for this disc
-    const trackResults: ReturnType<typeof tx.moveCall>[] = [];
+    for (const discInput of discs) {
+      // Build track vector for this disc
+      const trackResults: ReturnType<typeof tx.moveCall>[] = [];
 
-    for (const dealInput of discInput.deals) {
-      // Create the Track from the pre-existing Deal object
-      const track = tx.moveCall({
-        target: `${musicOsPackageId}::track::new`,
-        arguments: [tx.object(dealInput.dealId)],
-      });
-
-      trackResults.push(track);
-    }
-
-    // Create vector<Track> and push all tracks
-    const trackVec = tx.makeMoveVec({
-      type: `${musicOsPackageId}::track::Track`,
-      elements: trackResults,
-    });
-
-    // Create Option<String> for disc title
-    const discTitleOption = discInput.title
-      ? tx.moveCall({
-          target: "0x1::option::some",
-          arguments: [tx.pure.string(discInput.title)],
-          typeArguments: ["0x1::string::String"],
-        })
-      : tx.moveCall({
-          target: "0x1::option::none",
-          arguments: [],
-          typeArguments: ["0x1::string::String"],
+      for (const dealInput of discInput.deals) {
+        // Create the Track from the pre-existing Deal object
+        const track = tx.moveCall({
+          target: `${musicOsPackageId}::track::new`,
+          arguments: [tx.object(dealInput.dealId)],
         });
 
-    // Create the disc
-    const disc = tx.moveCall({
-      target: `${musicOsPackageId}::disc::new`,
-      arguments: [trackVec, discTitleOption],
+        trackResults.push(track);
+      }
+
+      // Create vector<Track> and push all tracks
+      const trackVec = tx.makeMoveVec({
+        type: `${musicOsPackageId}::track::Track`,
+        elements: trackResults,
+      });
+
+      // Create Option<String> for disc title
+      const discTitleOption = discInput.title
+        ? tx.moveCall({
+            target: "0x1::option::some",
+            arguments: [tx.pure.string(discInput.title)],
+            typeArguments: ["0x1::string::String"],
+          })
+        : tx.moveCall({
+            target: "0x1::option::none",
+            arguments: [],
+            typeArguments: ["0x1::string::String"],
+          });
+
+      // Create the disc
+      const disc = tx.moveCall({
+        target: `${musicOsPackageId}::disc::new`,
+        arguments: [trackVec, discTitleOption],
+      });
+
+      discResults.push(disc);
+    }
+
+    // Create vector<Disc>
+    const discVec = tx.makeMoveVec({
+      type: `${musicOsPackageId}::disc::Disc`,
+      elements: discResults,
     });
 
-    discResults.push(disc);
-  }
+    // Build cover art
+    const staticWalrusData = createWalrusData(coverArt.staticBlobId, coverArt.staticQuiltId);
 
-  // Create vector<Disc>
-  const discVec = tx.makeMoveVec({
-    type: `${musicOsPackageId}::disc::Disc`,
-    elements: discResults,
-  });
+    let animatedOption;
+    if (coverArt.animatedBlobId) {
+      const animatedWalrusData = createWalrusData(coverArt.animatedBlobId, coverArt.animatedQuiltId);
+      animatedOption = tx.moveCall({
+        target: "0x1::option::some",
+        arguments: [animatedWalrusData],
+        typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+      });
+    } else {
+      animatedOption = tx.moveCall({
+        target: "0x1::option::none",
+        arguments: [],
+        typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+      });
+    }
 
-  // Build cover art
-  const staticWalrusData = createWalrusData(coverArt.staticBlobId, coverArt.staticQuiltId);
-
-  let animatedOption;
-  if (coverArt.animatedBlobId) {
-    const animatedWalrusData = createWalrusData(coverArt.animatedBlobId, coverArt.animatedQuiltId);
-    animatedOption = tx.moveCall({
-      target: "0x1::option::some",
-      arguments: [animatedWalrusData],
-      typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+    const releaseCoverArt = tx.moveCall({
+      target: `${musicOsPackageId}::cover_art::new`,
+      arguments: [staticWalrusData, animatedOption],
     });
-  } else {
-    animatedOption = tx.moveCall({
-      target: "0x1::option::none",
-      arguments: [],
-      typeArguments: [`${walrusDataPackageId}::walrus_data::WalrusData`],
+
+    // Build ReleaseKind enum
+    const releaseKind = buildReleaseKind(tx, kind, musicOsPackageId);
+
+    // Create the release - returns (Release, ReleaseAdminCap)
+    const releaseResult = tx.moveCall({
+      target: `${musicOsPackageId}::release::new`,
+      arguments: [
+        releaseKind,
+        tx.pure.string(title),
+        tx.pure.string(description),
+        releaseCoverArt,
+        discVec,
+        tx.object(releaseRegistryId),
+      ],
     });
-  }
+    const release = releaseResult[0]!;
+    const releaseAdminCap = releaseResult[1]!;
 
-  const releaseCoverArt = tx.moveCall({
-    target: `${musicOsPackageId}::cover_art::new`,
-    arguments: [staticWalrusData, animatedOption],
-  });
+    // Publish the release
+    tx.moveCall({
+      target: `${musicOsPackageId}::release::publish`,
+      arguments: [release, releaseAdminCap, tx.object(SUI_CLOCK_OBJECT_ID)],
+    });
 
-  // Build ReleaseKind enum
-  const releaseKind = buildReleaseKind(tx, kind, musicOsPackageId);
+    // Transfer the ReleaseAdminCap to the admin address
+    tx.transferObjects([releaseAdminCap], tx.pure.address(adminAddress));
+  };
+}
 
-  // Create the release - returns (Release, ReleaseAdminCap)
-  const releaseResult = tx.moveCall({
-    target: `${musicOsPackageId}::release::new`,
-    arguments: [
-      releaseKind,
-      tx.pure.string(title),
-      tx.pure.string(description),
-      releaseCoverArt,
-      discVec,
-      tx.object(releaseRegistryId),
-    ],
-  });
-  const release = releaseResult[0]!;
-  const releaseAdminCap = releaseResult[1]!;
-
-  // Publish the release
-  tx.moveCall({
-    target: `${musicOsPackageId}::release::publish`,
-    arguments: [release, releaseAdminCap, tx.object(SUI_CLOCK_OBJECT_ID)],
-  });
-
-  // Transfer the ReleaseAdminCap to the admin address
-  tx.transferObjects([releaseAdminCap], tx.pure.address(adminAddress));
-
+export function publishReleaseFromDeals(params: PublishReleaseFromDealsParams): Transaction {
+  const tx = new Transaction();
+  tx.add(publishReleaseFromDealsCall(params));
   return tx;
 }
 
@@ -1553,16 +1589,20 @@ export interface DistributeReleaseRevenueParams {
  *
  * The release must be in the Published state and have funds deposited.
  */
+export function distributeReleaseRevenueCall(params: DistributeReleaseRevenueParams) {
+  return (tx: Transaction) => {
+    const { releaseId, value, coinType, musicOsPackageId } = params;
+
+    tx.moveCall({
+      target: `${musicOsPackageId}::release::distribute_revenue`,
+      arguments: [tx.object(releaseId), tx.pure.u64(value)],
+      typeArguments: [coinType],
+    });
+  };
+}
+
 export function distributeReleaseRevenue(params: DistributeReleaseRevenueParams): Transaction {
-  const { releaseId, value, coinType, musicOsPackageId } = params;
-
   const tx = new Transaction();
-
-  tx.moveCall({
-    target: `${musicOsPackageId}::release::distribute_revenue`,
-    arguments: [tx.object(releaseId), tx.pure.u64(value)],
-    typeArguments: [coinType],
-  });
-
+  tx.add(distributeReleaseRevenueCall(params));
   return tx;
 }

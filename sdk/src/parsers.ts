@@ -1,20 +1,20 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Studio Mirai, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from "@mysten/sui/bcs";
 import type { PartyCreatedEvent, PartyAddedToGroupEvent, PartyRemovedFromGroupEvent } from "./types.ts";
 
-const PartyCreatedEventBcs = bcs.struct("PartyCreatedEvent", {
+export const PartyCreatedEventBcs = bcs.struct("PartyCreatedEvent", {
   party_id: bcs.Address,
   name: bcs.String,
 });
 
-const PartyAddedToGroupEventBcs = bcs.struct("PartyAddedToGroupEvent", {
+export const PartyAddedToGroupEventBcs = bcs.struct("PartyAddedToGroupEvent", {
   group_id: bcs.Address,
   party_id: bcs.Address,
 });
 
-const PartyRemovedFromGroupEventBcs = bcs.struct("PartyRemovedFromGroupEvent", {
+export const PartyRemovedFromGroupEventBcs = bcs.struct("PartyRemovedFromGroupEvent", {
   group_id: bcs.Address,
   party_id: bcs.Address,
 });

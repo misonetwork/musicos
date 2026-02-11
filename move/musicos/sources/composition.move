@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Studio Mirai, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents a musical composition (song, instrumental work) in MusicOS.
@@ -16,6 +16,7 @@ module musicos::composition;
 use interest_bps::bps::{Self, BPS};
 use musicos::composition_party_role::CompositionPartyRole;
 use musicos::credit::Credit;
+use musicos::extension::{Self, Extension};
 use musicos::party::Party;
 use musicos::share;
 use std::string::String;
@@ -24,6 +25,7 @@ use sui::clock::Clock;
 use sui::coin::TreasuryCap;
 use sui::coin_registry::Currency;
 use sui::derived_object::claim;
+use sui::dynamic_field as df;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
 use walrus_data::walrus_data::WalrusData;
@@ -62,6 +64,10 @@ public struct CompositionAdminCap<phantom CompositionShare> has key, store {
     /// Unique identifier for this capability.
     id: UID,
 }
+
+/// Extension for the composition module.
+public struct CompositionExtension<phantom Extension: drop>() has copy, drop, store;
+
 //=== Derivation Keys ===
 
 /// Key for deriving the admin capability's deterministic address from the composition.
@@ -100,6 +106,18 @@ public struct CompositionPartyAddedEvent has copy, drop {
     composition_id: ID,
     /// ID of the added party.
     party_id: ID,
+}
+
+/// Emitted when an extension is registered for a composition.
+public struct CompositionExtensionRegisteredEvent<phantom Extension: drop> has copy, drop {
+    /// ID of the composition.
+    composition_id: ID,
+}
+
+/// Emitted when an extension is unregistered from a composition.
+public struct CompositionExtensionUnregisteredEvent<phantom Extension: drop> has copy, drop {
+    /// ID of the composition.
+    composition_id: ID,
 }
 
 /// Emitted when the composition split is updated.
@@ -411,6 +429,34 @@ public fun clear_score<CompositionShare>(
     }
 }
 
+// --- Extensions ---
+
+/// Registers an extension for the composition.
+public fun register_extension<CompositionShare, Extension: drop>(
+    self: &mut Composition<CompositionShare>,
+    _: &CompositionAdminCap<CompositionShare>,
+    _extension: Extension,
+) {
+    extension::register<Extension>(&mut self.id);
+
+    emit(CompositionExtensionRegisteredEvent<Extension> {
+        composition_id: self.id(),
+    });
+}
+
+/// Unregisters an extension from the composition.
+public fun unregister_extension<CompositionShare, Extension: drop>(
+    self: &mut Composition<CompositionShare>,
+    _: &CompositionAdminCap<CompositionShare>,
+    _extension: Extension,
+) {
+    extension::unregister<Extension>(&mut self.id);
+
+    emit(CompositionExtensionUnregisteredEvent<Extension> {
+        composition_id: self.id(),
+    });
+}
+
 //=== Public View Functions ===
 
 /// Returns the composition's object ID.
@@ -480,6 +526,15 @@ public fun uid_mut<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
 ): &mut UID {
+    &mut self.id
+}
+
+/// Returns a mutable reference to the composition's UID with an extension.
+public fun uid_mut_with_extension<CompositionShare, Extension: drop>(
+    self: &mut Composition<CompositionShare>,
+    _extension: Extension,
+): &mut UID {
+    extension::assert_registered<Extension>(&self.id);
     &mut self.id
 }
 

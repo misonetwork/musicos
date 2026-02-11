@@ -5,6 +5,7 @@ use musicos::cover_art::CoverArt;
 use musicos::recording::{Recording, RecordingAdminCap};
 use std::string::String;
 use std::type_name::{TypeName, with_defining_ids};
+use sui::event::emit;
 
 //=== Structs ===
 
@@ -22,6 +23,20 @@ public struct Deal has key, store {
     track_cover_art: CoverArt,
 }
 
+public struct DealCreatedEvent has copy, drop {
+    deal_id: ID,
+    release_id: ID,
+    recording_id: ID,
+    composition_id: ID,
+}
+
+public struct DealDestroyedEvent has copy, drop {
+    deal_id: ID,
+    release_id: ID,
+    recording_id: ID,
+    composition_id: ID,
+}
+
 //=== Public Functions ===
 
 public fun new<RecordingShare>(
@@ -33,23 +48,43 @@ public fun new<RecordingShare>(
     track_cover_art: Option<CoverArt>,
     ctx: &mut TxContext,
 ): Deal {
-    Deal {
+    let recording_id = recording.id();
+    let composition_id = recording.composition_id();
+
+    let deal = Deal {
         id: object::new(ctx),
         release_id,
-        composition_id: recording.composition_id(),
+        composition_id,
         composition_share_type: *recording.composition_share_type(),
         composition_split_bps: recording.composition_split_bps(),
-        recording_id: recording.id(),
+        recording_id,
         recording_share_type: with_defining_ids<RecordingShare>(),
         recording_duration_ms: recording.master().duration_ms(),
         track_title: track_title.destroy_or!(*recording.title()),
         track_split_bps: bps::new(track_split_bps_value),
         track_cover_art: track_cover_art.destroy_with_default(*recording.cover_art()),
-    }
+    };
+
+    emit(DealCreatedEvent {
+        deal_id: deal.id(),
+        release_id,
+        recording_id: recording.id(),
+        composition_id: recording.composition_id(),
+    });
+
+    deal
 }
 
 public fun destroy(self: Deal) {
-    let Deal { id, .. } = self;
+    let Deal { id, release_id, recording_id, composition_id, .. } = self;
+
+    emit(DealDestroyedEvent {
+        deal_id: id.to_inner(),
+        release_id,
+        recording_id,
+        composition_id,
+    });
+
     id.delete();
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Studio Mirai, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents an audio recording of a composition in MusicOS.
@@ -19,6 +19,7 @@ use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
+use musicos::extension;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
 use musicos::party::Party;
@@ -139,12 +140,26 @@ public struct RecordingPartyAddedEvent has copy, drop {
     party_id: ID,
 }
 
+/// Emitted when an extension is registered for a recording.
+public struct RecordingExtensionRegisteredEvent<phantom Extension: drop> has copy, drop {
+    /// ID of the recording.
+    recording_id: ID,
+}
+
+/// Emitted when an extension is unregistered from a recording.
+public struct RecordingExtensionUnregisteredEvent<phantom Extension: drop> has copy, drop {
+    /// ID of the recording.
+    recording_id: ID,
+}
+
 //=== Constants ===
 
 /// Minimum number of roles a party must have.
 const MIN_ROLES_PER_CREDIT: u64 = 1;
 /// Maximum number of roles a party can have.
 const MAX_ROLES_PER_CREDIT: u64 = 20;
+/// Minimum number of contributors a stem must have.
+const MIN_CONTRIBUTORS_PER_STEM: u64 = 1;
 
 //=== Errors ===
 
@@ -183,6 +198,8 @@ const ENoParties: u64 = 50;
 const ENoPrimaryArtistAssigned: u64 = 51;
 /// Party is not credited on the recording.
 const EPartyNotCredited: u64 = 52;
+/// Stem must have at least one contributor.
+const EMinStemContributorsNotMet: u64 = 53;
 
 //=== Public Functions ===
 
@@ -528,6 +545,11 @@ public fun add_stem<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
+            // Assert the stem has at least one contributor.
+            assert!(
+                stem.contributors().length() >= MIN_CONTRIBUTORS_PER_STEM,
+                EMinStemContributorsNotMet,
+            );
             // If the stem has assigned contributors, assert that each contributor
             // is credited in the recording's credits.
             stem.contributors().do_ref!(|contributor_id| {
@@ -674,6 +696,34 @@ public fun is_featured_artist<RecordingShare>(
     self.featured_artist_ids.contains(&party_id)
 }
 
+//=== Extension Functions ===
+
+/// Registers an extension for the recording.
+public fun register_extension<RecordingShare, Extension: drop>(
+    self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
+    _extension: Extension,
+) {
+    extension::register<Extension>(&mut self.id);
+
+    emit(RecordingExtensionRegisteredEvent<Extension> {
+        recording_id: self.id(),
+    });
+}
+
+/// Unregisters an extension from the recording.
+public fun unregister_extension<RecordingShare, Extension: drop>(
+    self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
+    _extension: Extension,
+) {
+    extension::unregister<Extension>(&mut self.id);
+
+    emit(RecordingExtensionUnregisteredEvent<Extension> {
+        recording_id: self.id(),
+    });
+}
+
 //=== UID Functions ===
 
 /// Returns a reference to the recording's UID for reading dynamic fields.
@@ -687,6 +737,15 @@ public fun uid_mut<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
 ): &mut UID {
+    &mut self.id
+}
+
+/// Returns a mutable reference to the recording's UID with an extension.
+public fun uid_mut_with_extension<RecordingShare, Extension: drop>(
+    self: &mut Recording<RecordingShare>,
+    _extension: Extension,
+): &mut UID {
+    extension::assert_registered<Extension>(&self.id);
     &mut self.id
 }
 

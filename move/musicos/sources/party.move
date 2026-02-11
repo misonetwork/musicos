@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Studio Mirai, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents artists, producers, and other parties in MusicOS.
@@ -16,6 +16,8 @@ use std::string::String;
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_set::{Self, VecSet};
+
+public use fun party_kind_name as PartyKind.name;
 
 //=== Structs ===
 
@@ -72,6 +74,15 @@ public struct PartyCreatedEvent has copy, drop {
     party_id: ID,
     /// Name of the party.
     name: String,
+    /// Kind of the party.
+    kind: String,
+}
+
+public struct PartyNameSetEvent has copy, drop {
+    /// ID of the party.
+    party_id: ID,
+    /// Name of the party.
+    name: String,
 }
 
 /// Emitted when a party is added to a group.
@@ -111,11 +122,7 @@ const EDuplicateParty: u64 = 40;
 /// Creates a new party with the specified kind and name.
 /// Returns the admin capability for managing the party.
 /// The party is shared and starts in the Created state.
-public fun new(
-    kind: PartyKind,
-    name: String,
-    ctx: &mut TxContext,
-): (Party, PartyAdminCap) {
+public fun new(kind: PartyKind, name: String, ctx: &mut TxContext): (Party, PartyAdminCap) {
     let mut party = Party {
         id: object::new(ctx),
         kind,
@@ -132,6 +139,7 @@ public fun new(
     emit(PartyCreatedEvent {
         party_id: party.id(),
         name,
+        kind: party.kind.name(),
     });
 
     (party, party_admin_cap)
@@ -147,16 +155,17 @@ public fun share(self: Party, cap: &PartyAdminCap) {
 public fun set_name(self: &mut Party, cap: &PartyAdminCap, name: String) {
     self.authorize(cap);
     self.name = name;
+
+    emit(PartyNameSetEvent {
+        party_id: self.id(),
+        name,
+    });
 }
 
 /// Adds an individual party to a group.
 /// Requires the admin capability for the group.
 /// The party being added must be an individual (not another group).
-public fun add_party(
-    self: &mut Party,
-    cap: &PartyAdminCap,
-    party: &Party,
-) {
+public fun add_party(self: &mut Party, cap: &PartyAdminCap, party: &Party) {
     self.authorize(cap);
 
     match (&mut self.kind) {
@@ -179,11 +188,7 @@ public fun add_party(
 
 /// Removes a party from a group by their ID.
 /// Requires the admin capability for the group.
-public fun remove_party(
-    self: &mut Party,
-    cap: &PartyAdminCap,
-    party_id: ID,
-) {
+public fun remove_party(self: &mut Party, cap: &PartyAdminCap, party_id: ID) {
     self.authorize(cap);
 
     match (&mut self.kind) {
@@ -216,6 +221,11 @@ public fun id(self: &Party): ID {
     self.id.to_inner()
 }
 
+/// Returns the human-readable name of this party.
+public fun name(self: &Party): String {
+    self.name
+}
+
 /// Returns true if this party is an individual.
 public fun is_individual_kind(self: &Party): bool {
     match (&self.kind) {
@@ -232,27 +242,19 @@ public fun is_group_kind(self: &Party): bool {
     }
 }
 
-/// Returns the human-readable name of this party.
-public fun name(self: &Party): String {
-    self.name
-}
-
-/// Aborts if this party is not an individual.
-public fun assert_is_individual_kind(self: &Party) {
-    assert!(is_individual_kind(self), ENotIndividualKind);
-}
-
-/// Aborts if this party is not a group.
-public fun assert_is_group_kind(self: &Party) {
-    assert!(is_group_kind(self), ENotGroupKind);
-}
-
 /// Returns a reference to the group members.
 /// Aborts if this party is not a group.
 public fun group_members(self: &Party): &VecSet<ID> {
     match (&self.kind) {
         PartyKind::Group(members) => members,
         _ => abort ENotGroupKind,
+    }
+}
+
+public fun party_kind_name(self: &PartyKind): String {
+    match (self) {
+        PartyKind::Individual => "Individual",
+        PartyKind::Group(_) => "Group",
     }
 }
 
@@ -277,4 +279,16 @@ public fun uid_mut(self: &mut Party, cap: &PartyAdminCap): &mut UID {
 /// Verifies that the admin capability matches this party.
 fun authorize(self: &Party, cap: &PartyAdminCap) {
     assert!(cap.party_id == self.id(), EUnauthorized);
+}
+
+//=== Assert Functions ===
+
+/// Aborts if this party is not an individual.
+public fun assert_is_individual_kind(self: &Party) {
+    assert!(is_individual_kind(self), ENotIndividualKind);
+}
+
+/// Aborts if this party is not a group.
+public fun assert_is_group_kind(self: &Party) {
+    assert!(is_group_kind(self), ENotGroupKind);
 }

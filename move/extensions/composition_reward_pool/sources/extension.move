@@ -1,4 +1,4 @@
-// Copyright (c) Sona Labs, Inc.
+// Copyright (c) Studio Mirai, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// A MusicOS extension that enables revenue distribution for compositions.
@@ -29,18 +29,17 @@ public struct CompositionRevenuePoolCreatedEvent<phantom Currency> has copy, dro
 
 //=== Public Functions ===
 
-public fun authorize<CompositionShare>(
+public fun register<CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap<CompositionShare>,
 ) {
-    let uid_mut = composition.uid_mut(cap);
-    extension::authorize(uid_mut, Extension());
+    composition.register_extension(cap, Extension());
 }
 
 public fun new_revenue_pool<CompositionShare, Currency>(
     composition: &mut Composition<CompositionShare>,
 ): RewardPool<CompositionShare, Currency> {
-    let uid_mut = composition.uid_mut_authorized(Extension());
+    let uid_mut = composition.uid_mut_with_extension(Extension());
     let reward_pool = reward_pool::new<CompositionShare, Currency>(uid_mut);
 
     emit(CompositionRevenuePoolCreatedEvent<Currency> {

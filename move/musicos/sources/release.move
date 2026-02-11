@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Studio Mirai, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents a music release (album, EP, or single) in MusicOS.
@@ -17,6 +17,7 @@ use interest_bps::bps;
 use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
 use musicos::disc::Disc;
+use musicos::extension;
 use musicos::party::Party;
 use musicos::release_party_role::ReleasePartyRole;
 use musicos::track_position::TrackPosition;
@@ -156,6 +157,18 @@ public struct ReleaseTrackPaidEvent<phantom C, phantom CS, phantom RecordingShar
     release_id: ID,
     /// Total value distributed.
     distribution_value: u64,
+}
+
+/// Emitted when an extension is registered for a release.
+public struct ReleaseExtensionRegisteredEvent<phantom Extension: drop> has copy, drop {
+    /// ID of the release.
+    release_id: ID,
+}
+
+/// Emitted when an extension is unregistered from a release.
+public struct ReleaseExtensionUnregisteredEvent<phantom Extension: drop> has copy, drop {
+    /// ID of the release.
+    release_id: ID,
 }
 
 //=== Constants ===
@@ -475,6 +488,47 @@ public fun uid(self: &Release): &UID {
 public fun uid_mut(self: &mut Release, cap: &ReleaseAdminCap): &mut UID {
     self.authorize(cap);
     &mut self.id
+}
+
+/// Returns a mutable reference to the release's UID with an extension.
+public fun uid_mut_with_extension<Extension: drop>(
+    self: &mut Release,
+    _extension: Extension,
+): &mut UID {
+    extension::assert_registered<Extension>(&self.id);
+    &mut self.id
+}
+
+//=== Extension Functions ===
+
+/// Registers an extension for the release.
+public fun register_extension<Extension: drop>(
+    self: &mut Release,
+    cap: &ReleaseAdminCap,
+    _extension: Extension,
+) {
+    self.authorize(cap);
+
+    extension::register<Extension>(&mut self.id);
+
+    emit(ReleaseExtensionRegisteredEvent<Extension> {
+        release_id: self.id(),
+    });
+}
+
+/// Unregisters an extension from the release.
+public fun unregister_extension<Extension: drop>(
+    self: &mut Release,
+    cap: &ReleaseAdminCap,
+    _extension: Extension,
+) {
+    self.authorize(cap);
+
+    extension::unregister<Extension>(&mut self.id);
+
+    emit(ReleaseExtensionUnregisteredEvent<Extension> {
+        release_id: self.id(),
+    });
 }
 
 //=== Private Functions ===
