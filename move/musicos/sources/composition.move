@@ -5,7 +5,8 @@
 /// Compositions are the underlying written works that recordings are based on.
 /// Each composition has its own share token for ownership distribution.
 ///
-/// Key features:
+/// ### Key Features:
+///
 /// - Share token initialization with fixed supply (100M tokens, 6 decimals)
 /// - Party management with role assignments (Composer, Lyricist, Songwriter)
 /// - State machine: Initialized -> Published (immutable after publish)
@@ -29,7 +30,7 @@ use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
 use walrus_data::walrus_data::WalrusData;
 
-//=== Structs ===
+// === Structs ===
 
 /// A musical composition representing the underlying written work.
 /// The phantom CompositionShare type parameter links to the share token.
@@ -64,12 +65,12 @@ public struct CompositionAdminCap<phantom CompositionShare> has key, store {
     id: UID,
 }
 
-//=== Derivation Keys ===
+// === Derivation Keys ===
 
 /// Key for deriving the admin capability's deterministic address from the composition.
 public struct CompositionAdminCapKey() has copy, drop, store;
 
-//=== Enums ===
+// === Enums ===
 
 /// Lifecycle state of a composition.
 public enum CompositionState has copy, drop, store {
@@ -82,7 +83,7 @@ public enum CompositionState has copy, drop, store {
     ),
 }
 
-//=== Events ===
+// === Events ===
 
 /// Emitted when a new composition is created.
 public struct CompositionInitializedEvent has copy, drop {
@@ -124,14 +125,14 @@ public struct CompositionSplitSetEvent has copy, drop {
     split_value: u64,
 }
 
-//=== Constants ===
+// === Constants ===
 
 /// Minimum number of roles a party must have.
 const MIN_ROLES_PER_PARTY: u64 = 1;
 /// Maximum number of roles a party can have.
 const MAX_ROLES_PER_PARTY: u64 = 20;
 
-//=== Errors ===
+// === Errors ===
 
 // State errors (10-19)
 /// Operation requires Initialized state but composition is in a different state.
@@ -155,9 +156,9 @@ const ENoParties: u64 = 50;
 /// Composition must have at least one of demo, chart, or score to publish.
 const ENoContent: u64 = 51;
 
-//=== Public Functions ===
+// === Public Functions ===
 
-// --- Lifecycle ---
+// === Lifecycle ===
 
 /// Creates a new composition with the given title and split.
 /// Initializes share tokens (100M supply, 6 decimals) and returns:
@@ -235,7 +236,7 @@ public fun publish<CompositionShare>(
     }
 }
 
-// --- Title ---
+// === Title ===
 
 /// Adds an alternate title to the composition.
 /// Required State: Initialized
@@ -252,7 +253,7 @@ public fun add_alternate_title<CompositionShare>(
     }
 }
 
-// --- People ---
+// === People ===
 
 /// Adds a party to the composition with specified roles.
 /// Each party must have 1-20 roles.
@@ -282,7 +283,7 @@ public fun add_credit<CompositionShare>(
     }
 }
 
-// --- Financial ---
+// === Financial ===
 
 /// Sets the revenue split rate for this composition.
 /// The split determines what percentage of track revenue goes to the composition
@@ -307,7 +308,7 @@ public fun set_split_bps<CompositionShare>(
     }
 }
 
-// --- Content ---
+// === Content ===
 
 /// Sets the lyrics data reference for the composition.
 /// Required State: Initialized
@@ -425,35 +426,38 @@ public fun clear_score<CompositionShare>(
     }
 }
 
-// --- Extensions ---
+// === Extensions ===
 
-/// Registers an extension for the composition.
-public fun register_extension<CompositionShare, Extension: drop>(
+/// Registers an extension for the composition with associated config.
+public fun register_extension<CompositionShare, Extension: drop, Config: drop + store>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
     _extension: Extension,
+    config: Config,
 ) {
-    extension::register<Extension>(&mut self.id);
+    extension::register<Extension, Config>(&mut self.id, config);
 
     emit(CompositionExtensionRegisteredEvent<Extension> {
         composition_id: self.id(),
     });
 }
 
-/// Unregisters an extension from the composition.
-public fun unregister_extension<CompositionShare, Extension: drop>(
+/// Unregisters an extension from the composition and returns its config.
+public fun unregister_extension<CompositionShare, Extension: drop, Config: drop + store>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
     _extension: Extension,
-) {
-    extension::unregister<Extension>(&mut self.id);
+): Config {
+    let config = extension::unregister<Extension, Config>(&mut self.id);
 
     emit(CompositionExtensionUnregisteredEvent<Extension> {
         composition_id: self.id(),
     });
+
+    config
 }
 
-//=== Public View Functions ===
+// === Public View Functions ===
 
 /// Returns the composition's object ID.
 public fun id<CompositionShare>(self: &Composition<CompositionShare>): ID {
@@ -509,7 +513,7 @@ public fun score<CompositionShare>(self: &Composition<CompositionShare>): &Optio
     &self.score
 }
 
-//=== UID Functions ===
+// === UID Functions ===
 
 /// Returns a reference to the composition's UID for reading dynamic fields.
 public fun uid<CompositionShare>(self: &Composition<CompositionShare>): &UID {

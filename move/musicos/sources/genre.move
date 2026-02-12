@@ -5,7 +5,8 @@
 /// Genres are registered in a shared GenreRegistry and used to categorize
 /// recordings. Each genre has a unique name within the registry.
 ///
-/// Key features:
+/// ### Key Features:
+///
 /// - Admin-controlled genre creation
 /// - Deterministic addresses via derived object pattern
 /// - Event emission for genre creation tracking
@@ -15,7 +16,7 @@ use std::string::String;
 use sui::derived_object::claim;
 use sui::event::emit;
 
-//=== Structs ===
+// === Structs ===
 
 /// One-time witness for the genre module.
 public struct GENRE() has drop;
@@ -38,13 +39,13 @@ public struct GenreRegistry has key {
     id: UID,
 }
 
-//=== Errors ===
+// === Errors ===
 
 // Validation errors (20-29)
 /// Genre name contains an invalid character (must be A-Z or _).
 const EInvalidCharacter: u64 = 20;
 
-//=== Events ===
+// === Events ===
 
 /// Emitted when a new genre is created.
 public struct GenreCreatedEvent has copy, drop {
@@ -54,8 +55,9 @@ public struct GenreCreatedEvent has copy, drop {
     name: String,
 }
 
-//=== Constants ===
+// === Constants ===
 
+/// Default genres created during module initialization.
 const LAUNCH_GENRES: vector<vector<u8>> = vector[
     b"ALTERNATIVE",
     b"CLASSICAL",
@@ -70,7 +72,7 @@ const LAUNCH_GENRES: vector<vector<u8>> = vector[
     b"SOUNDTRACK",
 ];
 
-//=== Init Function ===
+// === Init Function ===
 
 /// Initializes the genre module by creating and sharing the GenreRegistry.
 fun init(_otw: GENRE, ctx: &mut TxContext) {
@@ -87,7 +89,7 @@ fun init(_otw: GENRE, ctx: &mut TxContext) {
     transfer::share_object(genre_registry);
 }
 
-//=== Public Functions ===
+// === Public Functions ===
 
 /// Creates a new genre with the given name.
 /// Requires admin capability and registers the genre in the shared registry.
@@ -97,7 +99,7 @@ public fun new(name: String, genre_registry: &mut GenreRegistry) {
     transfer::share_object(genre);
 }
 
-//=== Public View Functions ===
+// === Public View Functions ===
 
 /// Returns the unique identifier of the genre.
 public fun id(self: &Genre): ID {
@@ -109,8 +111,10 @@ public fun name(self: &Genre): &String {
     &self.name
 }
 
-//=== Private Functions ===
+// === Private Functions ===
 
+/// Internal implementation for creating a new genre.
+/// Validates the name and derives a deterministic address from the registry.
 fun new_impl(name: String, genre_registry: &mut GenreRegistry): Genre {
     assert_valid_name(&name);
 

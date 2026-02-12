@@ -13,7 +13,7 @@ module musicos::composition_party_role;
 
 use std::string::String;
 
-//=== Enums ===
+// === Enums ===
 
 /// Represents a party's role on a composition.
 public enum CompositionPartyRole has copy, drop, store {
@@ -31,7 +31,7 @@ public enum CompositionPartyRole has copy, drop, store {
     Translator,
 }
 
-//=== Public Functions ===
+// === Public Functions ===
 
 /// Creates a new Adapter role.
 public fun new_adapter_role(): CompositionPartyRole {
@@ -63,7 +63,7 @@ public fun new_translator_role(): CompositionPartyRole {
     CompositionPartyRole::Translator
 }
 
-//=== Public View Functions ===
+// === Public View Functions ===
 
 /// Returns the human-readable name of the role.
 public fun name(self: &CompositionPartyRole): String {
@@ -77,6 +77,7 @@ public fun name(self: &CompositionPartyRole): String {
     }
 }
 
+/// Returns true if this is an Adapter role.
 public fun is_adapter_role(self: &CompositionPartyRole): bool {
     match (self) {
         CompositionPartyRole::Adapter => true,
@@ -84,6 +85,7 @@ public fun is_adapter_role(self: &CompositionPartyRole): bool {
     }
 }
 
+/// Returns true if this is an Arranger role.
 public fun is_arranger_role(self: &CompositionPartyRole): bool {
     match (self) {
         CompositionPartyRole::Arranger => true,
@@ -91,6 +93,7 @@ public fun is_arranger_role(self: &CompositionPartyRole): bool {
     }
 }
 
+/// Returns true if this is a Composer role.
 public fun is_composer_role(self: &CompositionPartyRole): bool {
     match (self) {
         CompositionPartyRole::Composer => true,
@@ -98,6 +101,7 @@ public fun is_composer_role(self: &CompositionPartyRole): bool {
     }
 }
 
+/// Returns true if this is a Lyricist role.
 public fun is_lyricist_role(self: &CompositionPartyRole): bool {
     match (self) {
         CompositionPartyRole::Lyricist => true,
@@ -105,6 +109,7 @@ public fun is_lyricist_role(self: &CompositionPartyRole): bool {
     }
 }
 
+/// Returns true if this is a Songwriter role.
 public fun is_songwriter_role(self: &CompositionPartyRole): bool {
     match (self) {
         CompositionPartyRole::Songwriter => true,
@@ -112,6 +117,7 @@ public fun is_songwriter_role(self: &CompositionPartyRole): bool {
     }
 }
 
+/// Returns true if this is a Translator role.
 public fun is_translator_role(self: &CompositionPartyRole): bool {
     match (self) {
         CompositionPartyRole::Translator => true,

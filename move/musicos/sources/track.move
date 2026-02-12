@@ -5,7 +5,8 @@
 /// in the tracklist. Each track captures metadata from the recording at
 /// the time of release creation for efficient access during playback.
 ///
-/// Key features:
+/// ### Key Features:
+///
 /// - Caches recording metadata for quick access
 /// - Supports optional track-specific cover art
 /// - Stores composition split for royalty calculations
@@ -17,7 +18,7 @@ use musicos::deal::Deal;
 use std::string::String;
 use std::type_name::TypeName;
 
-//=== Structs ===
+// === Structs ===
 
 /// A track on a release containing a recording and its metadata.
 /// Metadata is captured at track creation time for efficient access.
@@ -44,19 +45,24 @@ public struct Track has drop, store {
     split_bps: BPS,
 }
 
-//=== Enums ===
+// === Enums ===
 
+/// Lifecycle state of a track within a release.
 public enum TrackState has copy, drop, store {
+    /// Track has been created but not yet assigned to a release.
     Unassigned { release_id: ID },
+    /// Track has been assigned to its target release.
     Assigned,
 }
 
-//=== Errors ===
+// === Errors ===
 
+/// Track's target release ID does not match the assigning release.
 const EUnauthorizedAssignment: u64 = 0;
+/// Track has already been assigned to a release.
 const EAlreadyAssigned: u64 = 1;
 
-//=== Public Functions ===
+// === Public Functions ===
 
 /// Creates a new track from a recording.
 /// Requires the recording admin capability.
@@ -80,8 +86,8 @@ public fun new(deal: Deal): Track {
     return track
 }
 
-/// Assigns the track to a release.
-
+/// Assigns the track to a release by verifying the release UID matches
+/// the track's target release ID. Can only be called once per track.
 public(package) fun assign(self: &mut Track, release_uid: &UID) {
     match (self.state) {
         TrackState::Unassigned { release_id } => {
@@ -92,7 +98,7 @@ public(package) fun assign(self: &mut Track, release_uid: &UID) {
     }
 }
 
-//=== Public View Functions ===
+// === Public View Functions ===
 
 /// Returns the ID of the underlying composition.
 public fun composition_id(self: &Track): ID {

@@ -4,7 +4,8 @@
 /// Represents cover artwork for releases and tracks in MusicOS.
 /// Supports both static images and optional animated artwork (GIFs, videos).
 ///
-/// Key features:
+/// ### Key Features:
+///
 /// - Required static image for all cover art
 /// - Optional animated version for enhanced presentation
 /// - References external storage via Data type
@@ -12,11 +13,15 @@ module musicos::cover_art;
 
 use walrus_data::walrus_data::WalrusData;
 
+// === Structs ===
+
 /// Cover artwork with required static image and optional animation.
 public struct CoverArt has copy, drop, store {
     static: WalrusData,
     animated: Option<WalrusData>,
 }
+
+// === Public Functions ===
 
 /// Creates new cover art with a static image and optional animated version.
 /// `static` - Required static image data reference.
@@ -27,6 +32,8 @@ public fun new(static: WalrusData, animated: Option<WalrusData>): CoverArt {
         animated,
     }
 }
+
+// === Public View Functions ===
 
 /// Returns a reference to the static image data.
 public fun static(self: &CoverArt): &WalrusData {

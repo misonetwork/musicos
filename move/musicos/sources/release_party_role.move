@@ -1,3 +1,9 @@
+// Copyright (c) Studio Mirai, LLC
+// SPDX-License-Identifier: Apache-2.0
+
+/// Defines the roles that parties can hold on a release.
+/// Releases support two roles: Primary (the main artist) and Featured
+/// (a guest or collaborating artist).
 module musicos::release_party_role;
 
 use std::string::String;
@@ -34,6 +40,7 @@ public fun is_featured_role(self: &ReleasePartyRole): bool {
     }
 }
 
+/// Returns the human-readable name of the role.
 public fun name(self: &ReleasePartyRole): String {
     match (self) {
         ReleasePartyRole::Primary => "Primary",

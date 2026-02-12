@@ -5,7 +5,8 @@
 /// Recordings are the audio performances that are distributed and played.
 /// Each recording has its own share token for ownership distribution.
 ///
-/// Key features:
+/// ### Key Features:
+///
 /// - Share token initialization with fixed supply (100M tokens, 6 decimals)
 /// - Party management with role assignments (Producer, Vocalist, etc.)
 /// - State machine: Initialized -> Published (immutable after publish)
@@ -39,7 +40,7 @@ use sui::vec_map::{Self, VecMap};
 use sui::vec_set::{Self, VecSet};
 use walrus_data::walrus_data::WalrusData;
 
-//=== Structs ===
+// === Structs ===
 
 /// An audio recording of a composition.
 /// The phantom RecordingShare type parameter links to the share token.
@@ -100,7 +101,7 @@ public struct RecordingAdminCap<phantom RecordingShare> has key, store {
     id: UID,
 }
 
-//=== Derivation Keys ===
+// === Derivation Keys ===
 
 /// Key for deriving the admin capability's deterministic address from the recording.
 public struct RecordingAdminCapKey() has copy, drop, store;
@@ -111,7 +112,7 @@ public struct RecordingKey(
     vector<u8>,
 ) has copy, drop, store;
 
-//=== Enums ===
+// === Enums ===
 
 /// Lifecycle state of a recording.
 public enum RecordingState has copy, drop, store {
@@ -124,7 +125,7 @@ public enum RecordingState has copy, drop, store {
     ),
 }
 
-//=== Events ===
+// === Events ===
 
 /// Emitted when a recording is published.
 public struct RecordingPublishedEvent has copy, drop {
@@ -152,7 +153,7 @@ public struct RecordingExtensionUnregisteredEvent<phantom Extension: drop> has c
     recording_id: ID,
 }
 
-//=== Constants ===
+// === Constants ===
 
 /// Minimum number of roles a party must have.
 const MIN_ROLES_PER_CREDIT: u64 = 1;
@@ -161,7 +162,7 @@ const MAX_ROLES_PER_CREDIT: u64 = 20;
 /// Minimum number of contributors a stem must have.
 const MIN_CONTRIBUTORS_PER_STEM: u64 = 1;
 
-//=== Errors ===
+// === Errors ===
 
 // State errors (10-19)
 /// Operation requires Initialized state but recording is in a different state.
@@ -201,9 +202,9 @@ const EPartyNotCredited: u64 = 52;
 /// Stem must have at least one contributor.
 const EMinStemContributorsNotMet: u64 = 53;
 
-//=== Public Functions ===
+// === Public Functions ===
 
-// --- Lifecycle ---
+// === Lifecycle ===
 
 /// Creates a new recording for a composition.
 /// Initializes share tokens (100M supply, 6 decimals) and returns:
@@ -296,7 +297,7 @@ public fun publish<RecordingShare>(
     };
 }
 
-// --- Title ---
+// === Title ===
 
 /// Sets the title version (e.g., "Radio Edit", "Extended Mix").
 /// Required State: Initialized
@@ -360,7 +361,7 @@ public fun set_lyrics<RecordingShare>(
     }
 }
 
-// --- People ---
+// === People ===
 
 /// Adds a party to the recording with specified roles.
 /// Each party must have 1-20 roles.
@@ -390,6 +391,9 @@ public fun add_credit<RecordingShare>(
     }
 }
 
+/// Adds a party as a primary artist on the recording.
+/// The party must already be credited and not already assigned as primary or featured.
+/// Required State: Initialized
 public fun add_primary_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
@@ -411,6 +415,9 @@ public fun add_primary_artist<RecordingShare>(
     }
 }
 
+/// Adds a party as a featured artist on the recording.
+/// The party must already be credited and not already assigned as primary or featured.
+/// Required State: Initialized
 public fun add_featured_artist<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
@@ -432,7 +439,7 @@ public fun add_featured_artist<RecordingShare>(
     }
 }
 
-// --- Classification ---
+// === Classification ===
 
 /// Sets the primary genre of the recording.
 /// Required State: Initialized
@@ -490,7 +497,7 @@ public fun remove_secondary_genre<RecordingShare>(
     }
 }
 
-// --- Musical Properties ---
+// === Musical Properties ===
 
 /// Sets the musical key of the recording.
 /// Required State: Initialized
@@ -538,6 +545,10 @@ public fun set_tempo_bpm<RecordingShare>(
     }
 }
 
+/// Adds an audio stem to the recording.
+/// Each stem must have at least one contributor, and all contributors must be
+/// credited on the recording.
+/// Required State: Initialized
 public fun add_stem<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
@@ -562,7 +573,7 @@ public fun add_stem<RecordingShare>(
     }
 }
 
-//=== Public View Functions ===
+// === Public View Functions ===
 
 /// Returns the recording's object ID.
 public fun id<RecordingShare>(self: &Recording<RecordingShare>): ID {
@@ -696,10 +707,10 @@ public fun is_featured_artist<RecordingShare>(
     self.featured_artist_ids.contains(&party_id)
 }
 
-//=== Extension Functions ===
+// === Extension Functions ===
 
 /// Registers an extension for the recording with associated config.
-public fun register_extension<RecordingShare, Extension: drop, Config: store>(
+public fun register_extension<RecordingShare, Extension: drop, Config: drop + store>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
     _extension: Extension,
@@ -713,7 +724,7 @@ public fun register_extension<RecordingShare, Extension: drop, Config: store>(
 }
 
 /// Unregisters an extension from the recording and returns its config.
-public fun unregister_extension<RecordingShare, Extension: drop, Config: store>(
+public fun unregister_extension<RecordingShare, Extension: drop, Config: drop + store>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
     _extension: Extension,
@@ -727,7 +738,7 @@ public fun unregister_extension<RecordingShare, Extension: drop, Config: store>(
     config
 }
 
-//=== UID Functions ===
+// === UID Functions ===
 
 /// Returns a reference to the recording's UID for reading dynamic fields.
 public fun uid<RecordingShare>(self: &Recording<RecordingShare>): &UID {

@@ -4,7 +4,8 @@
 /// Represents a disc within a release, containing an ordered list of tracks.
 /// Multi-disc releases (like double albums) are modeled as multiple Disc objects.
 ///
-/// Key features:
+/// ### Key Features:
+///
 /// - Maximum of 50 tracks per disc
 /// - Automatic duration calculation from tracks
 /// - Optional disc-specific artwork
@@ -14,7 +15,7 @@ use musicos::cover_art::CoverArt;
 use musicos::track::Track;
 use std::string::String;
 
-//=== Structs ===
+// === Structs ===
 
 /// A disc containing an ordered list of tracks.
 /// Duration is automatically calculated from the sum of track durations.
@@ -29,18 +30,18 @@ public struct Disc has drop, store {
     duration_ms: u64,
 }
 
-//=== Constants ===
+// === Constants ===
 
 /// Maximum number of tracks allowed on a single disc.
 const MAX_TRACKS_PER_DISC: u64 = 50;
 
-//=== Errors ===
+// === Errors ===
 
 // Constraint errors (30-39)
 /// Number of tracks exceeds the maximum allowed (50).
 const EMaxTracksExceeded: u64 = 30;
 
-//=== Public Functions ===
+// === Public Functions ===
 
 /// Creates a new disc from a vector of tracks.
 /// Automatically calculates the total duration.
@@ -66,7 +67,7 @@ public fun set_artwork(self: &mut Disc, artwork: CoverArt) {
     self.artwork.swap_or_fill(artwork);
 }
 
-//=== Public View Functions ===
+// === Public View Functions ===
 
 /// Returns a reference to all tracks on this disc.
 public fun tracks(self: &Disc): &vector<Track> {
@@ -88,8 +89,10 @@ public fun title(self: &Disc): &Option<String> {
     &self.title
 }
 
-//=== Package Functions ===
+// === Package Functions ===
 
+/// Returns a mutable reference to the tracks vector.
+/// Used internally for track assignment during release creation.
 public(package) fun tracks_mut(self: &mut Disc): &mut vector<Track> {
     &mut self.tracks
 }

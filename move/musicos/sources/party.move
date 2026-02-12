@@ -5,7 +5,8 @@
 /// Parties can be individuals or groups (bands, orchestras, etc.).
 /// Each party has an admin capability for managing their profile.
 ///
-/// Key features:
+/// ### Key Features:
+///
 /// - Individual and group party types
 /// - Extensible metadata via dynamic fields
 /// - Capability-based authorization for modifications
@@ -19,7 +20,7 @@ use sui::vec_set::{Self, VecSet};
 
 public use fun party_kind_name as PartyKind.name;
 
-//=== Structs ===
+// === Structs ===
 
 /// One-time witness for the party module.
 public struct PARTY() has drop;
@@ -46,7 +47,7 @@ public struct PartyAdminCap has key, store {
     party_id: ID,
 }
 
-//=== Derivation Keys ===
+// === Derivation Keys ===
 
 /// Key for deriving the admin capability's deterministic address.
 public struct PartyAdminCapKey(
@@ -54,7 +55,7 @@ public struct PartyAdminCapKey(
     ID,
 ) has copy, drop, store;
 
-//=== Enums ===
+// === Enums ===
 
 /// The type of self: individual person or group.
 public enum PartyKind has copy, drop, store {
@@ -67,7 +68,7 @@ public enum PartyKind has copy, drop, store {
     ),
 }
 
-//=== Events ===
+// === Events ===
 
 public struct PartyCreatedEvent has copy, drop {
     /// ID of the newly created party.
@@ -101,7 +102,7 @@ public struct PartyRemovedFromGroupEvent has copy, drop {
     party_id: ID,
 }
 
-//=== Errors ===
+// === Errors ===
 
 // Authorization errors (0-9)
 /// The provided admin capability does not match this party.
@@ -117,7 +118,7 @@ const ENotGroupKind: u64 = 11;
 /// Attempted to add a party that is already a member of the group.
 const EDuplicateParty: u64 = 40;
 
-//=== Public Functions ===
+// === Public Functions ===
 
 /// Creates a new party with the specified kind and name.
 /// Returns the admin capability for managing the party.
@@ -145,13 +146,15 @@ public fun new(kind: PartyKind, name: String, ctx: &mut TxContext): (Party, Part
     (party, party_admin_cap)
 }
 
-// Turn the party into a shared object.
+/// Shares the party object, making it publicly accessible.
+/// Requires the admin capability.
 public fun share(self: Party, cap: &PartyAdminCap) {
     self.authorize(cap);
     transfer::share_object(self);
 }
 
-// Set the human-readable name of the party.
+/// Sets the human-readable name of the party.
+/// Requires the admin capability.
 public fun set_name(self: &mut Party, cap: &PartyAdminCap, name: String) {
     self.authorize(cap);
     self.name = name;
@@ -214,7 +217,7 @@ public fun new_group_kind(): PartyKind {
     PartyKind::Group(vec_set::empty())
 }
 
-//=== Public View Functions ===
+// === Public View Functions ===
 
 /// Returns the ID of this party.
 public fun id(self: &Party): ID {
@@ -251,6 +254,7 @@ public fun group_members(self: &Party): &VecSet<ID> {
     }
 }
 
+/// Returns the human-readable name of the party kind.
 public fun party_kind_name(self: &PartyKind): String {
     match (self) {
         PartyKind::Individual => "Individual",
@@ -258,7 +262,7 @@ public fun party_kind_name(self: &PartyKind): String {
     }
 }
 
-//=== UID Functions ===
+// === UID Functions ===
 
 /// Returns a reference to the party's UID for reading dynamic fields.
 /// Requires the admin capability.
@@ -274,14 +278,14 @@ public fun uid_mut(self: &mut Party, cap: &PartyAdminCap): &mut UID {
     &mut self.id
 }
 
-//=== Private Functions ===
+// === Private Functions ===
 
 /// Verifies that the admin capability matches this party.
 fun authorize(self: &Party, cap: &PartyAdminCap) {
     assert!(cap.party_id == self.id(), EUnauthorized);
 }
 
-//=== Assert Functions ===
+// === Assert Functions ===
 
 /// Aborts if this party is not an individual.
 public fun assert_is_individual_kind(self: &Party) {

@@ -11,7 +11,7 @@ module musicos::recording_party_role;
 
 use std::string::String;
 
-//=== Enums ===
+// === Enums ===
 
 /// Represents a party's role on a recording.
 /// Most roles include an optional level to indicate seniority.
@@ -88,7 +88,7 @@ public enum RecordingPartyRoleLevel has copy, drop, store {
     Principal,
 }
 
-//=== Public Functions ===
+// === Public Functions ===
 
 /// Creates a new Actor role with optional level.
 public fun new_actor_role(level: Option<RecordingPartyRoleLevel>): RecordingPartyRole {
@@ -258,7 +258,7 @@ public fun new_principal_role_level(): RecordingPartyRoleLevel {
     RecordingPartyRoleLevel::Principal
 }
 
-//=== Public View Functions ===
+// === Public View Functions ===
 
 /// Returns the optional level associated with this role.
 public fun level(self: &RecordingPartyRole): Option<RecordingPartyRoleLevel> {
@@ -320,7 +320,7 @@ public fun name(self: &RecordingPartyRole): String {
     }
 }
 
-//=== Role Check Functions ===
+// === Role Check Functions ===
 
 /// Returns true if this is an Actor role.
 public fun is_actor_role(self: &RecordingPartyRole): bool {
@@ -514,7 +514,7 @@ public fun is_vocalist_role(self: &RecordingPartyRole): bool {
     }
 }
 
-//=== Level Check Functions ===
+// === Level Check Functions ===
 
 /// Returns true if this is an Additional level.
 public fun is_additional_role_level(self: &RecordingPartyRoleLevel): bool {

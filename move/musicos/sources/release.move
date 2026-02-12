@@ -5,7 +5,8 @@
 /// A release is a collection of tracks organized into discs, with cover art
 /// and revenue distribution configuration.
 ///
-/// Key features:
+/// ### Key Features:
+///
 /// - Support for albums, EPs, and singles
 /// - Multi-disc releases with track sequencing
 /// - Configurable per-track revenue splits
@@ -33,7 +34,7 @@ use sui::vec_map::{Self, VecMap};
 
 public use fun release_admin_cap_release_id as ReleaseAdminCap.release_id;
 
-//=== Structs ===
+// === Structs ===
 
 public struct RELEASE() has drop;
 
@@ -98,7 +99,7 @@ public struct TrackSplit has copy, drop, store {
     recording_split_value: u64,
 }
 
-//=== Enums ===
+// === Enums ===
 
 /// The type of music release.
 public enum ReleaseKind has copy, drop, store {
@@ -124,7 +125,7 @@ public enum ReleaseState has copy, drop, store {
     ),
 }
 
-//=== Events ===
+// === Events ===
 
 /// Emitted when a release is published.
 public struct ReleasePublishedEvent has copy, drop {
@@ -171,14 +172,18 @@ public struct ReleaseExtensionUnregisteredEvent<phantom Extension: drop> has cop
     release_id: ID,
 }
 
-//=== Constants ===
+// === Constants ===
 
+/// Number of roles allowed per credit on a release.
 const CREDIT_ROLE_COUNT: u64 = 1;
+/// Maximum length of a release description in bytes.
 const MAX_DESCRIPTION_LENGTH: u64 = 500;
+/// Maximum number of discs allowed in a release.
 const MAX_DISCS: u64 = 20;
+/// Maximum total number of tracks allowed across all discs.
 const MAX_TRACKS: u64 = 255;
 
-//=== Errors ===
+// === Errors ===
 
 // Authorization errors (0-9)
 /// The provided admin capability does not match this release.
@@ -212,8 +217,9 @@ const ENoPrimaryCredit: u64 = 52;
 /// Invalid number of roles in credit.
 const EInvalidCreditRoleCount: u64 = 53;
 
-//=== Init Function ===
+// === Init Function ===
 
+/// Module initializer. Creates and shares the `ReleaseRegistry`.
 fun init(_otw: RELEASE, ctx: &mut TxContext) {
     let registry = ReleaseRegistry {
         id: object::new(ctx),
@@ -222,7 +228,7 @@ fun init(_otw: RELEASE, ctx: &mut TxContext) {
     transfer::share_object(registry);
 }
 
-//=== Public Functions ===
+// === Public Functions ===
 
 /// Creates a new release with the given configuration.
 /// Returns the release and admin capability.
@@ -274,6 +280,9 @@ public fun new(
     (release, release_admin_cap)
 }
 
+/// Adds a credit to the release for a party.
+/// Each credit must have exactly one role (Primary or Featured).
+/// Required State: Initialized
 public fun add_credit(
     self: &mut Release,
     cap: &ReleaseAdminCap,
@@ -406,7 +415,7 @@ public fun new_single_kind(): ReleaseKind {
     ReleaseKind::Single
 }
 
-//=== Public View Functions ===
+// === Public View Functions ===
 
 /// Returns the release's object ID.
 public fun id(self: &Release): ID {
@@ -476,7 +485,7 @@ public fun release_admin_cap_release_id(cap: &ReleaseAdminCap): ID {
     cap.release_id
 }
 
-//=== UID Functions ===
+// === UID Functions ===
 
 /// Returns a reference to the release's UID for reading dynamic fields.
 public fun uid(self: &Release): &UID {
@@ -503,10 +512,10 @@ public(package) fun uid_mut_internal(self: &mut Release): &mut UID {
     &mut self.id
 }
 
-//=== Extension Functions ===
+// === Extension Functions ===
 
 /// Registers an extension for the release with associated config.
-public fun register_extension<Extension: drop, Config: store>(
+public fun register_extension<Extension: drop, Config: drop + store>(
     self: &mut Release,
     cap: &ReleaseAdminCap,
     _extension: Extension,
@@ -522,7 +531,7 @@ public fun register_extension<Extension: drop, Config: store>(
 }
 
 /// Unregisters an extension from the release and returns its config.
-public fun unregister_extension<Extension: drop, Config: store>(
+public fun unregister_extension<Extension: drop, Config: drop + store>(
     self: &mut Release,
     cap: &ReleaseAdminCap,
     _extension: Extension,
@@ -538,7 +547,7 @@ public fun unregister_extension<Extension: drop, Config: store>(
     config
 }
 
-//=== Private Functions ===
+// === Private Functions ===
 
 /// Extracts the recording IDs, split values, and split sum from discs.
 /// Used for release digest calculation and split validation.
@@ -559,6 +568,7 @@ fun extract_digest_inputs(discs: &vector<Disc>): (vector<ID>, vector<u64>, u64) 
     (recording_ids, track_split_values, split_sum)
 }
 
+/// Calculates the deterministic release digest from recording IDs, split values, and epoch.
 fun calculate_release_digest(
     recording_ids: vector<ID>,
     track_split_values: vector<u64>,
@@ -572,6 +582,7 @@ fun calculate_release_digest(
     blake2b256(&hash_input)
 }
 
+/// Assigns all tracks to this release, verifying each track's target release ID matches.
 fun assert_track_assignments(self: &mut Release) {
     self.discs.do_mut!(|disc| {
         disc.tracks_mut().do_mut!(|track| { track.assign(&self.id); });

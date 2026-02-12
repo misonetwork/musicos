@@ -8,14 +8,14 @@ module musicos::musical_key;
 
 use std::string::String;
 
-//=== Structs ===
+// === Structs ===
 
 /// A musical key combining a root note, accidental, and mode.
 /// Examples: MusicalKey(C, Natural, Major) = C Major
 ///           MusicalKey(F, Sharp, Minor) = F# Minor
 public struct MusicalKey(Note, Accidental, Mode) has copy, drop, store;
 
-//=== Enums ===
+// === Enums ===
 
 /// The seven natural note letters in Western music.
 public enum Note has copy, drop, store {
@@ -43,7 +43,7 @@ public enum Mode has copy, drop, store {
     Minor,
 }
 
-//=== Errors ===
+// === Errors ===
 
 // Validation errors (20-29)
 /// Note string must be one of: c, d, e, f, g, a, b.
@@ -53,12 +53,16 @@ const EInvalidAccidental: u64 = 21;
 /// Mode string must be one of: major, minor.
 const EInvalidMode: u64 = 22;
 
-//=== Public Functions ===
+// === Public Functions ===
 
+/// Creates a new musical key from typed components.
 public fun new(note: Note, accidental: Accidental, mode: Mode): MusicalKey {
     MusicalKey(note, accidental, mode)
 }
 
+/// Creates a new musical key from string representations.
+/// Accepts lowercase note letters ("c"-"b"), accidental names ("natural",
+/// "sharp", "flat"), and mode names ("major", "minor").
 public fun new_from_strings(
     note_string: String,
     accidental_string: String,
@@ -107,55 +111,67 @@ public fun new_from_strings(
     MusicalKey(note.destroy_some(), accidental.destroy_some(), mode.destroy_some())
 }
 
+/// Creates a C note.
 public fun new_note_c(): Note {
     Note::C
 }
 
+/// Creates a D note.
 public fun new_note_d(): Note {
     Note::D
 }
 
+/// Creates an E note.
 public fun new_note_e(): Note {
     Note::E
 }
 
+/// Creates an F note.
 public fun new_note_f(): Note {
     Note::F
 }
 
+/// Creates a G note.
 public fun new_note_g(): Note {
     Note::G
 }
 
+/// Creates an A note.
 public fun new_note_a(): Note {
     Note::A
 }
 
+/// Creates a B note.
 public fun new_note_b(): Note {
     Note::B
 }
 
+/// Creates a Natural accidental.
 public fun new_accidental_natural(): Accidental {
     Accidental::Natural
 }
 
+/// Creates a Sharp accidental.
 public fun new_accidental_sharp(): Accidental {
     Accidental::Sharp
 }
 
+/// Creates a Flat accidental.
 public fun new_accidental_flat(): Accidental {
     Accidental::Flat
 }
 
+/// Creates a Major mode.
 public fun new_mode_major(): Mode {
     Mode::Major
 }
 
+/// Creates a Minor mode.
 public fun new_mode_minor(): Mode {
     Mode::Minor
 }
 
-//=== Public View Functions ===
+// === Public View Functions ===
 
 /// Returns the root note letter of this key.
 public fun note(self: &MusicalKey): Note { self.0 }

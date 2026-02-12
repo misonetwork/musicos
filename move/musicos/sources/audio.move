@@ -3,29 +3,37 @@
 
 /// Represents audio files in MusicOS with technical metadata.
 ///
-/// Key features:
+/// ### Key Features:
+///
 /// - Audio format parameters (channels, bit depth, sample rate)
 /// - Content-addressed via pcm_digest for integrity verification
 module musicos::audio;
 
 use walrus_data::walrus_data::WalrusData;
 
-//=== Structs ===
+// === Structs ===
 
+/// An audio file with technical metadata and content-addressed integrity.
 public struct Audio has drop, store {
+    /// Number of audio channels (1 = mono, 2 = stereo).
     channels: u8,
+    /// Bits per sample (8, 16, 24, or 32).
     bit_depth: u8,
+    /// Sample rate in hertz (e.g., 44100, 48000, 96000).
     sample_rate_hz: u32,
+    /// Total number of PCM samples in the audio.
     samples: u64,
+    /// Reference to the audio data stored on Walrus.
     data: WalrusData,
+    /// Blake2b-256 digest of the raw PCM data for integrity verification.
     pcm_digest: vector<u8>,
 }
 
-//=== Constants ===
+// === Constants ===
 
 const PCM_DIGEST_LENGTH: u64 = 32;
 
-//=== Errors ===
+// === Errors ===
 
 // Validation errors (20-29)
 /// PCM digest must be exactly 32 bytes.
@@ -39,7 +47,7 @@ const EInvalidSampleRate: u64 = 23;
 /// Audio must have at least one sample.
 const EInvalidSamples: u64 = 24;
 
-//=== Public Functions ===
+// === Public Functions ===
 
 /// Creates a new Audio object with the given parameters.
 public fun new(
@@ -69,7 +77,7 @@ public fun new(
     }
 }
 
-//=== Public View Functions ===
+// === Public View Functions ===
 
 /// Returns the number of audio channels (1 = mono, 2 = stereo).
 public fun channels(self: &Audio): u8 {
