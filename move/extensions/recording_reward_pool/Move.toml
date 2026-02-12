@@ -7,4 +7,4 @@ authors = ["Studio Mirai, LLC (build@sm.xyz)"]
 [dependencies]
 hikida = { git = "https://github.com/unconfirmedlabs/hikida.git", rev = "main" }
 musicos = { local = "../../musicos" }
-reward_pool = { local = "../../../../reward_pool" }
+reward_pool = { git = "https://github.com/unconfirmedlabs/reward_pool.git", rev = "main" }
