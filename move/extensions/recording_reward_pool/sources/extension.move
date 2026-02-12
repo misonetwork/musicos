@@ -32,14 +32,17 @@ public fun authorize<RecordingShare>(
     recording: &mut Recording<RecordingShare>,
     cap: &RecordingAdminCap<RecordingShare>,
 ) {
-    recording.register_extension(cap, Extension());
+    recording.register_extension(cap, Extension(), true);
 }
 
 public fun new_reward_pool<RecordingShare, Currency>(
     recording: &mut Recording<RecordingShare>,
 ): RewardPool<RecordingShare, Currency> {
     let uid_mut = recording.uid_mut_with_extension(Extension());
-    let reward_pool = reward_pool::new<RecordingShare, Currency>(uid_mut);
+    let reward_pool = reward_pool::new<RecordingShare, Currency>(
+        uid_mut,
+        reward_pool::new_open_kind(),
+    );
 
     emit(RecordingRevenuePoolCreatedEvent<Currency> {
         recording_id: recording.id(),

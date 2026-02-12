@@ -32,14 +32,17 @@ public fun authorize<CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     cap: &CompositionAdminCap<CompositionShare>,
 ) {
-    composition.register_extension(cap, Extension());
+    composition.register_extension(cap, Extension(), true);
 }
 
 public fun new_reward_pool<CompositionShare, Currency>(
     composition: &mut Composition<CompositionShare>,
 ): RewardPool<CompositionShare, Currency> {
     let uid_mut = composition.uid_mut_with_extension(Extension());
-    let reward_pool = reward_pool::new<CompositionShare, Currency>(uid_mut);
+    let reward_pool = reward_pool::new<CompositionShare, Currency>(
+        uid_mut,
+        reward_pool::new_open_kind(),
+    );
 
     emit(CompositionRevenuePoolCreatedEvent<Currency> {
         composition_id: composition.id(),

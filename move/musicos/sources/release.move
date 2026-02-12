@@ -499,36 +499,43 @@ public fun uid_mut_with_extension<Extension: drop>(
     &mut self.id
 }
 
+public(package) fun uid_mut_internal(self: &mut Release): &mut UID {
+    &mut self.id
+}
+
 //=== Extension Functions ===
 
-/// Registers an extension for the release.
-public fun register_extension<Extension: drop>(
+/// Registers an extension for the release with associated config.
+public fun register_extension<Extension: drop, Config: store>(
     self: &mut Release,
     cap: &ReleaseAdminCap,
     _extension: Extension,
+    config: Config,
 ) {
     self.authorize(cap);
 
-    extension::register<Extension>(&mut self.id);
+    extension::register<Extension, Config>(&mut self.id, config);
 
     emit(ReleaseExtensionRegisteredEvent<Extension> {
         release_id: self.id(),
     });
 }
 
-/// Unregisters an extension from the release.
-public fun unregister_extension<Extension: drop>(
+/// Unregisters an extension from the release and returns its config.
+public fun unregister_extension<Extension: drop, Config: store>(
     self: &mut Release,
     cap: &ReleaseAdminCap,
     _extension: Extension,
-) {
+): Config {
     self.authorize(cap);
 
-    extension::unregister<Extension>(&mut self.id);
+    let config = extension::unregister<Extension, Config>(&mut self.id);
 
     emit(ReleaseExtensionUnregisteredEvent<Extension> {
         release_id: self.id(),
     });
+
+    config
 }
 
 //=== Private Functions ===

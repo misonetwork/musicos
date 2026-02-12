@@ -64,9 +64,6 @@ public struct CompositionAdminCap<phantom CompositionShare> has key, store {
     id: UID,
 }
 
-/// Extension for the composition module.
-public struct CompositionExtension<phantom Extension: drop>() has copy, drop, store;
-
 //=== Derivation Keys ===
 
 /// Key for deriving the admin capability's deterministic address from the composition.

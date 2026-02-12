@@ -698,30 +698,33 @@ public fun is_featured_artist<RecordingShare>(
 
 //=== Extension Functions ===
 
-/// Registers an extension for the recording.
-public fun register_extension<RecordingShare, Extension: drop>(
+/// Registers an extension for the recording with associated config.
+public fun register_extension<RecordingShare, Extension: drop, Config: store>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
     _extension: Extension,
+    config: Config,
 ) {
-    extension::register<Extension>(&mut self.id);
+    extension::register<Extension, Config>(&mut self.id, config);
 
     emit(RecordingExtensionRegisteredEvent<Extension> {
         recording_id: self.id(),
     });
 }
 
-/// Unregisters an extension from the recording.
-public fun unregister_extension<RecordingShare, Extension: drop>(
+/// Unregisters an extension from the recording and returns its config.
+public fun unregister_extension<RecordingShare, Extension: drop, Config: store>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
     _extension: Extension,
-) {
-    extension::unregister<Extension>(&mut self.id);
+): Config {
+    let config = extension::unregister<Extension, Config>(&mut self.id);
 
     emit(RecordingExtensionUnregisteredEvent<Extension> {
         recording_id: self.id(),
     });
+
+    config
 }
 
 //=== UID Functions ===

@@ -13,7 +13,7 @@ public struct Extension() has drop;
 
 // Register the extension for the release.
 public fun register(release: &mut Release, cap: &ReleaseAdminCap) {
-    release.register_extension(cap, Extension());
+    release.register_extension(cap, Extension(), true);
 }
 
 // Redeem revenue from the release's funds accumulator and distribute it to the release's tracks.
