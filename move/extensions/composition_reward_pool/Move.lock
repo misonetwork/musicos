@@ -4,60 +4,6 @@
 [move]
 version = 4
 
-[pinned.mirainet.MoveStdlib]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "22f9fc9781732d651e18384c9a8eb1dabddf73a6" }
-use_environment = "mirainet"
-manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
-deps = {}
-
-[pinned.mirainet.Sui]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "22f9fc9781732d651e18384c9a8eb1dabddf73a6" }
-use_environment = "mirainet"
-manifest_digest = "2DBAC1BE700DD546C6D7D47EFCB51CC8A331ABC62959B2C9E369271B1D376986"
-deps = { MoveStdlib = "MoveStdlib" }
-
-[pinned.mirainet.composition_reward_pool]
-source = { root = true }
-use_environment = "mirainet"
-manifest_digest = "33A12C5CEEB1CEE53F749F17EC1D9B2506B4A37D1D385271FFEAAF923CC099E5"
-deps = { musicos = "musicos", reward_pool = "reward_pool", std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mirainet.interest_bps]
-source = { local = "../../../../interest-mvr/bps" }
-use_environment = "mirainet"
-manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
-deps = { std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mirainet.language_code]
-source = { local = "../../../../language_code" }
-use_environment = "mirainet"
-manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
-deps = { std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mirainet.musicos]
-source = { local = "../../../../musicos/packages/musicos" }
-use_environment = "mirainet"
-manifest_digest = "56AAAEDE694249D24005831020CAA1C32B5C4A71DAF519095E7EB550FD6FEF7C"
-deps = { interest_bps = "interest_bps", language_code = "language_code", std = "MoveStdlib", sui = "Sui", walrus_data = "walrus_data" }
-
-[pinned.mirainet.reward_pool]
-source = { local = "../../../../reward_pool" }
-use_environment = "mirainet"
-manifest_digest = "25CE7E42831E17A1B8A7B4C8961F258E8A1E9887659B6A7282C9415282D54451"
-deps = { stake = "stake", std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mirainet.stake]
-source = { local = "../../../../stake" }
-use_environment = "mirainet"
-manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
-deps = { std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mirainet.walrus_data]
-source = { local = "../../../../walrus_data" }
-use_environment = "mirainet"
-manifest_digest = "CFBD3A26159A61052E1AD6093298FE1903BE2903642FF558D015951C40AC8CF9"
-deps = { std = "MoveStdlib", sui = "Sui" }
-
 [pinned.testnet.InterestBPS]
 source = { git = "https://github.com/interest-protocol/interest-mvr", subdir = "bps", rev = "6e800792a6bb640b23b05012c3ea88cb639db78f" }
 use_environment = "testnet"
@@ -101,13 +47,13 @@ manifest_digest = "AD90EFD33AA2369DF8A3647DA5C3752C51C5C808E4D2D4ADA21F1AB83945C
 deps = { interest_bps = "InterestBPS", language_code = "language_code", std = "MoveStdlib", sui = "Sui", walrus_data = "walrus_data" }
 
 [pinned.testnet.reward_pool]
-source = { git = "https://github.com/unconfirmedlabs/reward_pool.git", subdir = ".", rev = "807c8f1c50d042b365a78f12a58dd64ccf7c906f" }
+source = { git = "https://github.com/unconfirmedlabs/reward_pool.git", subdir = ".", rev = "6e6c74cfae4bf71db36c42735669fe5f294e50c4" }
 use_environment = "testnet"
 manifest_digest = "09BA5040B4A739D952C051FBE539F30C28386A417C3E241ECD4A7451EC9D7283"
 deps = { hikida = "hikida", stake = "stake", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.stake]
-source = { git = "https://github.com/unconfirmedlabs/stake.git", subdir = ".", rev = "43ef5fb9a998955078292cd06f86b8487abddd29" }
+source = { git = "https://github.com/unconfirmedlabs/stake.git", subdir = ".", rev = "41f8fd25c8c4518ef16c5788c3e9a8a4fcdb5003" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
