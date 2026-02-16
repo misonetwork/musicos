@@ -39,11 +39,18 @@ public struct GenreRegistry has key {
     id: UID,
 }
 
+// === Constants (validation) ===
+
+/// Maximum length of a genre name in bytes.
+const MAX_NAME_LENGTH: u64 = 50;
+
 // === Errors ===
 
 // Validation errors (20-29)
 /// Genre name contains an invalid character (must be A-Z or _).
 const EInvalidCharacter: u64 = 20;
+/// Genre name exceeds maximum length.
+const EMaxNameLengthExceeded: u64 = 21;
 
 // === Events ===
 
@@ -135,5 +142,6 @@ fun new_impl(name: String, genre_registry: &mut GenreRegistry): Genre {
 fun assert_valid_name(name: &String) {
     let bytes = name.as_bytes();
     assert!(!bytes.is_empty(), EInvalidCharacter);
+    assert!(bytes.length() <= MAX_NAME_LENGTH, EMaxNameLengthExceeded);
     assert!(bytes.all!(|c| (*c >= 65 && *c <= 90) || *c == 95), EInvalidCharacter);
 }

@@ -9,15 +9,18 @@
 ///
 /// - Individual and group party types
 /// - Extensible metadata via dynamic fields
+/// - Extension system for third-party module integration
 /// - Capability-based authorization for modifications
 /// - Groups can contain multiple individual parties
 module musicos::party;
 
+use musicos::extension;
 use std::string::String;
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_set::{Self, VecSet};
 
+public use fun party_admin_cap_party_id as PartyAdminCap.party_id;
 public use fun party_kind_name as PartyKind.name;
 
 // === Structs ===
@@ -102,6 +105,25 @@ public struct PartyRemovedFromGroupEvent has copy, drop {
     party_id: ID,
 }
 
+/// Emitted when an extension is registered for a party.
+public struct PartyExtensionRegisteredEvent<phantom Extension: drop> has copy, drop {
+    /// ID of the party.
+    party_id: ID,
+}
+
+/// Emitted when an extension is unregistered from a party.
+public struct PartyExtensionUnregisteredEvent<phantom Extension: drop> has copy, drop {
+    /// ID of the party.
+    party_id: ID,
+}
+
+// === Constants ===
+
+/// Maximum number of members allowed in a group.
+const MAX_GROUP_MEMBERS: u64 = 200;
+/// Maximum length of a party name in bytes.
+const MAX_NAME_LENGTH: u64 = 200;
+
 // === Errors ===
 
 // Authorization errors (0-9)
@@ -114,6 +136,14 @@ const ENotIndividualKind: u64 = 10;
 /// Operation requires a group party, but an individual was provided.
 const ENotGroupKind: u64 = 11;
 
+// Constraint errors (30-39)
+/// Group has too many members.
+const EMaxGroupMembersExceeded: u64 = 30;
+/// Name exceeds maximum length.
+const EMaxNameLengthExceeded: u64 = 31;
+/// String must not be empty.
+const EEmptyString: u64 = 32;
+
 // Conflict errors (40-49)
 /// Attempted to add a party that is already a member of the group.
 const EDuplicateParty: u64 = 40;
@@ -124,6 +154,9 @@ const EDuplicateParty: u64 = 40;
 /// Returns the admin capability for managing the party.
 /// The party is shared and starts in the Created state.
 public fun new(kind: PartyKind, name: String, ctx: &mut TxContext): (Party, PartyAdminCap) {
+    assert!(!name.is_empty(), EEmptyString);
+    assert!(name.length() <= MAX_NAME_LENGTH, EMaxNameLengthExceeded);
+
     let mut party = Party {
         id: object::new(ctx),
         kind,
@@ -157,6 +190,8 @@ public fun share(self: Party, cap: &PartyAdminCap) {
 /// Requires the admin capability.
 public fun set_name(self: &mut Party, cap: &PartyAdminCap, name: String) {
     self.authorize(cap);
+    assert!(!name.is_empty(), EEmptyString);
+    assert!(name.length() <= MAX_NAME_LENGTH, EMaxNameLengthExceeded);
     self.name = name;
 
     emit(PartyNameSetEvent {
@@ -173,6 +208,7 @@ public fun add_party(self: &mut Party, cap: &PartyAdminCap, party: &Party) {
 
     match (&mut self.kind) {
         PartyKind::Group(parties) => {
+            assert!(parties.length() < MAX_GROUP_MEMBERS, EMaxGroupMembersExceeded);
             // Assert the party that is being added is an individual.
             party.assert_is_individual_kind();
             // Assert the party that is being added is not already a member of the group.
@@ -205,6 +241,39 @@ public fun remove_party(self: &mut Party, cap: &PartyAdminCap, party_id: ID) {
         },
         _ => abort ENotGroupKind,
     }
+}
+
+// === Extensions ===
+
+/// Registers an extension for the party with associated config.
+public fun register_extension<Extension: drop, Config: drop + store>(
+    self: &mut Party,
+    cap: &PartyAdminCap,
+    _extension: Extension,
+    config: Config,
+) {
+    self.authorize(cap);
+    extension::register<Extension, Config>(&mut self.id, config);
+
+    emit(PartyExtensionRegisteredEvent<Extension> {
+        party_id: self.id(),
+    });
+}
+
+/// Unregisters an extension from the party and returns its config.
+public fun unregister_extension<Extension: drop, Config: drop + store>(
+    self: &mut Party,
+    cap: &PartyAdminCap,
+    _extension: Extension,
+): Config {
+    self.authorize(cap);
+    let config = extension::unregister<Extension, Config>(&mut self.id);
+
+    emit(PartyExtensionUnregisteredEvent<Extension> {
+        party_id: self.id(),
+    });
+
+    config
 }
 
 /// Creates a new individual party kind.
@@ -262,6 +331,16 @@ public fun party_kind_name(self: &PartyKind): String {
     }
 }
 
+/// Verifies that the admin capability matches this party.
+public fun authorize(self: &Party, cap: &PartyAdminCap) {
+    assert!(cap.party_id == self.id(), EUnauthorized);
+}
+
+/// Returns the ID of the party associated with the admin capability.
+public fun party_admin_cap_party_id(cap: &PartyAdminCap): ID {
+    cap.party_id
+}
+
 // === UID Functions ===
 
 /// Returns a reference to the party's UID for reading dynamic fields.
@@ -278,11 +357,13 @@ public fun uid_mut(self: &mut Party, cap: &PartyAdminCap): &mut UID {
     &mut self.id
 }
 
-// === Private Functions ===
-
-/// Verifies that the admin capability matches this party.
-fun authorize(self: &Party, cap: &PartyAdminCap) {
-    assert!(cap.party_id == self.id(), EUnauthorized);
+/// Returns a mutable reference to the party's UID with an extension.
+public fun uid_mut_with_extension<Extension: drop>(
+    self: &mut Party,
+    _extension: Extension,
+): &mut UID {
+    extension::assert_registered<Extension>(&self.id);
+    &mut self.id
 }
 
 // === Assert Functions ===

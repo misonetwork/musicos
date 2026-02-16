@@ -182,6 +182,10 @@ const MAX_DESCRIPTION_LENGTH: u64 = 500;
 const MAX_DISCS: u64 = 20;
 /// Maximum total number of tracks allowed across all discs.
 const MAX_TRACKS: u64 = 255;
+/// Maximum number of credits allowed on a release.
+const MAX_CREDITS: u64 = 50;
+/// Maximum length of a release title in bytes.
+const MAX_TITLE_LENGTH: u64 = 300;
 
 // === Errors ===
 
@@ -206,6 +210,12 @@ const EMaxDiscsExceeded: u64 = 30;
 const EMaxTracksExceeded: u64 = 31;
 /// Too long description in release.
 const EMaxDescriptionLengthExceeded: u64 = 32;
+/// Release has too many credits.
+const EMaxCreditsExceeded: u64 = 33;
+/// Title exceeds maximum length.
+const EMaxTitleLengthExceeded: u64 = 34;
+/// String must not be empty.
+const EEmptyString: u64 = 35;
 
 // Reference errors (50-59)
 /// Revenue pool has no funds to distribute.
@@ -241,6 +251,8 @@ public fun new(
     registry: &mut ReleaseRegistry,
     ctx: &TxContext,
 ): (Release, ReleaseAdminCap) {
+    assert!(!title.is_empty(), EEmptyString);
+    assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
     assert!(description.length() <= MAX_DESCRIPTION_LENGTH, EMaxDescriptionLengthExceeded);
     // Assert that the release has at least one disc.
     assert!(!discs.is_empty(), ENoDiscs);
@@ -293,6 +305,7 @@ public fun add_credit(
 
     match (&mut self.state) {
         ReleaseState::Initialized(has_primary_credit) => {
+            assert!(self.credits.length() < MAX_CREDITS, EMaxCreditsExceeded);
             // Assert the credit has a single role (releases only support "Primary" or "Featured").
             assert!(credit.roles().length() == CREDIT_ROLE_COUNT, EInvalidCreditRoleCount);
 

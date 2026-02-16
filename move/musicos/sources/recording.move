@@ -158,9 +158,23 @@ public struct RecordingExtensionUnregisteredEvent<phantom Extension: drop> has c
 /// Minimum number of roles a party must have.
 const MIN_ROLES_PER_CREDIT: u64 = 1;
 /// Maximum number of roles a party can have.
-const MAX_ROLES_PER_CREDIT: u64 = 20;
+const MAX_ROLES_PER_CREDIT: u64 = 10;
 /// Minimum number of contributors a stem must have.
 const MIN_CONTRIBUTORS_PER_STEM: u64 = 1;
+/// Maximum number of stems allowed on a recording.
+const MAX_STEMS: u64 = 50;
+/// Maximum number of credits allowed on a recording.
+const MAX_CREDITS: u64 = 150;
+/// Maximum number of secondary genres allowed on a recording.
+const MAX_SECONDARY_GENRES: u64 = 5;
+/// Maximum number of primary artists allowed on a recording.
+const MAX_PRIMARY_ARTISTS: u64 = 20;
+/// Maximum number of featured artists allowed on a recording.
+const MAX_FEATURED_ARTISTS: u64 = 50;
+/// Maximum length of a title version in bytes.
+const MAX_TITLE_VERSION_LENGTH: u64 = 100;
+/// Maximum length of a subtitle in bytes.
+const MAX_SUBTITLE_LENGTH: u64 = 200;
 
 // === Errors ===
 
@@ -177,6 +191,22 @@ const EInvalidTempoBpm: u64 = 21;
 // Constraint errors (30-39)
 /// Party has too many roles.
 const EExceedsMaxRoles: u64 = 30;
+/// Recording has too many stems.
+const EMaxStemsExceeded: u64 = 31;
+/// Recording has too many credits.
+const EMaxCreditsExceeded: u64 = 32;
+/// Recording has too many secondary genres.
+const EMaxSecondaryGenresExceeded: u64 = 33;
+/// Recording has too many primary artists.
+const EMaxPrimaryArtistsExceeded: u64 = 34;
+/// Recording has too many featured artists.
+const EMaxFeaturedArtistsExceeded: u64 = 35;
+/// Title version exceeds maximum length.
+const EMaxTitleVersionLengthExceeded: u64 = 36;
+/// Subtitle exceeds maximum length.
+const EMaxSubtitleLengthExceeded: u64 = 37;
+/// String must not be empty.
+const EEmptyString: u64 = 38;
 
 // Conflict errors (40-49)
 /// Party already has a credit on this recording.
@@ -308,6 +338,11 @@ public fun set_title_version<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
+            assert!(!title_version.is_empty(), EEmptyString);
+            assert!(
+                title_version.length() <= MAX_TITLE_VERSION_LENGTH,
+                EMaxTitleVersionLengthExceeded,
+            );
             self.title_version.swap_or_fill(title_version);
         },
         _ => abort ENotInitializedState,
@@ -323,6 +358,8 @@ public fun set_subtitle<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
+            assert!(!subtitle.is_empty(), EEmptyString);
+            assert!(subtitle.length() <= MAX_SUBTITLE_LENGTH, EMaxSubtitleLengthExceeded);
             self.subtitle.swap_or_fill(subtitle);
         },
         _ => abort ENotInitializedState,
@@ -376,6 +413,7 @@ public fun add_credit<RecordingShare>(
         RecordingState::Initialized => {
             assert!(credit.roles().length() >= MIN_ROLES_PER_CREDIT, EMinRolesNotMet);
             assert!(credit.roles().length() <= MAX_ROLES_PER_CREDIT, EExceedsMaxRoles);
+            assert!(self.credits.length() < MAX_CREDITS, EMaxCreditsExceeded);
 
             let party_id = party.id();
             // Abort early if party already has a credit on this recording.
@@ -401,6 +439,11 @@ public fun add_primary_artist<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
+            assert!(
+                self.primary_artist_ids.length() < MAX_PRIMARY_ARTISTS,
+                EMaxPrimaryArtistsExceeded,
+            );
+
             let party_id = party.id();
             // Assert the party is credited on the recording.
             assert!(self.credits.contains(&party_id), EPartyNotCredited);
@@ -425,6 +468,11 @@ public fun add_featured_artist<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
+            assert!(
+                self.featured_artist_ids.length() < MAX_FEATURED_ARTISTS,
+                EMaxFeaturedArtistsExceeded,
+            );
+
             let party_id = party.id();
             // Assert the party is credited on the recording.
             assert!(self.credits.contains(&party_id), EPartyNotCredited);
@@ -469,6 +517,11 @@ public fun add_secondary_genre<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
+            assert!(
+                self.secondary_genre_ids.length() < MAX_SECONDARY_GENRES,
+                EMaxSecondaryGenresExceeded,
+            );
+
             let genre_id = genre.id();
             assert!(self.primary_genre_id != genre_id, EAlreadyAssignedAsPrimaryGenre);
             // Assert the genre is not already a secondary genre.
@@ -556,6 +609,7 @@ public fun add_stem<RecordingShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
+            assert!(self.stems.length() < MAX_STEMS, EMaxStemsExceeded);
             // Assert the stem has at least one contributor.
             assert!(
                 stem.contributors().length() >= MIN_CONTRIBUTORS_PER_STEM,

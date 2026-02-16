@@ -32,6 +32,8 @@ public struct Audio has drop, store {
 // === Constants ===
 
 const PCM_DIGEST_LENGTH: u64 = 32;
+/// Maximum number of samples to prevent overflow in duration_ms (u64::MAX / 1_000).
+const MAX_SAMPLES: u64 = 18_446_744_073_709_551;
 
 // === Errors ===
 
@@ -46,6 +48,8 @@ const EInvalidBitDepth: u64 = 22;
 const EInvalidSampleRate: u64 = 23;
 /// Audio must have at least one sample.
 const EInvalidSamples: u64 = 24;
+/// Sample count would cause overflow in duration calculation.
+const ESamplesOverflow: u64 = 25;
 
 // === Public Functions ===
 
@@ -66,6 +70,7 @@ public fun new(
     );
     assert!(sample_rate_hz > 0, EInvalidSampleRate);
     assert!(samples > 0, EInvalidSamples);
+    assert!(samples <= MAX_SAMPLES, ESamplesOverflow);
 
     Audio {
         channels,

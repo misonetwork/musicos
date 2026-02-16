@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Implements the MusicOS Extensions functionality. It allows third-party
-/// modules to register capabilities on core MusicOS objects (Compositions,
-/// Recordings, and Releases) through a dynamic field-based extension system.
+/// modules to register capabilities on core MusicOS objects (Parties,
+/// Compositions, Recordings, and Releases) through a dynamic field-based
+/// extension system.
 ///
 /// A MusicOS Extension is a module that builds additional functionality on
 /// top of a core object without modifying or blocking the base. Common
@@ -14,8 +15,8 @@
 ///
 /// - An extension is registered by the object owner via the parent object's
 /// `register_extension` function, which requires the corresponding admin
-/// capability (`CompositionAdminCap`, `RecordingAdminCap`, or
-/// `ReleaseAdminCap`).
+/// capability (`PartyAdminCap`, `CompositionAdminCap`,
+/// `RecordingAdminCap`, or `ReleaseAdminCap`).
 /// - When registered, the extension stores its configuration as a typed
 /// dynamic field on the parent object's UID.
 /// - A registered extension can access the parent object's `UID` mutably

@@ -21,7 +21,18 @@ public struct Credit<Role: copy + drop + store> has copy, drop, store {
     roles: vector<Role>,
 }
 
+// === Constants ===
+
+/// Maximum length of a display name in bytes.
+const MAX_DISPLAY_NAME_LENGTH: u64 = 200;
+
 // === Errors ===
+
+// Constraint errors (30-39)
+/// Display name exceeds maximum length.
+const EMaxDisplayNameLengthExceeded: u64 = 30;
+/// String must not be empty.
+const EEmptyString: u64 = 31;
 
 // Conflict errors (40-49)
 /// Credit contains duplicate roles.
@@ -32,6 +43,8 @@ const EDuplicateRoles: u64 = 40;
 /// Creates a new credit with the given display name and roles.
 /// Aborts if the roles vector contains duplicates.
 public fun new<Role: copy + drop + store>(display_name: String, roles: vector<Role>): Credit<Role> {
+    assert!(!display_name.is_empty(), EEmptyString);
+    assert!(display_name.length() <= MAX_DISPLAY_NAME_LENGTH, EMaxDisplayNameLengthExceeded);
     assert!(vec_set::from_keys(roles).length() == roles.length(), EDuplicateRoles);
     Credit { display_name, roles }
 }

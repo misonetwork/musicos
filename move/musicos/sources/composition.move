@@ -130,7 +130,15 @@ public struct CompositionSplitSetEvent has copy, drop {
 /// Minimum number of roles a party must have.
 const MIN_ROLES_PER_PARTY: u64 = 1;
 /// Maximum number of roles a party can have.
-const MAX_ROLES_PER_PARTY: u64 = 20;
+const MAX_ROLES_PER_PARTY: u64 = 10;
+/// Maximum number of alternate titles allowed on a composition.
+const MAX_ALTERNATE_TITLES: u64 = 5;
+/// Maximum number of credits allowed on a composition.
+const MAX_CREDITS: u64 = 50;
+/// Maximum length of a title in bytes.
+const MAX_TITLE_LENGTH: u64 = 300;
+/// Maximum length of an alternate title in bytes.
+const MAX_ALTERNATE_TITLE_LENGTH: u64 = 300;
 
 // === Errors ===
 
@@ -145,6 +153,16 @@ const EMinRolesNotMet: u64 = 20;
 // Constraint errors (30-39)
 /// Party has too many roles.
 const EExceedsMaxRoles: u64 = 30;
+/// Composition has too many alternate titles.
+const EMaxAlternateTitlesExceeded: u64 = 31;
+/// Composition has too many credits.
+const EMaxCreditsExceeded: u64 = 32;
+/// Title exceeds maximum length.
+const EMaxTitleLengthExceeded: u64 = 33;
+/// Alternate title exceeds maximum length.
+const EMaxAlternateTitleLengthExceeded: u64 = 34;
+/// String must not be empty.
+const EEmptyString: u64 = 35;
 
 // Conflict errors (40-49)
 /// Party already has a credit on this composition.
@@ -177,6 +195,9 @@ public fun new<CompositionShare>(
     CompositionAdminCap<CompositionShare>,
     Balance<CompositionShare>,
 ) {
+    assert!(!title.is_empty(), EEmptyString);
+    assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
+
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Initialized,
@@ -247,6 +268,15 @@ public fun add_alternate_title<CompositionShare>(
 ) {
     match (self.state) {
         CompositionState::Initialized => {
+            assert!(!alternate_title.is_empty(), EEmptyString);
+            assert!(
+                alternate_title.length() <= MAX_ALTERNATE_TITLE_LENGTH,
+                EMaxAlternateTitleLengthExceeded,
+            );
+            assert!(
+                self.alternate_titles.length() < MAX_ALTERNATE_TITLES,
+                EMaxAlternateTitlesExceeded,
+            );
             self.alternate_titles.push_back(alternate_title);
         },
         _ => abort ENotInitializedState,
@@ -268,6 +298,7 @@ public fun add_credit<CompositionShare>(
         CompositionState::Initialized => {
             assert!(credit.roles().length() >= MIN_ROLES_PER_PARTY, EMinRolesNotMet);
             assert!(credit.roles().length() <= MAX_ROLES_PER_PARTY, EExceedsMaxRoles);
+            assert!(self.credits.length() < MAX_CREDITS, EMaxCreditsExceeded);
 
             let party_id = party.id();
             // Abort early if party already has a credit on this composition.

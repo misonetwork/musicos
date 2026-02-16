@@ -16,10 +16,10 @@ public struct TrackPosition(
     u64,
 ) has copy, drop, store;
 
-// === Public Functions ===
+// === Package Functions ===
 
 /// Creates a new track identifier with the specified disc and track indices.
-public fun new(disc_index: u64, track_index: u64): TrackPosition {
+public(package) fun new(disc_index: u64, track_index: u64): TrackPosition {
     TrackPosition(disc_index, track_index)
 }
 
