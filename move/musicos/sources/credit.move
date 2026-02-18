@@ -7,7 +7,6 @@
 module musicos::credit;
 
 use std::string::String;
-use sui::vec_set;
 
 // === Structs ===
 
@@ -41,11 +40,20 @@ const EDuplicateRoles: u64 = 40;
 // === Public Functions ===
 
 /// Creates a new credit with the given display name and roles.
-/// Aborts if the roles vector contains duplicates.
+/// Aborts with `EDuplicateRoles` if roles contains duplicates.
 public fun new<Role: copy + drop + store>(display_name: String, roles: vector<Role>): Credit<Role> {
     assert!(!display_name.is_empty(), EEmptyString);
     assert!(display_name.length() <= MAX_DISPLAY_NAME_LENGTH, EMaxDisplayNameLengthExceeded);
-    assert!(vec_set::from_keys(roles).length() == roles.length(), EDuplicateRoles);
+    let len = roles.length();
+    let mut i = 0;
+    while (i < len) {
+        let mut j = i + 1;
+        while (j < len) {
+            assert!(&roles[i] != &roles[j], EDuplicateRoles);
+            j = j + 1;
+        };
+        i = i + 1;
+    };
     Credit { display_name, roles }
 }
 

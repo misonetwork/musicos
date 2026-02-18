@@ -15,6 +15,7 @@
 module musicos::deal;
 
 use interest_bps::bps::{Self, BPS};
+use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
 use musicos::recording::{Recording, RecordingAdminCap};
 use std::string::String;
@@ -36,12 +37,18 @@ public struct Deal has key, store {
     composition_share_type: TypeName,
     /// Revenue split for the composition in basis points.
     composition_split_bps: BPS,
+    /// Verifier of the composition's demo audio file.
+    composition_demo_verifier_type: Option<TypeName>,
     /// ID of the recording being authorized.
     recording_id: ID,
     /// Type of the recording's share token.
     recording_share_type: TypeName,
     /// Duration of the recording in milliseconds.
     recording_duration_ms: u64,
+    /// Verifier of the recording's master audio file.
+    recording_master_verifier_type: TypeName,
+    /// Verifier of the recording's stem audio files.
+    recording_stem_verifier_types: vector<TypeName>,
     /// Title for the track (defaults to recording title).
     track_title: String,
     /// Revenue split allocated to this track in basis points.
@@ -79,8 +86,9 @@ public struct DealDestroyedEvent has copy, drop {
 /// Creates a new deal authorizing a recording for inclusion in a release.
 /// Requires the recording admin capability. Captures recording metadata
 /// at creation time. Optional title and cover art override the recording defaults.
-public fun new<RecordingShare>(
+public fun new<CompositionShare, RecordingShare>(
     _: &RecordingAdminCap<RecordingShare>,
+    composition: &Composition<CompositionShare>,
     recording: &Recording<RecordingShare>,
     release_id: ID,
     track_split_bps_value: u64,
@@ -97,9 +105,12 @@ public fun new<RecordingShare>(
         composition_id,
         composition_share_type: *recording.composition_share_type(),
         composition_split_bps: recording.composition_split_bps(),
+        composition_demo_verifier_type: composition.demo_verifier_type(),
         recording_id,
         recording_share_type: with_defining_ids<RecordingShare>(),
         recording_duration_ms: recording.master().duration_ms(),
+        recording_master_verifier_type: *recording.master().verifier_type(),
+        recording_stem_verifier_types: recording.stem_verifier_types(),
         track_title: track_title.destroy_or!(*recording.title()),
         track_split_bps: bps::new(track_split_bps_value),
         track_cover_art: track_cover_art.destroy_with_default(*recording.cover_art()),
@@ -152,6 +163,11 @@ public fun composition_share_type(self: &Deal): &TypeName {
     &self.composition_share_type
 }
 
+/// Returns the verifier of the composition's demo audio file.
+public fun composition_demo_verifier_type(self: &Deal): &Option<TypeName> {
+    &self.composition_demo_verifier_type
+}
+
 /// Returns the composition's revenue split in basis points.
 public fun composition_split_bps(self: &Deal): BPS {
     self.composition_split_bps
@@ -170,6 +186,16 @@ public fun recording_share_type(self: &Deal): &TypeName {
 /// Returns the duration of the recording in milliseconds.
 public fun recording_duration_ms(self: &Deal): u64 {
     self.recording_duration_ms
+}
+
+/// Returns the verifier of the recording's master audio file.
+public fun recording_master_verifier_type(self: &Deal): &TypeName {
+    &self.recording_master_verifier_type
+}
+
+/// Returns the verifier types of the recording's stem audio files.
+public fun recording_stem_verifier_types(self: &Deal): &vector<TypeName> {
+    &self.recording_stem_verifier_types
 }
 
 /// Returns the track title.

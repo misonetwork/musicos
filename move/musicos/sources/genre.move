@@ -145,3 +145,21 @@ fun assert_valid_name(name: &String) {
     assert!(bytes.length() <= MAX_NAME_LENGTH, EMaxNameLengthExceeded);
     assert!(bytes.all!(|c| (*c >= 65 && *c <= 90) || *c == 95), EInvalidCharacter);
 }
+
+// === Test Only ===
+
+#[test_only]
+public fun new_genre_registry_for_testing(ctx: &mut TxContext): GenreRegistry {
+    GenreRegistry {
+        id: object::new(ctx),
+    }
+}
+
+#[test_only]
+public fun new_for_testing(name: String, ctx: &mut TxContext): Genre {
+    assert_valid_name(&name);
+    Genre {
+        id: object::new(ctx),
+        name,
+    }
+}

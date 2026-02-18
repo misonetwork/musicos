@@ -50,7 +50,7 @@ const EEmptyString: u64 = 5;
 
 // === Public Functions ===
 
-/// Creates a new stem with the given audio and description.
+/// Creates a new stem with the given audio and name.
 /// Starts with an empty contributors list.
 public fun new(audio: Audio, name: String): Stem {
     assert!(!name.is_empty(), EEmptyString);

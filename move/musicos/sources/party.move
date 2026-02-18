@@ -94,7 +94,7 @@ public struct PartyAddedToGroupEvent has copy, drop {
     /// ID of the group.
     group_id: ID,
     /// ID of the party added to the group.
-    party_id: ID,
+    member_id: ID,
 }
 
 /// Emitted when a party is removed from a group.
@@ -102,7 +102,7 @@ public struct PartyRemovedFromGroupEvent has copy, drop {
     /// ID of the group.
     group_id: ID,
     /// ID of the party removed from the group.
-    party_id: ID,
+    member_id: ID,
 }
 
 /// Emitted when an extension is registered for a party.
@@ -147,6 +147,8 @@ const EEmptyString: u64 = 32;
 // Conflict errors (40-49)
 /// Attempted to add a party that is already a member of the group.
 const EDuplicateParty: u64 = 40;
+/// Attempted to add a group as a member of itself.
+const ECantAddSelfAsMember: u64 = 41;
 
 // === Public Functions ===
 
@@ -203,22 +205,28 @@ public fun set_name(self: &mut Party, cap: &PartyAdminCap, name: String) {
 /// Adds an individual party to a group.
 /// Requires the admin capability for the group.
 /// The party being added must be an individual (not another group).
-public fun add_party(self: &mut Party, cap: &PartyAdminCap, party: &Party) {
+public fun add_party(self: &mut Party, cap: &PartyAdminCap, member: &Party) {
     self.authorize(cap);
+
+    let group_id = self.id();
+    let member_id = member.id();
 
     match (&mut self.kind) {
         PartyKind::Group(parties) => {
             assert!(parties.length() < MAX_GROUP_MEMBERS, EMaxGroupMembersExceeded);
+
+            // Assert the party being added is not the group itself.
+            assert!(member_id != group_id, ECantAddSelfAsMember);
             // Assert the party that is being added is an individual.
-            party.assert_is_individual_kind();
+            member.assert_is_individual_kind();
             // Assert the party that is being added is not already a member of the group.
-            assert!(!parties.contains(&party.id()), EDuplicateParty);
+            assert!(!parties.contains(&member_id), EDuplicateParty);
             // Add the party to the group.
-            parties.insert(party.id());
+            parties.insert(member_id);
 
             emit(PartyAddedToGroupEvent {
-                group_id: self.id(),
-                party_id: party.id(),
+                group_id,
+                member_id,
             });
         },
         _ => abort ENotGroupKind,
@@ -227,16 +235,16 @@ public fun add_party(self: &mut Party, cap: &PartyAdminCap, party: &Party) {
 
 /// Removes a party from a group by their ID.
 /// Requires the admin capability for the group.
-public fun remove_party(self: &mut Party, cap: &PartyAdminCap, party_id: ID) {
+public fun remove_party(self: &mut Party, cap: &PartyAdminCap, member_id: ID) {
     self.authorize(cap);
 
     match (&mut self.kind) {
         PartyKind::Group(members) => {
-            members.remove(&party_id);
+            members.remove(&member_id);
 
             emit(PartyRemovedFromGroupEvent {
                 group_id: self.id(),
-                party_id,
+                member_id,
             });
         },
         _ => abort ENotGroupKind,
@@ -253,6 +261,7 @@ public fun register_extension<Extension: drop, Config: drop + store>(
     config: Config,
 ) {
     self.authorize(cap);
+
     extension::register<Extension, Config>(&mut self.id, config);
 
     emit(PartyExtensionRegisteredEvent<Extension> {
@@ -267,13 +276,12 @@ public fun unregister_extension<Extension: drop, Config: drop + store>(
     _extension: Extension,
 ): Config {
     self.authorize(cap);
-    let config = extension::unregister<Extension, Config>(&mut self.id);
 
     emit(PartyExtensionUnregisteredEvent<Extension> {
         party_id: self.id(),
     });
 
-    config
+    extension::unregister<Extension, Config>(&mut self.id)
 }
 
 /// Creates a new individual party kind.
@@ -376,4 +384,35 @@ public fun assert_is_individual_kind(self: &Party) {
 /// Aborts if this party is not a group.
 public fun assert_is_group_kind(self: &Party) {
     assert!(is_group_kind(self), ENotGroupKind);
+}
+
+// === Test Only ===
+
+#[test_only]
+public fun new_group_with_n_members_for_testing(
+    n: u64,
+    ctx: &mut TxContext,
+): (Party, PartyAdminCap) {
+    let mut members = vec_set::empty();
+    n.do!(|_| {
+        let uid = object::new(ctx);
+        let id = uid.to_inner();
+        uid.delete();
+        members.insert(id);
+    });
+
+    let mut party = Party {
+        id: object::new(ctx),
+        kind: PartyKind::Group(members),
+        name: b"Test Group".to_string(),
+    };
+
+    let party_id = party.id();
+
+    let party_admin_cap = PartyAdminCap {
+        id: claim(&mut party.id, PartyAdminCapKey(party_id)),
+        party_id,
+    };
+
+    (party, party_admin_cap)
 }

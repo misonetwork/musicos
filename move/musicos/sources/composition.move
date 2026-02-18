@@ -15,12 +15,14 @@
 module musicos::composition;
 
 use interest_bps::bps::{Self, BPS};
+use musicos::audio::Audio;
 use musicos::composition_party_role::CompositionPartyRole;
 use musicos::credit::Credit;
 use musicos::extension;
 use musicos::party::Party;
 use musicos::share;
 use std::string::String;
+use std::type_name::TypeName;
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
@@ -54,7 +56,7 @@ public struct Composition<phantom CompositionShare> has key {
     /// Optional score data reference.
     score: Option<WalrusData>,
     /// Optional audio demo of the composition.
-    demo: Option<WalrusData>,
+    demo: Option<Audio>,
 }
 
 /// Capability that authorizes modifications to a specific composition.
@@ -130,7 +132,7 @@ public struct CompositionSplitSetEvent has copy, drop {
 /// Minimum number of roles a party must have.
 const MIN_ROLES_PER_PARTY: u64 = 1;
 /// Maximum number of roles a party can have.
-const MAX_ROLES_PER_PARTY: u64 = 10;
+const MAX_ROLES_PER_PARTY: u64 = 5;
 /// Maximum number of alternate titles allowed on a composition.
 const MAX_ALTERNATE_TITLES: u64 = 5;
 /// Maximum number of credits allowed on a composition.
@@ -356,44 +358,16 @@ public fun set_lyrics<CompositionShare>(
     }
 }
 
-/// Clears the lyrics data reference from the composition.
-/// Required State: Initialized
-public fun clear_lyrics<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            self.lyrics = option::none();
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
 /// Sets the demo audio reference for the composition.
 /// Required State: Initialized
 public fun set_demo<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
-    demo: WalrusData,
+    audio: Audio,
 ) {
     match (self.state) {
         CompositionState::Initialized => {
-            self.demo = option::some(demo);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Clears the demo audio reference from the composition.
-/// Required State: Initialized
-public fun clear_demo<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            self.demo = option::none();
+            self.demo = option::some(audio);
         },
         _ => abort ENotInitializedState,
     }
@@ -414,20 +388,6 @@ public fun set_chart<CompositionShare>(
     }
 }
 
-/// Clears the chart data reference from the composition.
-/// Required State: Initialized
-public fun clear_chart<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            self.chart = option::none();
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
 /// Sets the score data reference for the composition.
 /// Required State: Initialized
 public fun set_score<CompositionShare>(
@@ -438,20 +398,6 @@ public fun set_score<CompositionShare>(
     match (self.state) {
         CompositionState::Initialized => {
             self.score = option::some(score);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Clears the score data reference from the composition.
-/// Required State: Initialized
-public fun clear_score<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            self.score = option::none();
         },
         _ => abort ENotInitializedState,
     }
@@ -530,8 +476,15 @@ public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &Opti
 }
 
 /// Returns the optional demo audio reference.
-public fun demo<CompositionShare>(self: &Composition<CompositionShare>): &Option<WalrusData> {
+public fun demo<CompositionShare>(self: &Composition<CompositionShare>): &Option<Audio> {
     &self.demo
+}
+
+/// Returns the verifier type of the composition's demo audio file.
+public fun demo_verifier_type<CompositionShare>(
+    self: &Composition<CompositionShare>,
+): Option<TypeName> {
+    self.demo.map_ref!(|audio| *audio.verifier_type())
 }
 
 /// Returns the optional chart data reference.
@@ -573,4 +526,35 @@ public(package) fun uid_mut_internal<CompositionShare>(
     self: &mut Composition<CompositionShare>,
 ): &mut UID {
     &mut self.id
+}
+
+// === Test Only ===
+
+#[test_only]
+public fun new_for_testing<CompositionShare>(
+    title: String,
+    split_value: u64,
+    ctx: &mut TxContext,
+): (Composition<CompositionShare>, CompositionAdminCap<CompositionShare>) {
+    assert!(!title.is_empty(), EEmptyString);
+    assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
+
+    let mut composition = Composition<CompositionShare> {
+        id: object::new(ctx),
+        state: CompositionState::Initialized,
+        title,
+        alternate_titles: vector[],
+        credits: vec_map::empty(),
+        split_bps: bps::new(split_value),
+        lyrics: option::none(),
+        chart: option::none(),
+        score: option::none(),
+        demo: option::none(),
+    };
+
+    let composition_admin_cap = CompositionAdminCap<CompositionShare> {
+        id: claim(&mut composition.id, CompositionAdminCapKey()),
+    };
+
+    (composition, composition_admin_cap)
 }

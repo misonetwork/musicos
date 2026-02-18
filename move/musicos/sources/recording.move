@@ -107,10 +107,8 @@ public struct RecordingAdminCap<phantom RecordingShare> has key, store {
 public struct RecordingAdminCapKey() has copy, drop, store;
 
 /// Key for deriving the recording's address from the composition.
-public struct RecordingKey(
-    /// Digest of the master audio file.
-    vector<u8>,
-) has copy, drop, store;
+/// Derived from the master audio's verifier type.
+public struct RecordingKey(TypeName) has copy, drop, store;
 
 // === Enums ===
 
@@ -162,11 +160,13 @@ const MAX_ROLES_PER_CREDIT: u64 = 10;
 /// Minimum number of contributors a stem must have.
 const MIN_CONTRIBUTORS_PER_STEM: u64 = 1;
 /// Maximum number of stems allowed on a recording.
-const MAX_STEMS: u64 = 50;
+const MAX_STEMS: u64 = 100;
+/// Minimum number of stems a recording must have.
+const MIN_STEMS: u64 = 2;
 /// Maximum number of credits allowed on a recording.
 const MAX_CREDITS: u64 = 150;
 /// Maximum number of secondary genres allowed on a recording.
-const MAX_SECONDARY_GENRES: u64 = 5;
+const MAX_SECONDARY_GENRES: u64 = 3;
 /// Maximum number of primary artists allowed on a recording.
 const MAX_PRIMARY_ARTISTS: u64 = 20;
 /// Maximum number of featured artists allowed on a recording.
@@ -174,7 +174,7 @@ const MAX_FEATURED_ARTISTS: u64 = 50;
 /// Maximum length of a title version in bytes.
 const MAX_TITLE_VERSION_LENGTH: u64 = 100;
 /// Maximum length of a subtitle in bytes.
-const MAX_SUBTITLE_LENGTH: u64 = 200;
+const MAX_SUBTITLE_LENGTH: u64 = 300;
 
 // === Errors ===
 
@@ -231,6 +231,8 @@ const ENoPrimaryArtistAssigned: u64 = 51;
 const EPartyNotCredited: u64 = 52;
 /// Stem must have at least one contributor.
 const EMinStemContributorsNotMet: u64 = 53;
+/// Recording must have at least two stems to publish.
+const EMinStemsNotMet: u64 = 54;
 
 // === Public Functions ===
 
@@ -256,7 +258,10 @@ public fun new<RecordingShare, CS>(
     let primary_genre_id = genre.id();
 
     let mut recording = Recording<RecordingShare> {
-        id: claim(composition.uid_mut_internal(), RecordingKey(*master.pcm_digest())),
+        id: claim(
+            composition.uid_mut_internal(),
+            RecordingKey(*master.verifier_type()),
+        ),
         state: RecordingState::Initialized,
         title: *composition.title(),
         title_version: option::none(),
@@ -313,6 +318,8 @@ public fun publish<RecordingShare>(
             assert!(!self.primary_artist_ids.is_empty(), ENoPrimaryArtistAssigned);
             // Assert instrumental => no lyrics
             assert!(!self.is_instrumental || self.lyrics.is_none(), ELyricsInstrumentalConflict);
+            // Assert the recording has at least two stems.
+            assert!(self.stems.length() >= MIN_STEMS, EMinStemsNotMet);
 
             // Set the recording's publish timestamp.
             self.state = RecordingState::Published(clock.timestamp_ms());
@@ -738,6 +745,11 @@ public fun master<RecordingShare>(self: &Recording<RecordingShare>): &Audio {
     &self.master
 }
 
+/// Returns the verifier type of the recording's master audio file.
+public fun master_verifier_type<RecordingShare>(self: &Recording<RecordingShare>): &TypeName {
+    self.master.verifier_type()
+}
+
 /// Returns a reference to the cover art.
 public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverArt {
     &self.cover_art
@@ -746,6 +758,12 @@ public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverAr
 /// Returns a reference to the stems.
 public fun stems<RecordingShare>(self: &Recording<RecordingShare>): &vector<Stem> {
     &self.stems
+}
+
+/// Returns the verifier types of the recording's stem audio files.
+/// Use VecSet as an intermediary to avoid duplicate types.
+public fun stem_verifier_types<RecordingShare>(self: &Recording<RecordingShare>): vector<TypeName> {
+    vec_set::from_keys(self.stems.map_ref!(|s| { *s.audio().verifier_type() })).into_keys()
 }
 
 /// Returns whether the provided ID is a primary artist on the recording.
@@ -821,4 +839,51 @@ public(package) fun uid_mut_internal<RecordingShare>(
     self: &mut Recording<RecordingShare>,
 ): &mut UID {
     &mut self.id
+}
+
+// === Test Only ===
+
+#[test_only]
+public fun new_for_testing<RecordingShare, CS>(
+    title: String,
+    composition_id: ID,
+    composition_split_value: u64,
+    primary_genre_id: ID,
+    is_explicit: bool,
+    is_instrumental: bool,
+    master: Audio,
+    cover_art: CoverArt,
+    ctx: &mut TxContext,
+): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>) {
+    let mut recording = Recording<RecordingShare> {
+        id: object::new(ctx),
+        state: RecordingState::Initialized,
+        title,
+        title_version: option::none(),
+        subtitle: option::none(),
+        composition_id,
+        composition_share_type: with_defining_ids<CS>(),
+        composition_split_bps: interest_bps::bps::new(composition_split_value),
+        primary_genre_id,
+        secondary_genre_ids: vec_set::empty(),
+        primary_artist_ids: vec_set::empty(),
+        featured_artist_ids: vec_set::empty(),
+        credits: vec_map::empty(),
+        language: option::none(),
+        is_explicit,
+        is_instrumental,
+        lyrics: option::none(),
+        musical_key: option::none(),
+        time_signature: option::none(),
+        tempo_bpm: option::none(),
+        master,
+        stems: vector[],
+        cover_art,
+    };
+
+    let recording_admin_cap = RecordingAdminCap<RecordingShare> {
+        id: claim(&mut recording.id, RecordingAdminCapKey()),
+    };
+
+    (recording, recording_admin_cap)
 }

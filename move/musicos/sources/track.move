@@ -29,12 +29,18 @@ public struct Track has drop, store {
     composition_id: ID,
     /// Type of the composition's share token.
     composition_share_type: TypeName,
+    /// Verifier of the composition's demo audio file.
+    composition_demo_verifier_type: Option<TypeName>,
     /// Split of revenue allocated to composition vs recording (in basis points).
     composition_split_bps: BPS,
     /// ID of the recording on this track.
     recording_id: ID,
     /// Type of the recording's share token.
     recording_share_type: TypeName,
+    /// Verifier of the recording's master audio file.
+    recording_master_verifier_type: TypeName,
+    /// Verifier of the recording's stem audio files.
+    recording_stem_verifier_types: vector<TypeName>,
     /// Description of the track.
     title: String,
     /// Duration of the track in milliseconds.
@@ -72,9 +78,12 @@ public fun new(deal: Deal): Track {
         state: TrackState::Unassigned { release_id: deal.release_id() },
         composition_id: deal.composition_id(),
         composition_share_type: *deal.composition_share_type(),
+        composition_demo_verifier_type: *deal.composition_demo_verifier_type(),
         composition_split_bps: deal.composition_split_bps(),
         recording_id: deal.recording_id(),
         recording_share_type: *deal.recording_share_type(),
+        recording_master_verifier_type: *deal.recording_master_verifier_type(),
+        recording_stem_verifier_types: *deal.recording_stem_verifier_types(),
         title: *deal.track_title(),
         duration_ms: deal.recording_duration_ms(),
         cover_art: *deal.track_cover_art(),
@@ -115,6 +124,11 @@ public fun composition_split_bps(self: &Track): BPS {
     self.composition_split_bps
 }
 
+/// Returns the verifier of the composition's demo audio file.
+public fun composition_demo_verifier_type(self: &Track): &Option<TypeName> {
+    &self.composition_demo_verifier_type
+}
+
 /// Returns the ID of the recording.
 public fun recording_id(self: &Track): ID {
     self.recording_id
@@ -123,6 +137,16 @@ public fun recording_id(self: &Track): ID {
 /// Returns the type of the recording's share token.
 public fun recording_share_type(self: &Track): &TypeName {
     &self.recording_share_type
+}
+
+/// Returns the verifier of the recording's master audio file.
+public fun recording_master_verifier_type(self: &Track): &TypeName {
+    &self.recording_master_verifier_type
+}
+
+/// Returns the verifier types of the recording's stem audio files.
+public fun recording_stem_verifier_types(self: &Track): &vector<TypeName> {
+    &self.recording_stem_verifier_types
 }
 
 /// Returns the title of the track.
@@ -143,4 +167,39 @@ public fun cover_art(self: &Track): &CoverArt {
 /// Returns the split of revenue allocated to composition vs recording (in basis points).
 public fun split_bps(self: &Track): BPS {
     self.split_bps
+}
+
+// === Test Only ===
+
+#[test_only]
+public fun new_for_testing<CS, RS, V: drop>(
+    composition_id: ID,
+    recording_id: ID,
+    release_id: ID,
+    title: String,
+    duration_ms: u64,
+    cover_art: CoverArt,
+    split_bps_value: u64,
+    composition_split_bps_value: u64,
+): Track {
+    Track {
+        state: TrackState::Unassigned { release_id },
+        composition_id,
+        composition_share_type: std::type_name::with_defining_ids<CS>(),
+        composition_demo_verifier_type: option::none(),
+        composition_split_bps: interest_bps::bps::new(composition_split_bps_value),
+        recording_id,
+        recording_share_type: std::type_name::with_defining_ids<RS>(),
+        recording_master_verifier_type: std::type_name::with_defining_ids<V>(),
+        recording_stem_verifier_types: vector[],
+        title,
+        duration_ms,
+        cover_art,
+        split_bps: interest_bps::bps::new(split_bps_value),
+    }
+}
+
+#[test_only]
+public fun set_release_id_for_testing(self: &mut Track, release_id: ID) {
+    self.state = TrackState::Unassigned { release_id };
 }

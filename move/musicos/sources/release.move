@@ -21,7 +21,6 @@ use musicos::disc::Disc;
 use musicos::extension;
 use musicos::party::Party;
 use musicos::release_party_role::ReleasePartyRole;
-use musicos::track_position::TrackPosition;
 use std::string::String;
 use std::type_name::TypeName;
 use sui::balance::Balance;
@@ -31,6 +30,7 @@ use sui::derived_object::claim;
 use sui::event::emit;
 use sui::hash::blake2b256;
 use sui::vec_map::{Self, VecMap};
+use sui::vec_set;
 
 public use fun release_admin_cap_release_id as ReleaseAdminCap.release_id;
 
@@ -79,25 +79,6 @@ public struct ReleaseAdminCap has key, store {
 
 // Derivation key for ReleaseAdminCap.
 public struct ReleaseAdminCapKey() has copy, drop, store;
-
-/// Revenue split information for a single track.
-#[allow(unused_field)]
-public struct TrackSplit has copy, drop, store {
-    /// Position of the track in the release.
-    track_position: TrackPosition,
-    /// ID of the track's composition.
-    composition_id: ID,
-    /// Share token type for the composition.
-    composition_share_type: TypeName,
-    /// Revenue amount for the composition.
-    composition_split_value: u64,
-    /// ID of the track's recording.
-    recording_id: ID,
-    /// Share token type for the recording.
-    recording_share_type: TypeName,
-    /// Revenue amount for the recording.
-    recording_split_value: u64,
-}
 
 // === Enums ===
 
@@ -149,15 +130,6 @@ public struct ReleaseRevenueDistributedEvent<phantom C> has copy, drop {
     recording_id: ID,
     /// Amount distributed to the recording.
     recording_split_value: u64,
-}
-
-/// Emitted when a track payment is completed.
-#[allow(unused_field)]
-public struct ReleaseTrackPaidEvent<phantom C, phantom CS, phantom RecordingShare> has copy, drop {
-    /// ID of the release.
-    release_id: ID,
-    /// Total value distributed.
-    distribution_value: u64,
 }
 
 /// Emitted when an extension is registered for a release.
@@ -493,6 +465,23 @@ public fun duration_ms(self: &Release): u64 {
     duration
 }
 
+public fun audio_verifier_types(self: &Release): vector<TypeName> {
+    let mut verifier_types = vector<TypeName>[];
+
+    self.discs.do_ref!(|disc| {
+        disc.tracks().do_ref!(|track| {
+            // Add the composition's demo audio verifier type.
+            track.composition_demo_verifier_type().do_ref!(|t| verifier_types.push_back(*t));
+            // Add the recording's master audio verifier type.
+            verifier_types.push_back(*track.recording_master_verifier_type());
+            // Add the recording's stem audio verifier types.
+            verifier_types.append(*track.recording_stem_verifier_types());
+        });
+    });
+
+    vec_set::from_keys(verifier_types).into_keys()
+}
+
 /// Returns the release ID associated with the admin capability.
 public fun release_admin_cap_release_id(cap: &ReleaseAdminCap): ID {
     cap.release_id
@@ -600,4 +589,52 @@ fun assert_track_assignments(self: &mut Release) {
     self.discs.do_mut!(|disc| {
         disc.tracks_mut().do_mut!(|track| { track.assign(&self.id); });
     });
+}
+
+// === Test Only ===
+
+#[test_only]
+public fun new_release_registry_for_testing(ctx: &mut TxContext): ReleaseRegistry {
+    ReleaseRegistry {
+        id: object::new(ctx),
+    }
+}
+
+#[test_only]
+public fun new_for_testing(
+    kind: ReleaseKind,
+    title: String,
+    description: String,
+    cover_art: CoverArt,
+    discs: vector<Disc>,
+    ctx: &mut TxContext,
+): (Release, ReleaseAdminCap) {
+    use musicos::track;
+
+    let mut release = Release {
+        id: object::new(ctx),
+        kind,
+        state: ReleaseState::Initialized(false),
+        title,
+        subtitle: option::none(),
+        description,
+        credits: vec_map::empty(),
+        discs,
+        cover_art,
+    };
+
+    // Patch all tracks to point to this release's ID so publish() can assign them.
+    let release_id = release.id();
+    release.discs.do_mut!(|disc| {
+        disc.tracks_mut().do_mut!(|t| {
+            track::set_release_id_for_testing(t, release_id);
+        });
+    });
+
+    let release_admin_cap = ReleaseAdminCap {
+        id: claim(&mut release.id, ReleaseAdminCapKey()),
+        release_id: release.id(),
+    };
+
+    (release, release_admin_cap)
 }
