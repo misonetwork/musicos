@@ -465,21 +465,21 @@ public fun duration_ms(self: &Release): u64 {
     duration
 }
 
-public fun audio_verifier_types(self: &Release): vector<TypeName> {
-    let mut verifier_types = vector<TypeName>[];
+public fun audio_ingester_types(self: &Release): vector<TypeName> {
+    let mut ingester_types = vector<TypeName>[];
 
     self.discs.do_ref!(|disc| {
         disc.tracks().do_ref!(|track| {
-            // Add the composition's demo audio verifier type.
-            track.composition_demo_verifier_type().do_ref!(|t| verifier_types.push_back(*t));
-            // Add the recording's master audio verifier type.
-            verifier_types.push_back(*track.recording_master_verifier_type());
-            // Add the recording's stem audio verifier types.
-            verifier_types.append(*track.recording_stem_verifier_types());
+            // Add the composition's demo audio ingester type.
+            track.composition_demo_ingester_type().do_ref!(|t| ingester_types.push_back(*t));
+            // Add the recording's master audio ingester type.
+            ingester_types.push_back(*track.recording_master_ingester_type());
+            // Add the recording's stem audio ingester types.
+            ingester_types.append(*track.recording_stem_ingester_types());
         });
     });
 
-    vec_set::from_keys(verifier_types).into_keys()
+    vec_set::from_keys(ingester_types).into_keys()
 }
 
 /// Returns the release ID associated with the admin capability.
@@ -598,6 +598,38 @@ public fun new_release_registry_for_testing(ctx: &mut TxContext): ReleaseRegistr
     ReleaseRegistry {
         id: object::new(ctx),
     }
+}
+
+/// Pre-fills a release with `n` fake credits (bypasses public API validation).
+/// The first credit is designated as a primary role.
+#[test_only]
+public fun prefill_credits_for_testing(
+    self: &mut Release,
+    n: u64,
+    ctx: &mut TxContext,
+) {
+    use musicos::credit;
+    use musicos::release_party_role;
+
+    n.do!(|i| {
+        let uid = object::new(ctx);
+        let id = uid.to_inner();
+        uid.delete();
+        let role = if (i == 0) {
+            release_party_role::new_primary_role()
+        } else {
+            release_party_role::new_featured_role()
+        };
+        let credit = credit::new(
+            b"Test".to_string(),
+            vector[role],
+        );
+        self.credits.insert(id, credit);
+        // Set has_primary_credit flag for the first credit
+        if (i == 0) {
+            self.state = ReleaseState::Initialized(true);
+        };
+    });
 }
 
 #[test_only]

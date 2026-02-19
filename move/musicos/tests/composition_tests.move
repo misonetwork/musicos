@@ -69,7 +69,7 @@ fun test_publish_composition() {
     comp.add_credit(&cap, &party, cred);
 
     // Add content (required for publish)
-    comp.set_lyrics(&cap, walrus_data::new_without_quilt(1));
+    comp.set_lyrics(&cap, walrus_data::new_blob(1));
 
     // Publish
     let clock = sui::clock::create_for_testing(ctx);
@@ -205,15 +205,15 @@ fun test_set_and_clear_content() {
     let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
 
     // Set lyrics
-    comp.set_lyrics(&cap, walrus_data::new_without_quilt(1));
+    comp.set_lyrics(&cap, walrus_data::new_blob(1));
     assert!(comp.lyrics().is_some());
 
     // Set chart
-    comp.set_chart(&cap, walrus_data::new_without_quilt(2));
+    comp.set_chart(&cap, walrus_data::new_blob(2));
     assert!(comp.chart().is_some());
 
     // Set score
-    comp.set_score(&cap, walrus_data::new_without_quilt(3));
+    comp.set_score(&cap, walrus_data::new_blob(3));
     assert!(comp.score().is_some());
 
     // Set demo (requires verified Audio)
@@ -373,7 +373,7 @@ fun test_add_credit_duplicate_party() {
 fun test_publish_no_parties() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
-    comp.set_lyrics(&cap, walrus_data::new_without_quilt(1));
+    comp.set_lyrics(&cap, walrus_data::new_blob(1));
 
     let clock = sui::clock::create_for_testing(ctx);
     comp.publish(&cap, &clock);

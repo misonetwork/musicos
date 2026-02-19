@@ -35,6 +35,7 @@ const ENoParties: u64 = 50;
 const ENoPrimaryArtistAssigned: u64 = 51;
 const EPartyNotCredited: u64 = 52;
 const EMinStemContributorsNotMet: u64 = 53;
+const EMinStemsNotMet: u64 = 54;
 
 // Must match recording.move
 const MAX_STEMS: u64 = 100;
@@ -489,7 +490,7 @@ fun test_set_lyrics_on_instrumental() {
     let ctx = &mut tx_context::dummy();
     let (mut rec, cap) = new_instrumental_recording(ctx);
 
-    rec.set_lyrics(&cap, walrus_data::new_without_quilt(1)); // should fail
+    rec.set_lyrics(&cap, walrus_data::new_blob(1)); // should fail
 
     destroy(rec);
     destroy(cap);
@@ -510,6 +511,14 @@ fun test_publish_recording() {
     );
     rec.add_credit(&cap, &party, cred);
     rec.add_primary_artist(&cap, &party);
+
+    // Add minimum required stems (MIN_STEMS = 2)
+    let mut s1 = stem::new(test_helpers::audio(), b"Vocals".to_string());
+    s1.add_contributor(&party);
+    rec.add_stem(&cap, s1);
+    let mut s2 = stem::new(test_helpers::audio(), b"Instrumental".to_string());
+    s2.add_contributor(&party);
+    rec.add_stem(&cap, s2);
 
     let clock = sui::clock::create_for_testing(ctx);
     rec.publish(&cap, &clock);
@@ -580,4 +589,184 @@ fun test_set_subtitle_twice() {
 
     destroy(rec);
     destroy(cap);
+}
+
+// === Exceeds-Limit Tests ===
+
+#[test, expected_failure(abort_code = EMaxCreditsExceeded, location = musicos::recording)]
+fun test_add_credit_exceeds_max() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rec, cap) = new_test_recording(ctx);
+
+    // Pre-fill to MAX_CREDITS
+    rec.prefill_credits_for_testing(MAX_CREDITS, ctx);
+
+    // One more should fail
+    let (party, party_cap) = test_helpers::individual(ctx);
+    let cred = credit::new(
+        b"One Too Many".to_string(),
+        vector[recording_party_role::new_vocalist_role(option::none())],
+    );
+    rec.add_credit(&cap, &party, cred);
+
+    destroy(party);
+    destroy(party_cap);
+    destroy(rec);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EMaxStemsExceeded, location = musicos::recording)]
+fun test_add_stem_exceeds_max() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rec, cap) = new_test_recording(ctx);
+    let (party, party_cap) = test_helpers::individual(ctx);
+
+    // Credit a party so we can create stems with a contributor
+    let cred = credit::new(
+        b"Artist".to_string(),
+        vector[recording_party_role::new_vocalist_role(option::none())],
+    );
+    rec.add_credit(&cap, &party, cred);
+
+    // Pre-fill to MAX_STEMS
+    rec.prefill_stems_for_testing(MAX_STEMS);
+
+    // One more should fail
+    let mut s = stem::new(test_helpers::audio(), b"Overflow".to_string());
+    s.add_contributor(&party);
+    rec.add_stem(&cap, s);
+
+    destroy(party);
+    destroy(party_cap);
+    destroy(rec);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EExceedsMaxRoles, location = musicos::recording)]
+fun test_add_credit_exceeds_max_roles() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rec, cap) = new_test_recording(ctx);
+    let (party, party_cap) = test_helpers::individual(ctx);
+
+    // Create a credit with 11 roles (MAX_ROLES_PER_CREDIT + 1)
+    let cred = credit::new(
+        b"Artist".to_string(),
+        vector[
+            recording_party_role::new_producer_role(option::none()),
+            recording_party_role::new_vocalist_role(option::none()),
+            recording_party_role::new_arranger_role(option::none()),
+            recording_party_role::new_conductor_role(option::none()),
+            recording_party_role::new_editor_role(option::none()),
+            recording_party_role::new_mixing_engineer_role(option::none()),
+            recording_party_role::new_mastering_engineer_role(option::none()),
+            recording_party_role::new_recording_engineer_role(option::none()),
+            recording_party_role::new_programmer_role(option::none()),
+            recording_party_role::new_sound_designer_role(option::none()),
+            recording_party_role::new_narrator_role(option::none()),
+        ],
+    );
+    rec.add_credit(&cap, &party, cred);
+
+    destroy(party);
+    destroy(party_cap);
+    destroy(rec);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EMaxPrimaryArtistsExceeded, location = musicos::recording)]
+fun test_add_primary_artist_exceeds_max() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rec, cap) = new_test_recording(ctx);
+
+    // Pre-fill to MAX_PRIMARY_ARTISTS
+    rec.prefill_primary_artists_for_testing(MAX_PRIMARY_ARTISTS, ctx);
+
+    // Credit one more party and try to designate as primary
+    let (party, party_cap) = test_helpers::individual(ctx);
+    let cred = credit::new(
+        b"Artist".to_string(),
+        vector[recording_party_role::new_vocalist_role(option::none())],
+    );
+    rec.add_credit(&cap, &party, cred);
+    rec.add_primary_artist(&cap, &party);
+
+    destroy(party);
+    destroy(party_cap);
+    destroy(rec);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EMaxFeaturedArtistsExceeded, location = musicos::recording)]
+fun test_add_featured_artist_exceeds_max() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rec, cap) = new_test_recording(ctx);
+
+    // Pre-fill to MAX_FEATURED_ARTISTS
+    rec.prefill_featured_artists_for_testing(MAX_FEATURED_ARTISTS, ctx);
+
+    // Credit one more party and try to designate as featured
+    let (party, party_cap) = test_helpers::individual(ctx);
+    let cred = credit::new(
+        b"Artist".to_string(),
+        vector[recording_party_role::new_vocalist_role(option::none())],
+    );
+    rec.add_credit(&cap, &party, cred);
+    rec.add_featured_artist(&cap, &party);
+
+    destroy(party);
+    destroy(party_cap);
+    destroy(rec);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EMaxSecondaryGenresExceeded, location = musicos::recording)]
+fun test_add_secondary_genre_exceeds_max() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rec, cap) = new_test_recording(ctx);
+
+    // Fill to MAX_SECONDARY_GENRES using valid genre names (A-Z and _ only)
+    let names = vector[b"JAZZ", b"ROCK", b"POP"];
+    let mut genres = vector[];
+    MAX_SECONDARY_GENRES.do!(|i| {
+        let g = genre::new_for_testing(names[i].to_string(), ctx);
+        rec.add_secondary_genre(&cap, &g);
+        genres.push_back(g);
+    });
+
+    // One more should fail
+    let extra = genre::new_for_testing(b"BLUES".to_string(), ctx);
+    rec.add_secondary_genre(&cap, &extra);
+
+    destroy(extra);
+    genres.destroy!(|g| destroy(g));
+    destroy(rec);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EMinStemsNotMet, location = musicos::recording)]
+fun test_publish_below_min_stems() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rec, cap) = new_test_recording(ctx);
+    let (party, party_cap) = test_helpers::individual(ctx);
+
+    // Credit and assign as primary artist
+    let cred = credit::new(
+        b"Artist".to_string(),
+        vector[recording_party_role::new_vocalist_role(option::none())],
+    );
+    rec.add_credit(&cap, &party, cred);
+    rec.add_primary_artist(&cap, &party);
+
+    // Add only 1 stem (MIN_STEMS = 2)
+    let mut s = stem::new(test_helpers::audio(), b"Solo Stem".to_string());
+    s.add_contributor(&party);
+    rec.add_stem(&cap, s);
+
+    let clock = sui::clock::create_for_testing(ctx);
+    rec.publish(&cap, &clock);
+
+    clock.destroy_for_testing();
+    destroy(cap);
+    destroy(party);
+    destroy(party_cap);
 }

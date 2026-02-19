@@ -109,3 +109,14 @@ public fun description(self: &Stem): &Option<String> {
 public fun contributors(self: &Stem): &vector<ID> {
     &self.contributors
 }
+
+/// Creates a stem for testing with a zero-ID contributor (bypasses Party requirement).
+#[test_only]
+public fun new_for_testing(audio: Audio): Stem {
+    Stem {
+        audio,
+        name: b"Test Stem".to_string(),
+        description: option::none(),
+        contributors: vector[@0x0.to_id()],
+    }
+}

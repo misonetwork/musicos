@@ -260,7 +260,7 @@ public fun new<RecordingShare, CS>(
     let mut recording = Recording<RecordingShare> {
         id: claim(
             composition.uid_mut_internal(),
-            RecordingKey(*master.verifier_type()),
+            RecordingKey(*master.ingester_type()),
         ),
         state: RecordingState::Initialized,
         title: *composition.title(),
@@ -745,9 +745,9 @@ public fun master<RecordingShare>(self: &Recording<RecordingShare>): &Audio {
     &self.master
 }
 
-/// Returns the verifier type of the recording's master audio file.
-public fun master_verifier_type<RecordingShare>(self: &Recording<RecordingShare>): &TypeName {
-    self.master.verifier_type()
+/// Returns the ingester type of the recording's master audio file.
+public fun master_ingester_type<RecordingShare>(self: &Recording<RecordingShare>): &TypeName {
+    self.master.ingester_type()
 }
 
 /// Returns a reference to the cover art.
@@ -760,10 +760,10 @@ public fun stems<RecordingShare>(self: &Recording<RecordingShare>): &vector<Stem
     &self.stems
 }
 
-/// Returns the verifier types of the recording's stem audio files.
+/// Returns the ingester types of the recording's stem audio files.
 /// Use VecSet as an intermediary to avoid duplicate types.
-public fun stem_verifier_types<RecordingShare>(self: &Recording<RecordingShare>): vector<TypeName> {
-    vec_set::from_keys(self.stems.map_ref!(|s| { *s.audio().verifier_type() })).into_keys()
+public fun stem_ingester_types<RecordingShare>(self: &Recording<RecordingShare>): vector<TypeName> {
+    vec_set::from_keys(self.stems.map_ref!(|s| { *s.audio().ingester_type() })).into_keys()
 }
 
 /// Returns whether the provided ID is a primary artist on the recording.
@@ -887,3 +887,92 @@ public fun new_for_testing<RecordingShare, CS>(
 
     (recording, recording_admin_cap)
 }
+
+/// Pre-fills a recording with `n` fake credits (bypasses public API validation).
+/// Each credit gets a unique fake party ID and a single vocalist role.
+#[test_only]
+public fun prefill_credits_for_testing<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    n: u64,
+    ctx: &mut TxContext,
+) {
+    use musicos::credit;
+    use musicos::recording_party_role;
+
+    n.do!(|_| {
+        let uid = object::new(ctx);
+        let id = uid.to_inner();
+        uid.delete();
+        let credit = credit::new(
+            b"Test".to_string(),
+            vector[recording_party_role::new_vocalist_role(option::none())],
+        );
+        self.credits.insert(id, credit);
+    });
+}
+
+/// Pre-fills a recording with `n` fake credits and designates them as primary artists.
+#[test_only]
+public fun prefill_primary_artists_for_testing<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    n: u64,
+    ctx: &mut TxContext,
+) {
+    use musicos::credit;
+    use musicos::recording_party_role;
+
+    n.do!(|_| {
+        let uid = object::new(ctx);
+        let id = uid.to_inner();
+        uid.delete();
+        let credit = credit::new(
+            b"Test".to_string(),
+            vector[recording_party_role::new_vocalist_role(option::none())],
+        );
+        self.credits.insert(id, credit);
+        self.primary_artist_ids.insert(id);
+    });
+}
+
+/// Pre-fills a recording with `n` fake credits and designates them as featured artists.
+#[test_only]
+public fun prefill_featured_artists_for_testing<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    n: u64,
+    ctx: &mut TxContext,
+) {
+    use musicos::credit;
+    use musicos::recording_party_role;
+
+    n.do!(|_| {
+        let uid = object::new(ctx);
+        let id = uid.to_inner();
+        uid.delete();
+        let credit = credit::new(
+            b"Test".to_string(),
+            vector[recording_party_role::new_vocalist_role(option::none())],
+        );
+        self.credits.insert(id, credit);
+        self.featured_artist_ids.insert(id);
+    });
+}
+
+/// Pre-fills a recording with `n` fake stems (bypasses public API validation).
+#[test_only]
+public fun prefill_stems_for_testing<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    n: u64,
+) {
+    use musicos::audio;
+    use musicos::stem;
+    use walrus_data::walrus_data;
+
+    let test_audio = audio::new(2, 16, 44100, 441000, walrus_data::new_blob(1), TestWitness());
+    n.do!(|_| {
+        self.stems.push_back(stem::new_for_testing(test_audio));
+    });
+}
+
+/// Witness for creating test Audio objects.
+#[test_only]
+public struct TestWitness() has drop;

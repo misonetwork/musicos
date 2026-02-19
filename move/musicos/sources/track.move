@@ -29,18 +29,18 @@ public struct Track has drop, store {
     composition_id: ID,
     /// Type of the composition's share token.
     composition_share_type: TypeName,
-    /// Verifier of the composition's demo audio file.
-    composition_demo_verifier_type: Option<TypeName>,
+    /// Ingester of the composition's demo audio file.
+    composition_demo_ingester_type: Option<TypeName>,
     /// Split of revenue allocated to composition vs recording (in basis points).
     composition_split_bps: BPS,
     /// ID of the recording on this track.
     recording_id: ID,
     /// Type of the recording's share token.
     recording_share_type: TypeName,
-    /// Verifier of the recording's master audio file.
-    recording_master_verifier_type: TypeName,
-    /// Verifier of the recording's stem audio files.
-    recording_stem_verifier_types: vector<TypeName>,
+    /// Ingester of the recording's master audio file.
+    recording_master_ingester_type: TypeName,
+    /// Ingester types of the recording's stem audio files.
+    recording_stem_ingester_types: vector<TypeName>,
     /// Description of the track.
     title: String,
     /// Duration of the track in milliseconds.
@@ -78,12 +78,12 @@ public fun new(deal: Deal): Track {
         state: TrackState::Unassigned { release_id: deal.release_id() },
         composition_id: deal.composition_id(),
         composition_share_type: *deal.composition_share_type(),
-        composition_demo_verifier_type: *deal.composition_demo_verifier_type(),
+        composition_demo_ingester_type: *deal.composition_demo_ingester_type(),
         composition_split_bps: deal.composition_split_bps(),
         recording_id: deal.recording_id(),
         recording_share_type: *deal.recording_share_type(),
-        recording_master_verifier_type: *deal.recording_master_verifier_type(),
-        recording_stem_verifier_types: *deal.recording_stem_verifier_types(),
+        recording_master_ingester_type: *deal.recording_master_ingester_type(),
+        recording_stem_ingester_types: *deal.recording_stem_ingester_types(),
         title: *deal.track_title(),
         duration_ms: deal.recording_duration_ms(),
         cover_art: *deal.track_cover_art(),
@@ -124,9 +124,9 @@ public fun composition_split_bps(self: &Track): BPS {
     self.composition_split_bps
 }
 
-/// Returns the verifier of the composition's demo audio file.
-public fun composition_demo_verifier_type(self: &Track): &Option<TypeName> {
-    &self.composition_demo_verifier_type
+/// Returns the ingester of the composition's demo audio file.
+public fun composition_demo_ingester_type(self: &Track): &Option<TypeName> {
+    &self.composition_demo_ingester_type
 }
 
 /// Returns the ID of the recording.
@@ -139,14 +139,14 @@ public fun recording_share_type(self: &Track): &TypeName {
     &self.recording_share_type
 }
 
-/// Returns the verifier of the recording's master audio file.
-public fun recording_master_verifier_type(self: &Track): &TypeName {
-    &self.recording_master_verifier_type
+/// Returns the ingester of the recording's master audio file.
+public fun recording_master_ingester_type(self: &Track): &TypeName {
+    &self.recording_master_ingester_type
 }
 
-/// Returns the verifier types of the recording's stem audio files.
-public fun recording_stem_verifier_types(self: &Track): &vector<TypeName> {
-    &self.recording_stem_verifier_types
+/// Returns the ingester types of the recording's stem audio files.
+public fun recording_stem_ingester_types(self: &Track): &vector<TypeName> {
+    &self.recording_stem_ingester_types
 }
 
 /// Returns the title of the track.
@@ -186,12 +186,12 @@ public fun new_for_testing<CS, RS, V: drop>(
         state: TrackState::Unassigned { release_id },
         composition_id,
         composition_share_type: std::type_name::with_defining_ids<CS>(),
-        composition_demo_verifier_type: option::none(),
+        composition_demo_ingester_type: option::none(),
         composition_split_bps: interest_bps::bps::new(composition_split_bps_value),
         recording_id,
         recording_share_type: std::type_name::with_defining_ids<RS>(),
-        recording_master_verifier_type: std::type_name::with_defining_ids<V>(),
-        recording_stem_verifier_types: vector[],
+        recording_master_ingester_type: std::type_name::with_defining_ids<V>(),
+        recording_stem_ingester_types: vector[],
         title,
         duration_ms,
         cover_art,

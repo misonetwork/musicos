@@ -480,11 +480,11 @@ public fun demo<CompositionShare>(self: &Composition<CompositionShare>): &Option
     &self.demo
 }
 
-/// Returns the verifier type of the composition's demo audio file.
-public fun demo_verifier_type<CompositionShare>(
+/// Returns the ingester type of the composition's demo audio file.
+public fun demo_ingester_type<CompositionShare>(
     self: &Composition<CompositionShare>,
 ): Option<TypeName> {
-    self.demo.map_ref!(|audio| *audio.verifier_type())
+    self.demo.map_ref!(|audio| *audio.ingester_type())
 }
 
 /// Returns the optional chart data reference.

@@ -6,9 +6,9 @@
 /// ### Key Features:
 ///
 /// - Audio format parameters (channels, bit depth, sample rate)
-/// - Walrus blob storage reference
-/// - Hot potato verification: `new()` returns an `UnverifiedAudio` that must
-///   be consumed by a verifier's `verify()` call to produce a storable `Audio`.
+/// - Walrus blob ID for storage reference
+/// - Witness-gated creation: only packages that can produce an `Ingester` witness
+///   type (with `drop`) can create `Audio`.
 module musicos::audio;
 
 use std::type_name::{Self, TypeName};
@@ -18,7 +18,7 @@ use walrus_data::walrus_data::WalrusData;
 // === Structs ===
 
 /// A verified audio file with technical metadata.
-/// Can only be created by verifying an `UnverifiedAudio`.
+/// Can only be created by a package that provides an ingester witness.
 public struct Audio has copy, drop, store {
     /// Number of audio channels (1 = mono, 2 = stereo).
     channels: u8,
@@ -28,26 +28,16 @@ public struct Audio has copy, drop, store {
     sample_rate_hz: u32,
     /// Total number of PCM samples in the audio.
     samples: u64,
-    /// Reference to the audio data stored on Walrus.
+    /// Walrus data reference for the audio (must be a blob).
     data: WalrusData,
-    /// The verifier that attested this audio.
-    verifier: TypeName,
-}
-
-/// An unverified audio file. Has no abilities — must be consumed by calling
-/// `verify()` before the transaction ends.
-public struct UnverifiedAudio {
-    channels: u8,
-    bit_depth: u8,
-    sample_rate_hz: u32,
-    samples: u64,
-    data: WalrusData,
+    /// The ingester that attested this audio.
+    ingester: TypeName,
 }
 
 // === Events ===
 
-/// Emitted when an audio file is verified.
-public struct AudioVerifiedEvent<phantom Verifier: drop> has copy, drop {
+/// Emitted when an audio file is ingested.
+public struct AudioIngestedEvent<phantom Ingester: drop> has copy, drop {
     blob_id: u256,
 }
 
@@ -72,15 +62,16 @@ const ESamplesOverflow: u64 = 25;
 
 // === Public Functions ===
 
-/// Creates a new unverified audio. Returns a hot potato that must be
-/// consumed by calling `verify()` before the transaction completes.
-public fun new(
+/// Creates a new verified audio. The `Ingester` witness type gates creation —
+/// only the package that defines the witness can call this function.
+public fun new<Ingester: drop>(
     channels: u8,
     bit_depth: u8,
     sample_rate_hz: u32,
     samples: u64,
     data: WalrusData,
-): UnverifiedAudio {
+    _ingester: Ingester,
+): Audio {
     assert!(channels > 0, EInvalidChannels);
     assert!(
         bit_depth == 8 || bit_depth == 16 || bit_depth == 24 || bit_depth == 32,
@@ -89,24 +80,9 @@ public fun new(
     assert!(sample_rate_hz > 0, EInvalidSampleRate);
     assert!(samples > 0, EInvalidSamples);
     assert!(samples <= MAX_SAMPLES, ESamplesOverflow);
+    data.assert_is_blob();
 
-    UnverifiedAudio {
-        channels,
-        bit_depth,
-        sample_rate_hz,
-        samples,
-        data,
-    }
-}
-
-/// Consumes an `UnverifiedAudio` and returns a verified `Audio`.
-/// The verifier witness type identifies who performed the verification.
-public fun verify<Verifier: drop>(unverified: UnverifiedAudio, _verifier: Verifier): Audio {
-    let UnverifiedAudio { channels, bit_depth, sample_rate_hz, samples, data } = unverified;
-
-    emit(AudioVerifiedEvent<Verifier> {
-        blob_id: data.blob_id(),
-    });
+    emit(AudioIngestedEvent<Ingester> { blob_id: data.blob_id() });
 
     Audio {
         channels,
@@ -114,35 +90,8 @@ public fun verify<Verifier: drop>(unverified: UnverifiedAudio, _verifier: Verifi
         sample_rate_hz,
         samples,
         data,
-        verifier: type_name::with_defining_ids<Verifier>(),
+        ingester: type_name::with_defining_ids<Ingester>(),
     }
-}
-
-// === UnverifiedAudio View Functions ===
-
-/// Returns the number of audio channels.
-public fun unverified_channels(self: &UnverifiedAudio): u8 {
-    self.channels
-}
-
-/// Returns the bit depth.
-public fun unverified_bit_depth(self: &UnverifiedAudio): u8 {
-    self.bit_depth
-}
-
-/// Returns the sample rate in Hz.
-public fun unverified_sample_rate_hz(self: &UnverifiedAudio): u32 {
-    self.sample_rate_hz
-}
-
-/// Returns the total number of samples.
-public fun unverified_samples(self: &UnverifiedAudio): u64 {
-    self.samples
-}
-
-/// Returns a reference to the Walrus data.
-public fun unverified_data(self: &UnverifiedAudio): &WalrusData {
-    &self.data
 }
 
 // === Audio View Functions ===
@@ -178,7 +127,7 @@ public fun duration_ms(self: &Audio): u64 {
     self.samples * 1_000 / (self.sample_rate_hz as u64)
 }
 
-/// Returns a reference to the verifier type name.
-public fun verifier_type(self: &Audio): &TypeName {
-    &self.verifier
+/// Returns a reference to the ingester type name.
+public fun ingester_type(self: &Audio): &TypeName {
+    &self.ingester
 }

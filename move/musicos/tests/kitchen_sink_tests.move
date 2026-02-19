@@ -40,7 +40,7 @@ fun make_10_roles(): vector<recording_party_role::RecordingPartyRole> {
 /// - 20 primary artists (MAX_PRIMARY_ARTISTS)
 /// - 50 featured artists (MAX_FEATURED_ARTISTS)
 /// - 3 secondary genres (MAX_SECONDARY_GENRES)
-/// - 50 stems (MAX_STEMS), each with 1 contributor
+/// - 100 stems (MAX_STEMS), each with 1 contributor
 /// - title_version at 100 bytes (MAX_TITLE_VERSION_LENGTH)
 /// - subtitle at 200 bytes (MAX_SUBTITLE_LENGTH)
 /// - language, lyrics, musical_key, time_signature, tempo_bpm all set
@@ -97,8 +97,8 @@ fun test_recording_kitchen_sink() {
     let g2 = genre::new_for_testing(b"GENRE_C".to_string(), ctx);
     rec.add_secondary_genre(&cap, &g2);
 
-    // Add 50 stems (MAX_STEMS), each with 1 contributor from credited parties
-    50u64.do!(|i| {
+    // Add 100 stems (MAX_STEMS), each with 1 contributor from credited parties
+    100u64.do!(|i| {
         let mut s = stem::new(test_helpers::audio(), b"Stem".to_string());
         s.add_contributor(&parties[i]);
         rec.add_stem(&cap, s);

@@ -11,17 +11,17 @@ use walrus_data::walrus_data;
 public struct CS() has drop;
 /// Phantom type for recording share tokens in tests.
 public struct RS() has drop;
-/// Phantom type for audio verifier witness in tests.
+/// Phantom type for audio ingester witness in tests.
 public struct V() has drop;
 
 /// Creates a WalrusData reference for testing.
 public fun walrus(): walrus_data::WalrusData {
-    walrus_data::new_without_quilt(1)
+    walrus_data::new_blob(1)
 }
 
 /// Creates a verified Audio object for testing (stereo, 16-bit, 44100 Hz, 10 seconds).
 public fun audio(): audio::Audio {
-    audio::verify(audio::new(2, 16, 44100, 441000, walrus()), V())
+    audio::new(2, 16, 44100, 441000, walrus_data::new_blob(1), V())
 }
 
 /// Creates a valid CoverArt object for testing.
