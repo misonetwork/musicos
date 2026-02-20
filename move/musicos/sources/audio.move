@@ -11,7 +11,7 @@
 ///   type (with `drop`) can create `Audio`.
 module musicos::audio;
 
-use std::type_name::{Self, TypeName};
+use std::type_name::{TypeName, with_defining_ids};
 use sui::event::emit;
 use walrus_data::walrus_data::WalrusData;
 
@@ -90,7 +90,7 @@ public fun new<Ingester: drop>(
         sample_rate_hz,
         samples,
         data,
-        ingester: type_name::with_defining_ids<Ingester>(),
+        ingester: with_defining_ids<Ingester>(),
     }
 }
 

@@ -202,7 +202,6 @@ fun test_release_kitchen_sink() {
     // Create release with max title and description.
     // new_for_testing patches all tracks to point to the real release ID.
     let (mut rel, rel_cap) = release::new_for_testing(
-        release::new_album_kind(),
         test_helpers::long_string(300), // MAX_TITLE_LENGTH
         test_helpers::long_string(500), // MAX_DESCRIPTION_LENGTH
         test_helpers::cover_art(),

@@ -20,7 +20,6 @@ use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
-use musicos::extension;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
 use musicos::party::Party;
@@ -137,18 +136,6 @@ public struct RecordingPartyAddedEvent has copy, drop {
     recording_id: ID,
     /// ID of the added party.
     party_id: ID,
-}
-
-/// Emitted when an extension is registered for a recording.
-public struct RecordingExtensionRegisteredEvent<phantom Extension: drop> has copy, drop {
-    /// ID of the recording.
-    recording_id: ID,
-}
-
-/// Emitted when an extension is unregistered from a recording.
-public struct RecordingExtensionUnregisteredEvent<phantom Extension: drop> has copy, drop {
-    /// ID of the recording.
-    recording_id: ID,
 }
 
 // === Constants ===
@@ -779,37 +766,6 @@ public fun is_featured_artist<RecordingShare>(
     self.featured_artist_ids.contains(&party_id)
 }
 
-// === Extension Functions ===
-
-/// Registers an extension for the recording with associated config.
-public fun register_extension<RecordingShare, Extension: drop, Config: drop + store>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    _extension: Extension,
-    config: Config,
-) {
-    extension::register<Extension, Config>(&mut self.id, config);
-
-    emit(RecordingExtensionRegisteredEvent<Extension> {
-        recording_id: self.id(),
-    });
-}
-
-/// Unregisters an extension from the recording and returns its config.
-public fun unregister_extension<RecordingShare, Extension: drop, Config: drop + store>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    _extension: Extension,
-): Config {
-    let config = extension::unregister<Extension, Config>(&mut self.id);
-
-    emit(RecordingExtensionUnregisteredEvent<Extension> {
-        recording_id: self.id(),
-    });
-
-    config
-}
-
 // === UID Functions ===
 
 /// Returns a reference to the recording's UID for reading dynamic fields.
@@ -823,15 +779,6 @@ public fun uid_mut<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
 ): &mut UID {
-    &mut self.id
-}
-
-/// Returns a mutable reference to the recording's UID with an extension.
-public fun uid_mut_with_extension<RecordingShare, Extension: drop>(
-    self: &mut Recording<RecordingShare>,
-    _extension: Extension,
-): &mut UID {
-    extension::assert_registered<Extension>(&self.id);
     &mut self.id
 }
 

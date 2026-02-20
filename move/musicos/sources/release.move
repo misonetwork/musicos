@@ -1,13 +1,12 @@
 // Copyright (c) Studio Mirai, LLC
 // SPDX-License-Identifier: Apache-2.0
 
-/// Represents a music release (album, EP, or single) in MusicOS.
+/// Represents a music release in MusicOS.
 /// A release is a collection of tracks organized into discs, with cover art
 /// and revenue distribution configuration.
 ///
 /// ### Key Features:
 ///
-/// - Support for albums, EPs, and singles
 /// - Multi-disc releases with track sequencing
 /// - Configurable per-track revenue splits
 /// - Revenue distribution to composition and recording royalty pools
@@ -18,7 +17,6 @@ use interest_bps::bps;
 use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
 use musicos::disc::Disc;
-use musicos::extension;
 use musicos::party::Party;
 use musicos::release_party_role::ReleasePartyRole;
 use std::string::String;
@@ -42,8 +40,6 @@ public struct RELEASE() has drop;
 public struct Release has key {
     /// Unique identifier for this release.
     id: UID,
-    /// Type of release (Album, EP, or Single).
-    kind: ReleaseKind,
     /// Current lifecycle state.
     state: ReleaseState,
     /// Title of the release.
@@ -81,16 +77,6 @@ public struct ReleaseAdminCap has key, store {
 public struct ReleaseAdminCapKey() has copy, drop, store;
 
 // === Enums ===
-
-/// The type of music release.
-public enum ReleaseKind has copy, drop, store {
-    /// Full-length album (typically 7+ tracks).
-    Album,
-    /// Extended play (typically 3-6 tracks).
-    EP,
-    /// Single release (typically 1-2 tracks).
-    Single,
-}
 
 /// Lifecycle state of a release.
 public enum ReleaseState has copy, drop, store {
@@ -130,18 +116,6 @@ public struct ReleaseRevenueDistributedEvent<phantom C> has copy, drop {
     recording_id: ID,
     /// Amount distributed to the recording.
     recording_split_value: u64,
-}
-
-/// Emitted when an extension is registered for a release.
-public struct ReleaseExtensionRegisteredEvent<phantom Extension: drop> has copy, drop {
-    /// ID of the release.
-    release_id: ID,
-}
-
-/// Emitted when an extension is unregistered from a release.
-public struct ReleaseExtensionUnregisteredEvent<phantom Extension: drop> has copy, drop {
-    /// ID of the release.
-    release_id: ID,
 }
 
 // === Constants ===
@@ -215,7 +189,6 @@ fun init(_otw: RELEASE, ctx: &mut TxContext) {
 /// Creates a new release with the given configuration.
 /// Returns the release and admin capability.
 public fun new(
-    kind: ReleaseKind,
     title: String,
     description: String,
     cover_art: CoverArt,
@@ -246,7 +219,6 @@ public fun new(
 
     let mut release = Release {
         id: release_uid,
-        kind,
         state: ReleaseState::Initialized(false),
         title,
         subtitle: option::none(),
@@ -385,31 +357,11 @@ public fun authorize(self: &Release, cap: &ReleaseAdminCap) {
     assert!(self.id() == cap.release_id, EUnauthorized);
 }
 
-/// Creates an Album release kind.
-public fun new_album_kind(): ReleaseKind {
-    ReleaseKind::Album
-}
-
-/// Creates an EP release kind.
-public fun new_ep_kind(): ReleaseKind {
-    ReleaseKind::EP
-}
-
-/// Creates a Single release kind.
-public fun new_single_kind(): ReleaseKind {
-    ReleaseKind::Single
-}
-
 // === Public View Functions ===
 
 /// Returns the release's object ID.
 public fun id(self: &Release): ID {
     self.id.to_inner()
-}
-
-/// Returns the release kind (Album, EP, or Single).
-public fun kind(self: &Release): ReleaseKind {
-    self.kind
 }
 
 /// Returns the release state.
@@ -501,52 +453,8 @@ public fun uid_mut(self: &mut Release, cap: &ReleaseAdminCap): &mut UID {
     &mut self.id
 }
 
-/// Returns a mutable reference to the release's UID with an extension.
-public fun uid_mut_with_extension<Extension: drop>(
-    self: &mut Release,
-    _extension: Extension,
-): &mut UID {
-    extension::assert_registered<Extension>(&self.id);
-    &mut self.id
-}
-
 public(package) fun uid_mut_internal(self: &mut Release): &mut UID {
     &mut self.id
-}
-
-// === Extension Functions ===
-
-/// Registers an extension for the release with associated config.
-public fun register_extension<Extension: drop, Config: drop + store>(
-    self: &mut Release,
-    cap: &ReleaseAdminCap,
-    _extension: Extension,
-    config: Config,
-) {
-    self.authorize(cap);
-
-    extension::register<Extension, Config>(&mut self.id, config);
-
-    emit(ReleaseExtensionRegisteredEvent<Extension> {
-        release_id: self.id(),
-    });
-}
-
-/// Unregisters an extension from the release and returns its config.
-public fun unregister_extension<Extension: drop, Config: drop + store>(
-    self: &mut Release,
-    cap: &ReleaseAdminCap,
-    _extension: Extension,
-): Config {
-    self.authorize(cap);
-
-    let config = extension::unregister<Extension, Config>(&mut self.id);
-
-    emit(ReleaseExtensionUnregisteredEvent<Extension> {
-        release_id: self.id(),
-    });
-
-    config
 }
 
 // === Private Functions ===
@@ -634,7 +542,6 @@ public fun prefill_credits_for_testing(
 
 #[test_only]
 public fun new_for_testing(
-    kind: ReleaseKind,
     title: String,
     description: String,
     cover_art: CoverArt,
@@ -645,7 +552,6 @@ public fun new_for_testing(
 
     let mut release = Release {
         id: object::new(ctx),
-        kind,
         state: ReleaseState::Initialized(false),
         title,
         subtitle: option::none(),

@@ -9,12 +9,10 @@
 ///
 /// - Individual and group party types
 /// - Extensible metadata via dynamic fields
-/// - Extension system for third-party module integration
 /// - Capability-based authorization for modifications
 /// - Groups can contain multiple individual parties
 module musicos::party;
 
-use musicos::extension;
 use std::string::String;
 use sui::derived_object::claim;
 use sui::event::emit;
@@ -103,18 +101,6 @@ public struct PartyRemovedFromGroupEvent has copy, drop {
     group_id: ID,
     /// ID of the party removed from the group.
     member_id: ID,
-}
-
-/// Emitted when an extension is registered for a party.
-public struct PartyExtensionRegisteredEvent<phantom Extension: drop> has copy, drop {
-    /// ID of the party.
-    party_id: ID,
-}
-
-/// Emitted when an extension is unregistered from a party.
-public struct PartyExtensionUnregisteredEvent<phantom Extension: drop> has copy, drop {
-    /// ID of the party.
-    party_id: ID,
 }
 
 // === Constants ===
@@ -251,39 +237,6 @@ public fun remove_party(self: &mut Party, cap: &PartyAdminCap, member_id: ID) {
     }
 }
 
-// === Extensions ===
-
-/// Registers an extension for the party with associated config.
-public fun register_extension<Extension: drop, Config: drop + store>(
-    self: &mut Party,
-    cap: &PartyAdminCap,
-    _extension: Extension,
-    config: Config,
-) {
-    self.authorize(cap);
-
-    extension::register<Extension, Config>(&mut self.id, config);
-
-    emit(PartyExtensionRegisteredEvent<Extension> {
-        party_id: self.id(),
-    });
-}
-
-/// Unregisters an extension from the party and returns its config.
-public fun unregister_extension<Extension: drop, Config: drop + store>(
-    self: &mut Party,
-    cap: &PartyAdminCap,
-    _extension: Extension,
-): Config {
-    self.authorize(cap);
-
-    emit(PartyExtensionUnregisteredEvent<Extension> {
-        party_id: self.id(),
-    });
-
-    extension::unregister<Extension, Config>(&mut self.id)
-}
-
 /// Creates a new individual party kind.
 public fun new_individual_kind(): PartyKind {
     PartyKind::Individual
@@ -362,15 +315,6 @@ public fun uid(self: &Party, cap: &PartyAdminCap): &UID {
 /// Requires the admin capability.
 public fun uid_mut(self: &mut Party, cap: &PartyAdminCap): &mut UID {
     self.authorize(cap);
-    &mut self.id
-}
-
-/// Returns a mutable reference to the party's UID with an extension.
-public fun uid_mut_with_extension<Extension: drop>(
-    self: &mut Party,
-    _extension: Extension,
-): &mut UID {
-    extension::assert_registered<Extension>(&self.id);
     &mut self.id
 }
 

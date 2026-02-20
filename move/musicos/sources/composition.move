@@ -18,7 +18,6 @@ use interest_bps::bps::{Self, BPS};
 use musicos::audio::Audio;
 use musicos::composition_party_role::CompositionPartyRole;
 use musicos::credit::Credit;
-use musicos::extension;
 use musicos::party::Party;
 use musicos::share;
 use std::string::String;
@@ -105,18 +104,6 @@ public struct CompositionPartyAddedEvent has copy, drop {
     composition_id: ID,
     /// ID of the added party.
     party_id: ID,
-}
-
-/// Emitted when an extension is registered for a composition.
-public struct CompositionExtensionRegisteredEvent<phantom Extension: drop> has copy, drop {
-    /// ID of the composition.
-    composition_id: ID,
-}
-
-/// Emitted when an extension is unregistered from a composition.
-public struct CompositionExtensionUnregisteredEvent<phantom Extension: drop> has copy, drop {
-    /// ID of the composition.
-    composition_id: ID,
 }
 
 /// Emitted when the composition split is updated.
@@ -403,37 +390,6 @@ public fun set_score<CompositionShare>(
     }
 }
 
-// === Extensions ===
-
-/// Registers an extension for the composition with associated config.
-public fun register_extension<CompositionShare, Extension: drop, Config: drop + store>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-    _extension: Extension,
-    config: Config,
-) {
-    extension::register<Extension, Config>(&mut self.id, config);
-
-    emit(CompositionExtensionRegisteredEvent<Extension> {
-        composition_id: self.id(),
-    });
-}
-
-/// Unregisters an extension from the composition and returns its config.
-public fun unregister_extension<CompositionShare, Extension: drop, Config: drop + store>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-    _extension: Extension,
-): Config {
-    let config = extension::unregister<Extension, Config>(&mut self.id);
-
-    emit(CompositionExtensionUnregisteredEvent<Extension> {
-        composition_id: self.id(),
-    });
-
-    config
-}
-
 // === Public View Functions ===
 
 /// Returns the composition's object ID.
@@ -510,15 +466,6 @@ public fun uid_mut<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
 ): &mut UID {
-    &mut self.id
-}
-
-/// Returns a mutable reference to the composition's UID with an extension.
-public fun uid_mut_with_extension<CompositionShare, Extension: drop>(
-    self: &mut Composition<CompositionShare>,
-    _extension: Extension,
-): &mut UID {
-    extension::assert_registered<Extension>(&self.id);
     &mut self.id
 }
 
