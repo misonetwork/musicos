@@ -914,8 +914,9 @@ public fun prefill_stems_for_testing<RecordingShare>(
     use musicos::stem;
     use walrus_data::walrus_data;
 
-    let test_audio = audio::new(2, 16, 44100, 441000, walrus_data::new_blob(1), TestWitness());
     n.do!(|_| {
+        let pcm_digest = x"0000000000000000000000000000000000000000000000000000000000000000";
+        let test_audio = audio::new(2, 16, 44100, 441000, pcm_digest, walrus_data::new_blob(1), TestWitness());
         self.stems.push_back(stem::new_for_testing(test_audio));
     });
 }
