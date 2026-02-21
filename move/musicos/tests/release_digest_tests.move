@@ -1,4 +1,4 @@
-// Copyright (c) Studio Mirai, LLC
+// Copyright (c) Unconfirmed Labs, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Tests for release digest calculation to verify TypeScript SDK parity.

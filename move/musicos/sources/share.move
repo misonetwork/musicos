@@ -1,4 +1,4 @@
-// Copyright (c) Studio Mirai, LLC
+// Copyright (c) Unconfirmed Labs, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Initializes share tokens for compositions and recordings.

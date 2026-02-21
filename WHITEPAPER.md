@@ -2,7 +2,7 @@
 
 **Version 1.0 — February 2026**
 
-Studio Mirai, LLC
+Unconfirmed Labs, LLC
 
 ---
 
@@ -526,4 +526,4 @@ The protocol is deployed on Sui testnet and available under the Apache 2.0 licen
 
 ---
 
-_MusicOS is open-source software licensed under Apache 2.0. The protocol is developed by Studio Mirai, LLC._
+_MusicOS is open-source software licensed under Apache 2.0. The protocol is developed by Unconfirmed Labs, LLC._

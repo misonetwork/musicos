@@ -2,7 +2,7 @@
 name = "musicos"
 edition = "2024"
 license = "Apache 2.0"
-authors = ["Studio Mirai, LLC (os@unconfirmed.com)"]
+authors = ["Unconfirmed Labs, LLC (os@unconfirmed.com)"]
 
 [dependencies]
 interest_bps = { r.mvr = "@interest/bps" }
