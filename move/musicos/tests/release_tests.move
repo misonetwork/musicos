@@ -5,7 +5,7 @@ use musicos::credit;
 use musicos::disc;
 use musicos::release;
 use musicos::release_party_role;
-use musicos::test_helpers::{Self, CS, RS, V};
+use musicos::test_helpers::{Self, CompositionShare, RecordingShare, V};
 use musicos::track;
 use std::unit_test::destroy;
 
@@ -25,7 +25,7 @@ const MAX_TITLE_LENGTH: u64 = 300;
 
 /// Helper to create a single test track.
 fun test_track(ctx: &mut TxContext): track::Track {
-    track::new_for_testing<CS, RS, V>(
+    track::new_for_testing<CompositionShare, RecordingShare, V>(
         test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),
@@ -41,7 +41,7 @@ fun test_track(ctx: &mut TxContext): track::Track {
 fun test_disc_with_n_tracks(n: u64, split_bps: u64, ctx: &mut TxContext): disc::Disc {
     let mut tracks = vector[];
     n.do!(|_| {
-        tracks.push_back(track::new_for_testing<CS, RS, V>(
+        tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare, V>(
             test_helpers::fake_id(ctx),
             test_helpers::fake_id(ctx),
             test_helpers::fake_id(ctx),
@@ -146,7 +146,7 @@ fun test_new_exceeds_max_tracks() {
         let mut t = 0u64;
         while (t < n_tracks) {
             let split = if (global_idx < 16) 40 else 39;
-            tracks.push_back(track::new_for_testing<CS, RS, V>(
+            tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare, V>(
                 test_helpers::fake_id(ctx),
                 test_helpers::fake_id(ctx),
                 test_helpers::fake_id(ctx),

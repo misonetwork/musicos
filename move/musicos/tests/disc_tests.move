@@ -2,7 +2,7 @@
 module musicos::disc_tests;
 
 use musicos::disc;
-use musicos::test_helpers::{Self, CS, RS, V};
+use musicos::test_helpers::{Self, CompositionShare, RecordingShare, V};
 use musicos::track;
 use std::unit_test::{assert_eq, destroy};
 
@@ -14,7 +14,7 @@ const MAX_TRACKS_PER_DISC: u64 = 50;
 
 /// Helper to create a test track.
 fun test_track(ctx: &mut TxContext): track::Track {
-    track::new_for_testing<CS, RS, V>(
+    track::new_for_testing<CompositionShare, RecordingShare, V>(
         test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),

@@ -10,7 +10,7 @@ use musicos::recording_party_role;
 use musicos::release;
 use musicos::release_party_role;
 use musicos::stem;
-use musicos::test_helpers::{Self, CS, RS, V};
+use musicos::test_helpers::{Self, CompositionShare, RecordingShare, V};
 use musicos::time_signature;
 use musicos::track;
 use std::unit_test::destroy;
@@ -52,7 +52,7 @@ fun test_recording_kitchen_sink() {
     // Create recording
     let comp_id = test_helpers::fake_id(ctx);
     let genre_id = test_helpers::fake_id(ctx);
-    let (mut rec, cap) = recording::new_for_testing<RS, CS>(
+    let (mut rec, cap) = recording::new_for_testing<RecordingShare>(
         b"Kitchen Sink Recording".to_string(),
         comp_id,
         5000,
@@ -158,7 +158,7 @@ fun test_release_kitchen_sink() {
         let mut t: u64 = 0;
         while (t < 13) {
             let split_bps = if (global_idx < 55) 40 else 39;
-            disc_tracks.push_back(track::new_for_testing<CS, RS, V>(
+            disc_tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare, V>(
                 test_helpers::fake_id(ctx),
                 test_helpers::fake_id(ctx),
                 dummy_release_id,
@@ -182,7 +182,7 @@ fun test_release_kitchen_sink() {
         let mut t: u64 = 0;
         while (t < 12) {
             let split_bps = if (global_idx < 55) 40 else 39;
-            disc_tracks.push_back(track::new_for_testing<CS, RS, V>(
+            disc_tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare, V>(
                 test_helpers::fake_id(ctx),
                 test_helpers::fake_id(ctx),
                 dummy_release_id,

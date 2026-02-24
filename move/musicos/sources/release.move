@@ -302,20 +302,17 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
 /// Splits revenue according to track splits.
 /// Each track's revenue is further split between its composition and recording based on their split ratio.
 /// Required State: Published
-public fun distribute_revenue<C>(self: &mut Release, mut revenue: Balance<C>) {
+public fun distribute_revenue<Currency>(self: &mut Release, mut revenue: Balance<Currency>) {
     match (self.state) {
         ReleaseState::Published(_) => {
             let release_id = self.id();
-
-            //let withdrawal = withdraw_funds_from_object<C>(&mut self.id, value);
-            //let mut revenue = redeem_funds(withdrawal);
 
             assert!(revenue.value() > 0, ENoRevenueToDistribute);
 
             // Store the distribution's principal value.
             let distribution_value = revenue.value();
 
-            // Iterate through all discs and tracks
+            // Iterate through all discs and tracks.
             self.discs.do_ref!(|disc| {
                 disc.tracks().do_ref!(|track| {
                     let track_split_bps = track.split_bps();
@@ -331,7 +328,7 @@ public fun distribute_revenue<C>(self: &mut Release, mut revenue: Balance<C>) {
                         let composition_id = track.composition_id();
                         let recording_id = track.recording_id();
 
-                        emit(ReleaseRevenueDistributedEvent<C> {
+                        emit(ReleaseRevenueDistributedEvent<Currency> {
                             release_id,
                             composition_id,
                             composition_split_value: comp_split_balance.value(),
@@ -511,11 +508,7 @@ public fun new_release_registry_for_testing(ctx: &mut TxContext): ReleaseRegistr
 /// Pre-fills a release with `n` fake credits (bypasses public API validation).
 /// The first credit is designated as a primary role.
 #[test_only]
-public fun prefill_credits_for_testing(
-    self: &mut Release,
-    n: u64,
-    ctx: &mut TxContext,
-) {
+public fun prefill_credits_for_testing(self: &mut Release, n: u64, ctx: &mut TxContext) {
     use musicos::credit;
     use musicos::release_party_role;
 

@@ -28,7 +28,7 @@ use musicos::share;
 use musicos::stem::Stem;
 use musicos::time_signature::TimeSignature;
 use std::string::String;
-use std::type_name::{TypeName, with_defining_ids};
+use std::type_name::TypeName;
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
@@ -56,8 +56,6 @@ public struct Recording<phantom RecordingShare> has key {
     subtitle: Option<String>,
     /// ID of the underlying composition.
     composition_id: ID,
-    /// Type of the composition's share token.
-    composition_share_type: TypeName,
     /// Revenue split for the composition in basis points (captured at creation time).
     composition_split_bps: BPS,
     /// Primary genre of the recording.
@@ -148,8 +146,6 @@ const MAX_ROLES_PER_CREDIT: u64 = 10;
 const MIN_CONTRIBUTORS_PER_STEM: u64 = 1;
 /// Maximum number of stems allowed on a recording.
 const MAX_STEMS: u64 = 100;
-/// Minimum number of stems a recording must have.
-const MIN_STEMS: u64 = 2;
 /// Maximum number of credits allowed on a recording.
 const MAX_CREDITS: u64 = 150;
 /// Maximum number of secondary genres allowed on a recording.
@@ -218,8 +214,6 @@ const ENoPrimaryArtistAssigned: u64 = 51;
 const EPartyNotCredited: u64 = 52;
 /// Stem must have at least one contributor.
 const EMinStemContributorsNotMet: u64 = 53;
-/// Recording must have at least two stems to publish.
-const EMinStemsNotMet: u64 = 54;
 
 // === Public Functions ===
 
@@ -231,8 +225,8 @@ const EMinStemsNotMet: u64 = 54;
 /// - Admin capability for the owner
 /// - Initial share token balance
 /// - Promise that must be consumed by calling `share()`
-public fun new<RecordingShare, CS>(
-    composition: &mut Composition<CS>,
+public fun new<RecordingShare, CompositionShare>(
+    composition: &mut Composition<CompositionShare>,
     genre: &Genre,
     is_explicit: bool,
     is_instrumental: bool,
@@ -254,7 +248,6 @@ public fun new<RecordingShare, CS>(
         title_version: option::none(),
         subtitle: option::none(),
         composition_id,
-        composition_share_type: with_defining_ids<CS>(),
         composition_split_bps: composition.split_bps(),
         primary_genre_id,
         secondary_genre_ids: vec_set::empty(),
@@ -305,8 +298,6 @@ public fun publish<RecordingShare>(
             assert!(!self.primary_artist_ids.is_empty(), ENoPrimaryArtistAssigned);
             // Assert instrumental => no lyrics
             assert!(!self.is_instrumental || self.lyrics.is_none(), ELyricsInstrumentalConflict);
-            // Assert the recording has at least two stems.
-            assert!(self.stems.length() >= MIN_STEMS, EMinStemsNotMet);
 
             // Set the recording's publish timestamp.
             self.state = RecordingState::Published(clock.timestamp_ms());
@@ -653,11 +644,6 @@ public fun composition_id<RecordingShare>(self: &Recording<RecordingShare>): ID 
     self.composition_id
 }
 
-/// Returns the type of the composition's share token.
-public fun composition_share_type<RecordingShare>(self: &Recording<RecordingShare>): &TypeName {
-    &self.composition_share_type
-}
-
 /// Returns the composition's revenue split in basis points.
 public fun composition_split_bps<RecordingShare>(self: &Recording<RecordingShare>): BPS {
     self.composition_split_bps
@@ -791,7 +777,7 @@ public(package) fun uid_mut_internal<RecordingShare>(
 // === Test Only ===
 
 #[test_only]
-public fun new_for_testing<RecordingShare, CS>(
+public fun new_for_testing<RecordingShare>(
     title: String,
     composition_id: ID,
     composition_split_value: u64,
@@ -809,7 +795,6 @@ public fun new_for_testing<RecordingShare, CS>(
         title_version: option::none(),
         subtitle: option::none(),
         composition_id,
-        composition_share_type: with_defining_ids<CS>(),
         composition_split_bps: interest_bps::bps::new(composition_split_value),
         primary_genre_id,
         secondary_genre_ids: vec_set::empty(),
@@ -906,17 +891,22 @@ public fun prefill_featured_artists_for_testing<RecordingShare>(
 
 /// Pre-fills a recording with `n` fake stems (bypasses public API validation).
 #[test_only]
-public fun prefill_stems_for_testing<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    n: u64,
-) {
+public fun prefill_stems_for_testing<RecordingShare>(self: &mut Recording<RecordingShare>, n: u64) {
     use musicos::audio;
     use musicos::stem;
     use walrus_data::walrus_data;
 
     n.do!(|_| {
         let pcm_digest = x"0000000000000000000000000000000000000000000000000000000000000000";
-        let test_audio = audio::new(2, 16, 44100, 441000, pcm_digest, walrus_data::new_blob(1), TestWitness());
+        let test_audio = audio::new(
+            2,
+            16,
+            44100,
+            441000,
+            pcm_digest,
+            walrus_data::new_blob(1),
+            TestWitness(),
+        );
         self.stems.push_back(stem::new_for_testing(test_audio));
     });
 }

@@ -6,7 +6,7 @@ use musicos::genre;
 use musicos::recording;
 use musicos::recording_party_role;
 use musicos::stem;
-use musicos::test_helpers::{Self, CS, RS};
+use musicos::test_helpers::{Self, RecordingShare};
 use musicos::time_signature;
 use musicos::musical_key;
 use std::unit_test::{assert_eq, destroy};
@@ -35,7 +35,6 @@ const ENoParties: u64 = 50;
 const ENoPrimaryArtistAssigned: u64 = 51;
 const EPartyNotCredited: u64 = 52;
 const EMinStemContributorsNotMet: u64 = 53;
-const EMinStemsNotMet: u64 = 54;
 
 // Must match recording.move
 const MAX_STEMS: u64 = 100;
@@ -48,12 +47,12 @@ const MAX_SUBTITLE_LENGTH: u64 = 300;
 
 /// Helper to create a test recording.
 fun new_test_recording(ctx: &mut TxContext): (
-    recording::Recording<RS>,
-    recording::RecordingAdminCap<RS>,
+    recording::Recording<RecordingShare>,
+    recording::RecordingAdminCap<RecordingShare>,
 ) {
     let comp_id = test_helpers::fake_id(ctx);
     let genre_id = test_helpers::fake_id(ctx);
-    recording::new_for_testing<RS, CS>(
+    recording::new_for_testing<RecordingShare>(
         b"Test Song".to_string(),
         comp_id,
         5000,
@@ -68,12 +67,12 @@ fun new_test_recording(ctx: &mut TxContext): (
 
 /// Helper to create an instrumental test recording.
 fun new_instrumental_recording(ctx: &mut TxContext): (
-    recording::Recording<RS>,
-    recording::RecordingAdminCap<RS>,
+    recording::Recording<RecordingShare>,
+    recording::RecordingAdminCap<RecordingShare>,
 ) {
     let comp_id = test_helpers::fake_id(ctx);
     let genre_id = test_helpers::fake_id(ctx);
-    recording::new_for_testing<RS, CS>(
+    recording::new_for_testing<RecordingShare>(
         b"Test Instrumental".to_string(),
         comp_id,
         5000,
@@ -512,14 +511,6 @@ fun test_publish_recording() {
     rec.add_credit(&cap, &party, cred);
     rec.add_primary_artist(&cap, &party);
 
-    // Add minimum required stems (MIN_STEMS = 2)
-    let mut s1 = stem::new(test_helpers::audio(), b"Vocals".to_string());
-    s1.add_contributor(&party);
-    rec.add_stem(&cap, s1);
-    let mut s2 = stem::new(test_helpers::audio(), b"Instrumental".to_string());
-    s2.add_contributor(&party);
-    rec.add_stem(&cap, s2);
-
     let clock = sui::clock::create_for_testing(ctx);
     rec.publish(&cap, &clock);
 
@@ -743,30 +734,3 @@ fun test_add_secondary_genre_exceeds_max() {
     destroy(cap);
 }
 
-#[test, expected_failure(abort_code = EMinStemsNotMet, location = musicos::recording)]
-fun test_publish_below_min_stems() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_test_recording(ctx);
-    let (party, party_cap) = test_helpers::individual(ctx);
-
-    // Credit and assign as primary artist
-    let cred = credit::new(
-        b"Artist".to_string(),
-        vector[recording_party_role::new_vocalist_role(option::none())],
-    );
-    rec.add_credit(&cap, &party, cred);
-    rec.add_primary_artist(&cap, &party);
-
-    // Add only 1 stem (MIN_STEMS = 2)
-    let mut s = stem::new(test_helpers::audio(), b"Solo Stem".to_string());
-    s.add_contributor(&party);
-    rec.add_stem(&cap, s);
-
-    let clock = sui::clock::create_for_testing(ctx);
-    rec.publish(&cap, &clock);
-
-    clock.destroy_for_testing();
-    destroy(cap);
-    destroy(party);
-    destroy(party_cap);
-}

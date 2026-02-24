@@ -4,7 +4,7 @@ module musicos::composition_tests;
 use musicos::composition;
 use musicos::composition_party_role;
 use musicos::credit;
-use musicos::test_helpers::{Self, CS};
+use musicos::test_helpers::{Self, CompositionShare};
 use std::unit_test::{assert_eq, destroy};
 use walrus_data::walrus_data;
 
@@ -33,7 +33,7 @@ const MAX_ALTERNATE_TITLE_LENGTH: u64 = 300;
 #[test]
 fun test_new_composition() {
     let ctx = &mut tx_context::dummy();
-    let (comp, cap) = composition::new_for_testing<CS>(
+    let (comp, cap) = composition::new_for_testing<CompositionShare>(
         b"My Song".to_string(),
         5000,
         ctx,
@@ -49,7 +49,7 @@ fun test_new_composition() {
 fun test_new_composition_title_at_max_length() {
     let ctx = &mut tx_context::dummy();
     let title = test_helpers::long_string(MAX_TITLE_LENGTH);
-    let (comp, cap) = composition::new_for_testing<CS>(title, 5000, ctx);
+    let (comp, cap) = composition::new_for_testing<CompositionShare>(title, 5000, ctx);
     assert_eq!(comp.title().length(), MAX_TITLE_LENGTH);
     destroy(comp);
     destroy(cap);
@@ -58,7 +58,7 @@ fun test_new_composition_title_at_max_length() {
 #[test]
 fun test_publish_composition() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
     // Add a credit (required for publish)
     let (party, party_cap) = test_helpers::individual(ctx);
@@ -89,7 +89,7 @@ fun test_publish_composition() {
 #[test]
 fun test_add_alternate_title() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
     comp.add_alternate_title(&cap, b"Mi Cancion".to_string());
     assert_eq!(comp.alternate_titles().length(), 1);
@@ -101,7 +101,7 @@ fun test_add_alternate_title() {
 #[test]
 fun test_add_alternate_title_at_max_count() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
     MAX_ALTERNATE_TITLES.do!(|i| {
         let mut title = b"Title ".to_string();
@@ -118,7 +118,7 @@ fun test_add_alternate_title_at_max_count() {
 #[test]
 fun test_add_alternate_title_at_max_length() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
     comp.add_alternate_title(&cap, test_helpers::long_string(MAX_ALTERNATE_TITLE_LENGTH));
     assert_eq!(comp.alternate_titles().length(), 1);
@@ -132,7 +132,7 @@ fun test_add_alternate_title_at_max_length() {
 #[test]
 fun test_add_credit() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
     let (party, party_cap) = test_helpers::individual(ctx);
 
     let cred = credit::new(
@@ -152,7 +152,7 @@ fun test_add_credit() {
 #[test]
 fun test_add_credit_with_max_roles() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
     let (party, party_cap) = test_helpers::individual(ctx);
 
     // Create credit with MAX_ROLES_PER_PARTY roles (all distinct)
@@ -178,7 +178,7 @@ fun test_add_credit_with_max_roles() {
 #[test]
 fun test_add_max_credits() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
     MAX_CREDITS.do!(|_| {
         let (party, party_cap) = test_helpers::individual(ctx);
@@ -202,7 +202,7 @@ fun test_add_max_credits() {
 #[test]
 fun test_set_and_clear_content() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
     // Set lyrics
     comp.set_lyrics(&cap, walrus_data::new_blob(1));
@@ -229,7 +229,7 @@ fun test_set_and_clear_content() {
 #[test]
 fun test_set_split_bps() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
     comp.set_split_bps(&cap, 3000);
     assert_eq!(comp.split_bps().value(), 3000);
@@ -243,7 +243,7 @@ fun test_set_split_bps() {
 #[test, expected_failure(abort_code = EEmptyString, location = musicos::composition)]
 fun test_new_empty_title() {
     let ctx = &mut tx_context::dummy();
-    let (comp, cap) = composition::new_for_testing<CS>(b"".to_string(), 5000, ctx);
+    let (comp, cap) = composition::new_for_testing<CompositionShare>(b"".to_string(), 5000, ctx);
     destroy(comp);
     destroy(cap);
 }
@@ -251,7 +251,7 @@ fun test_new_empty_title() {
 #[test, expected_failure(abort_code = EMaxTitleLengthExceeded, location = musicos::composition)]
 fun test_new_title_too_long() {
     let ctx = &mut tx_context::dummy();
-    let (comp, cap) = composition::new_for_testing<CS>(
+    let (comp, cap) = composition::new_for_testing<CompositionShare>(
         test_helpers::long_string(MAX_TITLE_LENGTH + 1),
         5000,
         ctx,
@@ -263,7 +263,7 @@ fun test_new_title_too_long() {
 #[test, expected_failure(abort_code = EEmptyString, location = musicos::composition)]
 fun test_add_alternate_title_empty() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
     comp.add_alternate_title(&cap, b"".to_string());
     destroy(comp);
     destroy(cap);
@@ -272,7 +272,7 @@ fun test_add_alternate_title_empty() {
 #[test, expected_failure(abort_code = EMaxAlternateTitleLengthExceeded, location = musicos::composition)]
 fun test_add_alternate_title_too_long() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
     comp.add_alternate_title(&cap, test_helpers::long_string(MAX_ALTERNATE_TITLE_LENGTH + 1));
     destroy(comp);
     destroy(cap);
@@ -281,7 +281,7 @@ fun test_add_alternate_title_too_long() {
 #[test, expected_failure(abort_code = EMaxAlternateTitlesExceeded, location = musicos::composition)]
 fun test_add_alternate_title_exceeds_max() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
     // Fill to max
     MAX_ALTERNATE_TITLES.do!(|i| {
@@ -300,7 +300,7 @@ fun test_add_alternate_title_exceeds_max() {
 #[test, expected_failure(abort_code = EMaxCreditsExceeded, location = musicos::composition)]
 fun test_add_credit_exceeds_max() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
     // Add MAX_CREDITS credits
     MAX_CREDITS.do!(|_| {
@@ -331,7 +331,7 @@ fun test_add_credit_exceeds_max() {
 #[test, expected_failure(abort_code = EMinRolesNotMet, location = musicos::composition)]
 fun test_add_credit_no_roles() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
     let (party, party_cap) = test_helpers::individual(ctx);
 
     let cred = credit::new(b"Artist".to_string(), vector[]);
@@ -346,7 +346,7 @@ fun test_add_credit_no_roles() {
 #[test, expected_failure(abort_code = EPartyAlreadyCredited, location = musicos::composition)]
 fun test_add_credit_duplicate_party() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
     let (party, party_cap) = test_helpers::individual(ctx);
 
     let cred1 = credit::new(
@@ -372,7 +372,7 @@ fun test_add_credit_duplicate_party() {
 #[test, expected_failure(abort_code = ENoParties, location = musicos::composition)]
 fun test_publish_no_parties() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
     comp.set_lyrics(&cap, walrus_data::new_blob(1));
 
     let clock = sui::clock::create_for_testing(ctx);
@@ -385,7 +385,7 @@ fun test_publish_no_parties() {
 #[test, expected_failure(abort_code = ENoContent, location = musicos::composition)]
 fun test_publish_no_content() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CS>(b"My Song".to_string(), 5000, ctx);
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
     // Add a credit but no content
     let (party, party_cap) = test_helpers::individual(ctx);

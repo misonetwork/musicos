@@ -81,6 +81,11 @@ public struct DealDestroyedEvent has copy, drop {
     composition_id: ID,
 }
 
+// === Errors ===
+
+/// Composition ID mismatch between recording and composition.
+const ECompositionIdMismatch: u64 = 0;
+
 // === Public Functions ===
 
 /// Creates a new deal authorizing a recording for inclusion in a release.
@@ -97,13 +102,15 @@ public fun new<CompositionShare, RecordingShare>(
     ctx: &mut TxContext,
 ): Deal {
     let recording_id = recording.id();
-    let composition_id = recording.composition_id();
+    let composition_id = composition.id();
+
+    assert!(composition_id == recording.composition_id(), ECompositionIdMismatch);
 
     let deal = Deal {
         id: object::new(ctx),
         release_id,
         composition_id,
-        composition_share_type: *recording.composition_share_type(),
+        composition_share_type: with_defining_ids<CompositionShare>(),
         composition_split_bps: recording.composition_split_bps(),
         composition_demo_ingester_type: composition.demo_ingester_type(),
         recording_id,

@@ -172,7 +172,7 @@ public fun split_bps(self: &Track): BPS {
 // === Test Only ===
 
 #[test_only]
-public fun new_for_testing<CS, RS, V: drop>(
+public fun new_for_testing<CompositionShare, RecordingShare, V: drop>(
     composition_id: ID,
     recording_id: ID,
     release_id: ID,
@@ -185,11 +185,11 @@ public fun new_for_testing<CS, RS, V: drop>(
     Track {
         state: TrackState::Unassigned { release_id },
         composition_id,
-        composition_share_type: std::type_name::with_defining_ids<CS>(),
+        composition_share_type: std::type_name::with_defining_ids<CompositionShare>(),
         composition_demo_ingester_type: option::none(),
         composition_split_bps: interest_bps::bps::new(composition_split_bps_value),
         recording_id,
-        recording_share_type: std::type_name::with_defining_ids<RS>(),
+        recording_share_type: std::type_name::with_defining_ids<RecordingShare>(),
         recording_master_ingester_type: std::type_name::with_defining_ids<V>(),
         recording_stem_ingester_types: vector[],
         title,

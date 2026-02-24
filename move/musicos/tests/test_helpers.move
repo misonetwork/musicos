@@ -8,9 +8,9 @@ use std::string::String;
 use walrus_data::walrus_data;
 
 /// Phantom type for composition share tokens in tests.
-public struct CS() has drop;
+public struct CompositionShare() has drop;
 /// Phantom type for recording share tokens in tests.
-public struct RS() has drop;
+public struct RecordingShare() has drop;
 /// Phantom type for audio ingester witness in tests.
 public struct V() has drop;
 
