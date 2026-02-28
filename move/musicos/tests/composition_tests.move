@@ -9,9 +9,7 @@ use std::unit_test::{assert_eq, destroy};
 use walrus_data::walrus_data;
 
 // Error codes from composition.move
-const ENotInitializedState: u64 = 10;
 const EMinRolesNotMet: u64 = 20;
-const EExceedsMaxRoles: u64 = 30;
 const EMaxAlternateTitlesExceeded: u64 = 31;
 const EMaxCreditsExceeded: u64 = 32;
 const EMaxTitleLengthExceeded: u64 = 33;
@@ -22,7 +20,6 @@ const ENoParties: u64 = 50;
 const ENoContent: u64 = 51;
 
 // Must match composition.move
-const MAX_ROLES_PER_PARTY: u64 = 5;
 const MAX_ALTERNATE_TITLES: u64 = 5;
 const MAX_CREDITS: u64 = 50;
 const MAX_TITLE_LENGTH: u64 = 300;

@@ -21,12 +21,7 @@ public fun walrus(): walrus_data::WalrusData {
 
 /// Creates a verified Audio object for testing (stereo, 16-bit, 44100 Hz, 10 seconds).
 public fun audio(): audio::Audio {
-    audio::new(2, 16, 44100, 441000, pcm_digest(), walrus_data::new_blob(1), V())
-}
-
-/// Returns a dummy 32-byte PCM digest for testing.
-public fun pcm_digest(): vector<u8> {
-    x"0000000000000000000000000000000000000000000000000000000000000000"
+    audio::new(2, 16, 44100, 441000, walrus_data::new_blob(1), V())
 }
 
 /// Creates a valid CoverArt object for testing.

@@ -30,8 +30,6 @@ public struct Audio has drop, store {
     sample_rate_hz: u32,
     /// Total number of PCM samples in the audio.
     samples: u64,
-    /// Digest of the PCM data.
-    pcm_digest: vector<u8>,
     /// Walrus data reference for the audio (must be a blob).
     data: WalrusData,
 }
@@ -41,7 +39,6 @@ public struct Audio has drop, store {
 /// Emitted when an audio file is ingested.
 public struct AudioIngestedEvent<phantom Ingester: drop> has copy, drop {
     blob_id: u256,
-    pcm_digest: vector<u8>,
 }
 
 // === Constants ===
@@ -62,9 +59,6 @@ const EInvalidSampleRate: u64 = 23;
 const EInvalidSamples: u64 = 24;
 /// Sample count would cause overflow in duration calculation.
 const ESamplesOverflow: u64 = 25;
-/// PCM digest must be 32 bytes.
-const EInvalidPcmDigestLength: u64 = 26;
-
 // === Public Functions ===
 
 /// Creates a new verified audio. The `Ingester` witness type gates creation —
@@ -74,7 +68,6 @@ public fun new<Ingester: drop>(
     bit_depth: u8,
     sample_rate_hz: u32,
     samples: u64,
-    pcm_digest: vector<u8>,
     data: WalrusData,
     _ingester: Ingester,
 ): Audio {
@@ -88,8 +81,6 @@ public fun new<Ingester: drop>(
     assert!(samples > 0, EInvalidSamples);
     // Assert the samples are less than or equal to the maximum number of samples.
     assert!(samples <= MAX_SAMPLES, ESamplesOverflow);
-    // Assert the PCM digest is 32 bytes.
-    assert!(pcm_digest.length() == 32, EInvalidPcmDigestLength);
 
     // Assert the data is a blob, not a patch quilt.
     // Source files should be lossless, and are typically 10-20MB, which doesn't benefit from quilt effiency.
@@ -98,7 +89,6 @@ public fun new<Ingester: drop>(
 
     emit(AudioIngestedEvent<Ingester> {
         blob_id: data.blob_id(),
-        pcm_digest,
     });
 
     Audio {
@@ -107,7 +97,6 @@ public fun new<Ingester: drop>(
         bit_depth,
         sample_rate_hz,
         samples,
-        pcm_digest,
         data,
     }
 }
@@ -132,11 +121,6 @@ public fun sample_rate_hz(self: &Audio): u32 {
 /// Returns the total number of samples in the audio.
 public fun samples(self: &Audio): u64 {
     self.samples
-}
-
-/// Returns the digest of the PCM data.
-public fun pcm_digest(self: &Audio): &vector<u8> {
-    &self.pcm_digest
 }
 
 /// Returns a reference to the Walrus data.

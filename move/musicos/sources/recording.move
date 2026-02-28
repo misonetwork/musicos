@@ -897,13 +897,11 @@ public fun prefill_stems_for_testing<RecordingShare>(self: &mut Recording<Record
     use walrus_data::walrus_data;
 
     n.do!(|_| {
-        let pcm_digest = x"0000000000000000000000000000000000000000000000000000000000000000";
         let test_audio = audio::new(
             2,
             16,
             44100,
             441000,
-            pcm_digest,
             walrus_data::new_blob(1),
             TestWitness(),
         );

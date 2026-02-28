@@ -13,7 +13,6 @@ use std::unit_test::{assert_eq, destroy};
 use walrus_data::walrus_data;
 
 // Error codes from recording.move
-const ENotInitializedState: u64 = 10;
 const EMinRolesNotMet: u64 = 20;
 const EInvalidTempoBpm: u64 = 21;
 const EExceedsMaxRoles: u64 = 30;
@@ -28,8 +27,6 @@ const EEmptyString: u64 = 38;
 const EPartyAlreadyCredited: u64 = 40;
 const EAlreadyPrimaryArtist: u64 = 41;
 const EAlreadyFeaturedArtist: u64 = 42;
-const EAlreadyAssignedAsPrimaryGenre: u64 = 43;
-const EAlreadyAssignedAsSecondaryGenre: u64 = 44;
 const ELyricsInstrumentalConflict: u64 = 45;
 const ENoParties: u64 = 50;
 const ENoPrimaryArtistAssigned: u64 = 51;
@@ -272,7 +269,7 @@ fun test_add_featured_artist_already_primary() {
 #[test]
 fun test_add_secondary_genre() {
     let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_test_recording(ctx);
+    let (rec, cap) = new_test_recording(ctx);
     let mut registry = genre::new_genre_registry_for_testing(ctx);
 
     genre::new(b"JAZZ".to_string(), &mut registry);
