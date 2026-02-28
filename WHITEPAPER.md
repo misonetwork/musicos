@@ -2,7 +2,7 @@
 
 **Version 1.0 — February 2026**
 
-Subsonic Labs, LLC
+Subsonic Labs, LLC — os@subsoniclabs.io
 
 ---
 

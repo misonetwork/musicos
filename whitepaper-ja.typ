@@ -3,7 +3,7 @@
 
 #set document(
   title: "MusicOS：プログラマブルな音楽権利と流通のためのパーミッションレス・プロトコル",
-  author: "Unconfirmed Labs (os@unconfirmed.com)",
+  author: "Subsonic Labs (os@subsoniclabs.io)",
   date: datetime(year: 2026, month: 2, day: 18),
 )
 
@@ -18,7 +18,7 @@
       #set text(8pt, fill: luma(120))
       MusicOS：プログラマブルな音楽権利と流通のためのパーミッションレス・プロトコル
       #h(1fr)
-      Unconfirmed Labs
+      Subsonic Labs
     ]
   },
 )
@@ -113,8 +113,8 @@
 
   #v(2em)
 
-  #text(12pt)[Unconfirmed Labs]
-  \ os\@unconfirmed.com
+  #text(12pt)[Subsonic Labs]
+  \ os\@subsoniclabs.io
 
   #v(3em)
 
@@ -695,6 +695,6 @@ MusicOSは代替的な基盤を提供する。音楽権利の完全な構造を�
 #v(2em)
 #align(center)[
   #text(8pt, fill: luma(120))[
-    _MusicOSはApache 2.0の下でライセンスされたオープンソースソフトウェアである。本プロトコルはUnconfirmed Labsによって開発されている。_
+    _MusicOSはApache 2.0の下でライセンスされたオープンソースソフトウェアである。本プロトコルはSubsonic Labsによって開発されている。_
   ]
 ]

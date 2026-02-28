@@ -3,7 +3,7 @@
 
 #set document(
   title: "MusicOS: A Permissionless Protocol for Programmable Music Rights and Distribution",
-  author: "Unconfirmed Labs (os@unconfirmed.com)",
+  author: "Subsonic Labs (os@subsoniclabs.io)",
   date: datetime(year: 2026, month: 2, day: 18),
 )
 
@@ -18,7 +18,7 @@
       #set text(8pt, fill: luma(120))
       MusicOS: A Permissionless Protocol for Programmable Music Rights and Distribution
       #h(1fr)
-      Unconfirmed Labs
+      Subsonic Labs
     ]
   },
 )
@@ -113,8 +113,8 @@
 
   #v(2em)
 
-  #text(12pt)[Unconfirmed Labs]
-  \ os\@unconfirmed.com
+  #text(12pt)[Subsonic Labs]
+  \ os\@subsoniclabs.io
 
   #v(3em)
 
@@ -695,6 +695,6 @@ The protocol will be deployed in Q2 2026 and is available under the Apache 2.0 l
 #v(2em)
 #align(center)[
   #text(8pt, fill: luma(120))[
-    _MusicOS is open-source software licensed under Apache 2.0. The protocol is developed by Unconfirmed Labs._
+    _MusicOS is open-source software licensed under Apache 2.0. The protocol is developed by Subsonic Labs._
   ]
 ]
