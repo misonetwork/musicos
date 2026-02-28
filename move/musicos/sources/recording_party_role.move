@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Subsonic Labs, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Defines the roles that parties can hold on a recording.

@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Subsonic Labs, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Initializes share tokens for compositions and recordings.

@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Subsonic Labs, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents an individual audio stem within a recording.

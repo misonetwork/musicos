@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Subsonic Labs, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents an audio recording of a composition in MusicOS.

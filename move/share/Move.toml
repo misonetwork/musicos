@@ -2,7 +2,7 @@
 name = "share"
 edition = "2024"
 license = "Apache 2.0"
-authors = ["Unconfirmed Labs, LLC (os@unconfirmed.com)"]
+authors = ["Subsonic Labs, LLC (os@unconfirmed.com)"]
 
 [environments]
 mirainet = "11235922"
