@@ -6,5 +6,5 @@ authors = ["Subsonic Labs, LLC (os@unconfirmed.com)"]
 
 [dependencies]
 interest_bps = { r.mvr = "@interest/bps" }
-language_code = { git = "https://github.com/unconfirmedlabs/language_code.git", rev = "main" }
-walrus_data = { git = "https://github.com/unconfirmedlabs/walrus_data.git", rev = "main" }
+gengo = { git = "https://github.com/unconfirmedlabs/gengo.git", rev = "main" }
+ori = { git = "https://github.com/unconfirmedlabs/ori.git", rev = "main" }

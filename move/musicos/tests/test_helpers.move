@@ -5,7 +5,7 @@ use musicos::audio;
 use musicos::cover_art;
 use musicos::party::{Self, Party, PartyAdminCap};
 use std::string::String;
-use walrus_data::walrus_data;
+use ori::walrus_data;
 
 /// Phantom type for composition share tokens in tests.
 public struct CompositionShare() has drop;

@@ -29,7 +29,7 @@ use sui::coin_registry::Currency;
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
-use walrus_data::walrus_data::WalrusData;
+use ori::walrus_data::WalrusData;
 
 // === Structs ===
 

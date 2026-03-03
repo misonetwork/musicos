@@ -15,7 +15,7 @@
 module musicos::recording;
 
 use interest_bps::bps::BPS;
-use language_code::language_code::{Self, LanguageCode};
+use gengo::language_code::{Self, LanguageCode};
 use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
@@ -37,7 +37,7 @@ use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
 use sui::vec_set::{Self, VecSet};
-use walrus_data::walrus_data::WalrusData;
+use ori::walrus_data::WalrusData;
 
 // === Structs ===
 
@@ -894,7 +894,7 @@ public fun prefill_featured_artists_for_testing<RecordingShare>(
 public fun prefill_stems_for_testing<RecordingShare>(self: &mut Recording<RecordingShare>, n: u64) {
     use musicos::audio;
     use musicos::stem;
-    use walrus_data::walrus_data;
+    use ori::walrus_data;
 
     n.do!(|_| {
         let test_audio = audio::new(

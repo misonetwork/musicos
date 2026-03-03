@@ -10,7 +10,7 @@ use musicos::test_helpers::{Self, RecordingShare};
 use musicos::time_signature;
 use musicos::musical_key;
 use std::unit_test::{assert_eq, destroy};
-use walrus_data::walrus_data;
+use ori::walrus_data;
 
 // Error codes from recording.move
 const EMinRolesNotMet: u64 = 20;

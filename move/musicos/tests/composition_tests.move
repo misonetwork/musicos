@@ -6,7 +6,7 @@ use musicos::composition_party_role;
 use musicos::credit;
 use musicos::test_helpers::{Self, CompositionShare};
 use std::unit_test::{assert_eq, destroy};
-use walrus_data::walrus_data;
+use ori::walrus_data;
 
 // Error codes from composition.move
 const EMinRolesNotMet: u64 = 20;

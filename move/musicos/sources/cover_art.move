@@ -11,7 +11,7 @@
 /// - References external storage via Data type
 module musicos::cover_art;
 
-use walrus_data::walrus_data::WalrusData;
+use ori::walrus_data::WalrusData;
 
 // === Structs ===
 

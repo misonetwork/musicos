@@ -22,8 +22,8 @@ use_environment = "testnet"
 manifest_digest = "7AFB66695545775FBFBB2D3078ADFD084244D5002392E837FDE21D9EA1C6D01C"
 deps = { MoveStdlib = "MoveStdlib" }
 
-[pinned.testnet.language_code]
-source = { git = "https://github.com/unconfirmedlabs/language_code.git", subdir = ".", rev = "df318d99733da2d7a7ee5a0563ae6c89ceee13e5" }
+[pinned.testnet.gengo]
+source = { git = "https://github.com/unconfirmedlabs/gengo.git", subdir = ".", rev = "a0bd83703efbd8143dc82f19e6ec95b0a106793a" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
@@ -31,11 +31,11 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.musicos]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "AD90EFD33AA2369DF8A3647DA5C3752C51C5C808E4D2D4ADA21F1AB83945CD6B"
-deps = { interest_bps = "InterestBPS", language_code = "language_code", std = "MoveStdlib", sui = "Sui", walrus_data = "walrus_data" }
+manifest_digest = "54C13872AB129EB9A7397A40A3A8476CDDE10419B106F7B40A21284147115492"
+deps = { gengo = "gengo", interest_bps = "InterestBPS", ori = "ori", std = "MoveStdlib", sui = "Sui" }
 
-[pinned.testnet.walrus_data]
-source = { git = "https://github.com/unconfirmedlabs/walrus_data.git", subdir = ".", rev = "a21733704fd2450ee0226f3573773512c7808d11" }
+[pinned.testnet.ori]
+source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = ".", rev = "cea19fd31cb9581e2000407650eb86cd7ba23238" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
