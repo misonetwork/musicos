@@ -733,10 +733,14 @@ public fun stems<RecordingShare>(self: &Recording<RecordingShare>): &vector<Stem
     &self.stems
 }
 
-/// Returns the ingester types of the recording's stem audio files.
-/// Use VecSet as an intermediary to avoid duplicate types.
+/// Returns the unique ingester types of the recording's stem audio files.
 public fun stem_ingester_types<RecordingShare>(self: &Recording<RecordingShare>): vector<TypeName> {
-    vec_set::from_keys(self.stems.map_ref!(|s| { *s.audio().ingester_type() })).into_keys()
+    let mut types = vector[];
+    self.stems.do_ref!(|s| {
+        let t = *s.audio().ingester_type();
+        if (!types.contains(&t)) types.push_back(t);
+    });
+    types
 }
 
 /// Returns whether the provided ID is a primary artist on the recording.

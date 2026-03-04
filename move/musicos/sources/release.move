@@ -18,6 +18,7 @@ use musicos::cover_art::CoverArt;
 use musicos::credit::Credit;
 use musicos::disc::Disc;
 use musicos::party::Party;
+use musicos::release_kind::ReleaseKind;
 use musicos::release_party_role::ReleasePartyRole;
 use std::string::String;
 use std::type_name::TypeName;
@@ -28,7 +29,6 @@ use sui::derived_object::claim;
 use sui::event::emit;
 use sui::hash::blake2b256;
 use sui::vec_map::{Self, VecMap};
-use sui::vec_set;
 
 public use fun release_admin_cap_release_id as ReleaseAdminCap.release_id;
 
@@ -40,6 +40,8 @@ public struct RELEASE() has drop;
 public struct Release has key {
     /// Unique identifier for this release.
     id: UID,
+    /// The type of release.
+    kind: ReleaseKind,
     /// Current lifecycle state.
     state: ReleaseState,
     /// Title of the release.
@@ -172,6 +174,7 @@ const ENoDiscs: u64 = 51;
 const ENoPrimaryCredit: u64 = 52;
 /// Invalid number of roles in credit.
 const EInvalidCreditRoleCount: u64 = 53;
+const EPartyAlreadyCredited: u64 = 54;
 
 // === Init Function ===
 
@@ -189,6 +192,7 @@ fun init(_otw: RELEASE, ctx: &mut TxContext) {
 /// Creates a new release with the given configuration.
 /// Returns the release and admin capability.
 public fun new(
+    kind: ReleaseKind,
     title: String,
     description: String,
     cover_art: CoverArt,
@@ -219,6 +223,7 @@ public fun new(
 
     let mut release = Release {
         id: release_uid,
+        kind,
         state: ReleaseState::Initialized(false),
         title,
         subtitle: option::none(),
@@ -262,7 +267,9 @@ public fun add_credit(
             });
 
             // Insert the credit into the release credits map.
-            self.credits.insert(party.id(), credit);
+            let party_id = party.id();
+            assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
+            self.credits.insert(party_id, credit);
         },
         _ => abort ENotInitializedState,
     }
@@ -361,6 +368,11 @@ public fun id(self: &Release): ID {
     self.id.to_inner()
 }
 
+/// Returns the release kind.
+public fun kind(self: &Release): &ReleaseKind {
+    &self.kind
+}
+
 /// Returns the release state.
 public fun state(self: &Release): ReleaseState {
     self.state
@@ -428,7 +440,11 @@ public fun audio_ingester_types(self: &Release): vector<TypeName> {
         });
     });
 
-    vec_set::from_keys(ingester_types).into_keys()
+    let mut unique = vector[];
+    ingester_types.do!(|t| {
+        if (!unique.contains(&t)) unique.push_back(t);
+    });
+    unique
 }
 
 /// Returns the release ID associated with the admin capability.
@@ -535,6 +551,7 @@ public fun prefill_credits_for_testing(self: &mut Release, n: u64, ctx: &mut TxC
 
 #[test_only]
 public fun new_for_testing(
+    kind: ReleaseKind,
     title: String,
     description: String,
     cover_art: CoverArt,
@@ -545,6 +562,7 @@ public fun new_for_testing(
 
     let mut release = Release {
         id: object::new(ctx),
+        kind,
         state: ReleaseState::Initialized(false),
         title,
         subtitle: option::none(),
