@@ -1,7 +1,7 @@
 #[test_only]
 module musicos::recording_tests;
 
-use musicos::credit;
+use partyos::credit;
 use musicos::genre;
 use musicos::recording;
 use musicos::recording_party_role;

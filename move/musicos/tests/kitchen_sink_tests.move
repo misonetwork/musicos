@@ -1,13 +1,14 @@
 #[test_only]
 module musicos::kitchen_sink_tests;
 
-use musicos::credit;
+use partyos::credit;
 use musicos::disc;
 use musicos::genre;
 use musicos::musical_key;
 use musicos::recording;
 use musicos::recording_party_role;
 use musicos::release;
+use musicos::release_kind;
 use musicos::release_party_role;
 use musicos::stem;
 use musicos::test_helpers::{Self, CompositionShare, RecordingShare, V};
@@ -202,6 +203,7 @@ fun test_release_kitchen_sink() {
     // Create release with max title and description.
     // new_for_testing patches all tracks to point to the real release ID.
     let (mut rel, rel_cap) = release::new_for_testing(
+        release_kind::new_album_kind(),
         test_helpers::long_string(300), // MAX_TITLE_LENGTH
         test_helpers::long_string(500), // MAX_DESCRIPTION_LENGTH
         test_helpers::cover_art(),

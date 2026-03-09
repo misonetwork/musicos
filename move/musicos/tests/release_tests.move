@@ -1,9 +1,10 @@
 #[test_only]
 module musicos::release_tests;
 
-use musicos::credit;
+use partyos::credit;
 use musicos::disc;
 use musicos::release;
+use musicos::release_kind;
 use musicos::release_party_role;
 use musicos::test_helpers::{Self, CompositionShare, RecordingShare, V};
 use musicos::track;
@@ -63,6 +64,7 @@ fun test_new_title_too_long() {
     let mut registry = release::new_release_registry_for_testing(ctx);
     let discs = vector[disc::new(vector[test_track(ctx)], option::none())];
     let (rel, cap) = release::new(
+        release_kind::new_album_kind(),
         test_helpers::long_string(MAX_TITLE_LENGTH + 1),
         b"Description".to_string(),
         test_helpers::cover_art(),
@@ -83,6 +85,7 @@ fun test_new_description_too_long() {
     let mut registry = release::new_release_registry_for_testing(ctx);
     let discs = vector[disc::new(vector[test_track(ctx)], option::none())];
     let (rel, cap) = release::new(
+        release_kind::new_album_kind(),
         b"Title".to_string(),
         test_helpers::long_string(MAX_DESCRIPTION_LENGTH + 1),
         test_helpers::cover_art(),
@@ -112,6 +115,7 @@ fun test_new_exceeds_max_discs() {
     });
 
     let (rel, cap) = release::new(
+        release_kind::new_album_kind(),
         b"Too Many Discs".to_string(),
         b"Description".to_string(),
         test_helpers::cover_art(),
@@ -164,6 +168,7 @@ fun test_new_exceeds_max_tracks() {
     };
 
     let (rel, cap) = release::new(
+        release_kind::new_album_kind(),
         b"Too Many Tracks".to_string(),
         b"Description".to_string(),
         test_helpers::cover_art(),
@@ -183,6 +188,7 @@ fun test_add_credit_exceeds_max() {
     let ctx = &mut tx_context::dummy();
     let discs = vector[disc::new(vector[test_track(ctx)], option::none())];
     let (mut rel, cap) = release::new_for_testing(
+        release_kind::new_album_kind(),
         b"Title".to_string(),
         b"Description".to_string(),
         test_helpers::cover_art(),

@@ -7,7 +7,7 @@
 module musicos::stem;
 
 use musicos::audio::Audio;
-use musicos::party::Party;
+use partyos::party::Party;
 use std::string::String;
 
 // === Structs ===

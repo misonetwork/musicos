@@ -19,10 +19,10 @@ use gengo::language_code::{Self, LanguageCode};
 use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
-use musicos::credit::Credit;
+use partyos::credit::Credit;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
-use musicos::party::Party;
+use partyos::party::Party;
 use musicos::recording_party_role::RecordingPartyRole;
 use musicos::share;
 use musicos::stem::Stem;
@@ -832,7 +832,7 @@ public fun prefill_credits_for_testing<RecordingShare>(
     n: u64,
     ctx: &mut TxContext,
 ) {
-    use musicos::credit;
+    use partyos::credit;
     use musicos::recording_party_role;
 
     n.do!(|_| {
@@ -854,7 +854,7 @@ public fun prefill_primary_artists_for_testing<RecordingShare>(
     n: u64,
     ctx: &mut TxContext,
 ) {
-    use musicos::credit;
+    use partyos::credit;
     use musicos::recording_party_role;
 
     n.do!(|_| {
@@ -877,7 +877,7 @@ public fun prefill_featured_artists_for_testing<RecordingShare>(
     n: u64,
     ctx: &mut TxContext,
 ) {
-    use musicos::credit;
+    use partyos::credit;
     use musicos::recording_party_role;
 
     n.do!(|_| {

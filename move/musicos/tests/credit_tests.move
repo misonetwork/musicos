@@ -2,7 +2,7 @@
 module musicos::credit_tests;
 
 use musicos::composition_party_role;
-use musicos::credit;
+use partyos::credit;
 use musicos::test_helpers;
 use std::unit_test::assert_eq;
 
@@ -45,7 +45,7 @@ fun test_new_display_name_at_max_length() {
 
 // === Error Conditions ===
 
-#[test, expected_failure(abort_code = EEmptyString, location = musicos::credit)]
+#[test, expected_failure(abort_code = EEmptyString, location = partyos::credit)]
 fun test_new_empty_display_name() {
     credit::new(
         b"".to_string(),
@@ -53,7 +53,7 @@ fun test_new_empty_display_name() {
     );
 }
 
-#[test, expected_failure(abort_code = EMaxDisplayNameLengthExceeded, location = musicos::credit)]
+#[test, expected_failure(abort_code = EMaxDisplayNameLengthExceeded, location = partyos::credit)]
 fun test_new_display_name_too_long() {
     credit::new(
         test_helpers::long_string(MAX_DISPLAY_NAME_LENGTH + 1),
@@ -61,7 +61,7 @@ fun test_new_display_name_too_long() {
     );
 }
 
-#[test, expected_failure(abort_code = EDuplicateRoles, location = musicos::credit)]
+#[test, expected_failure(abort_code = EDuplicateRoles, location = partyos::credit)]
 fun test_new_duplicate_roles() {
     credit::new(
         b"John Doe".to_string(),

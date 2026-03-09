@@ -1,7 +1,7 @@
 #[test_only]
 module musicos::party_tests;
 
-use musicos::party;
+use partyos::party;
 use musicos::test_helpers;
 use std::unit_test::{assert_eq, destroy};
 
@@ -140,7 +140,7 @@ fun test_set_name_at_max_length() {
 
 // === Boundary Tests ===
 
-#[test, expected_failure(abort_code = EMaxGroupMembersExceeded, location = musicos::party)]
+#[test, expected_failure(abort_code = EMaxGroupMembersExceeded, location = partyos::party)]
 fun test_add_party_exceeds_max_group_members() {
     let ctx = &mut tx_context::dummy();
     // Create a group pre-filled with MAX_GROUP_MEMBERS members
@@ -158,7 +158,7 @@ fun test_add_party_exceeds_max_group_members() {
 
 // === Error Conditions ===
 
-#[test, expected_failure(abort_code = EEmptyString, location = musicos::party)]
+#[test, expected_failure(abort_code = EEmptyString, location = partyos::party)]
 fun test_new_empty_name() {
     let ctx = &mut tx_context::dummy();
     let (party, cap) = party::new(party::new_individual_kind(), b"".to_string(), ctx);
@@ -166,7 +166,7 @@ fun test_new_empty_name() {
     destroy(cap);
 }
 
-#[test, expected_failure(abort_code = EMaxNameLengthExceeded, location = musicos::party)]
+#[test, expected_failure(abort_code = EMaxNameLengthExceeded, location = partyos::party)]
 fun test_new_name_too_long() {
     let ctx = &mut tx_context::dummy();
     let (party, cap) = party::new(
@@ -178,7 +178,7 @@ fun test_new_name_too_long() {
     destroy(cap);
 }
 
-#[test, expected_failure(abort_code = EEmptyString, location = musicos::party)]
+#[test, expected_failure(abort_code = EEmptyString, location = partyos::party)]
 fun test_set_name_empty() {
     let ctx = &mut tx_context::dummy();
     let (mut party, cap) = test_helpers::individual(ctx);
@@ -187,7 +187,7 @@ fun test_set_name_empty() {
     destroy(cap);
 }
 
-#[test, expected_failure(abort_code = EMaxNameLengthExceeded, location = musicos::party)]
+#[test, expected_failure(abort_code = EMaxNameLengthExceeded, location = partyos::party)]
 fun test_set_name_too_long() {
     let ctx = &mut tx_context::dummy();
     let (mut party, cap) = test_helpers::individual(ctx);
@@ -196,7 +196,7 @@ fun test_set_name_too_long() {
     destroy(cap);
 }
 
-#[test, expected_failure(abort_code = EDuplicateParty, location = musicos::party)]
+#[test, expected_failure(abort_code = EDuplicateParty, location = partyos::party)]
 fun test_add_party_duplicate() {
     let ctx = &mut tx_context::dummy();
     let (mut group, group_cap) = test_helpers::group(ctx);
@@ -211,7 +211,7 @@ fun test_add_party_duplicate() {
     destroy(individual_cap);
 }
 
-#[test, expected_failure(abort_code = ENotGroupKind, location = musicos::party)]
+#[test, expected_failure(abort_code = ENotGroupKind, location = partyos::party)]
 fun test_add_party_to_individual() {
     let ctx = &mut tx_context::dummy();
     let (mut party1, cap1) = test_helpers::individual(ctx);
@@ -225,7 +225,7 @@ fun test_add_party_to_individual() {
     destroy(cap2);
 }
 
-#[test, expected_failure(abort_code = ENotIndividualKind, location = musicos::party)]
+#[test, expected_failure(abort_code = ENotIndividualKind, location = partyos::party)]
 fun test_add_group_to_group() {
     let ctx = &mut tx_context::dummy();
     let (mut group1, cap1) = test_helpers::group(ctx);
@@ -239,7 +239,7 @@ fun test_add_group_to_group() {
     destroy(cap2);
 }
 
-#[test, expected_failure(abort_code = EUnauthorized, location = musicos::party)]
+#[test, expected_failure(abort_code = EUnauthorized, location = partyos::party)]
 fun test_unauthorized_cap() {
     let ctx = &mut tx_context::dummy();
     let (mut party1, cap1) = test_helpers::individual(ctx);
@@ -254,7 +254,7 @@ fun test_unauthorized_cap() {
     destroy(cap2);
 }
 
-#[test, expected_failure(abort_code = ENotGroupKind, location = musicos::party)]
+#[test, expected_failure(abort_code = ENotGroupKind, location = partyos::party)]
 fun test_remove_party_from_individual() {
     let ctx = &mut tx_context::dummy();
     let (mut party, cap) = test_helpers::individual(ctx);
@@ -266,7 +266,7 @@ fun test_remove_party_from_individual() {
     destroy(cap);
 }
 
-#[test, expected_failure(abort_code = ENotGroupKind, location = musicos::party)]
+#[test, expected_failure(abort_code = ENotGroupKind, location = partyos::party)]
 fun test_group_members_on_individual() {
     let ctx = &mut tx_context::dummy();
     let (party, cap) = test_helpers::individual(ctx);

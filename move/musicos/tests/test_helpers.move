@@ -3,7 +3,7 @@ module musicos::test_helpers;
 
 use musicos::audio;
 use musicos::cover_art;
-use musicos::party::{Self, Party, PartyAdminCap};
+use partyos::party::{Self, Party, PartyAdminCap};
 use std::string::String;
 use ori::walrus_data;
 

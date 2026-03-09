@@ -7,4 +7,5 @@ authors = ["Subsonic Labs, LLC (os@unconfirmed.com)"]
 [dependencies]
 interest_bps = { r.mvr = "@interest/bps" }
 gengo = { git = "https://github.com/unconfirmedlabs/gengo.git", rev = "main" }
-ori = { git = "https://github.com/unconfirmedlabs/ori.git", rev = "main" }
+ori = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "main" }
+partyos = { git = "https://github.com/subsoniclabs/partyos.git", rev = "main" }

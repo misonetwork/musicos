@@ -3,7 +3,7 @@ module musicos::composition_tests;
 
 use musicos::composition;
 use musicos::composition_party_role;
-use musicos::credit;
+use partyos::credit;
 use musicos::test_helpers::{Self, CompositionShare};
 use std::unit_test::{assert_eq, destroy};
 use ori::walrus_data;

@@ -15,9 +15,9 @@ module musicos::release;
 
 use interest_bps::bps;
 use musicos::cover_art::CoverArt;
-use musicos::credit::Credit;
+use partyos::credit::Credit;
 use musicos::disc::Disc;
-use musicos::party::Party;
+use partyos::party::Party;
 use musicos::release_kind::ReleaseKind;
 use musicos::release_party_role::ReleasePartyRole;
 use std::string::String;
@@ -525,7 +525,7 @@ public fun new_release_registry_for_testing(ctx: &mut TxContext): ReleaseRegistr
 /// The first credit is designated as a primary role.
 #[test_only]
 public fun prefill_credits_for_testing(self: &mut Release, n: u64, ctx: &mut TxContext) {
-    use musicos::credit;
+    use partyos::credit;
     use musicos::release_party_role;
 
     n.do!(|i| {
