@@ -15,14 +15,13 @@ module musicos::release;
 
 use interest_bps::bps;
 use musicos::cover_art::CoverArt;
-use partyos::credit::Credit;
 use musicos::disc::Disc;
-use partyos::party::Party;
 use musicos::release_kind::ReleaseKind;
 use musicos::release_party_role::ReleasePartyRole;
+use partyos::credit::Credit;
+use partyos::party::Party;
 use std::string::String;
 use std::type_name::TypeName;
-use sui::balance::Balance;
 use sui::bcs::to_bytes;
 use sui::clock::Clock;
 use sui::derived_object::claim;
@@ -106,20 +105,6 @@ public struct ReleasePublishedEvent has copy, drop {
     sender: address,
 }
 
-/// Emitted when revenue is distributed for a track.
-public struct ReleaseRevenueDistributedEvent<phantom C> has copy, drop {
-    /// ID of the release.
-    release_id: ID,
-    /// ID of the composition receiving revenue.
-    composition_id: ID,
-    /// Amount distributed to the composition.
-    composition_split_value: u64,
-    /// ID of the recording receiving revenue.
-    recording_id: ID,
-    /// Amount distributed to the recording.
-    recording_split_value: u64,
-}
-
 // === Constants ===
 
 /// Number of roles allowed per credit on a release.
@@ -144,8 +129,6 @@ const EUnauthorized: u64 = 0;
 // State errors (10-19)
 /// Operation requires Initialized state.
 const ENotInitializedState: u64 = 10;
-/// Operation requires Published state.
-const ENotPublishedState: u64 = 11;
 
 // Validation errors (20-29)
 /// Track splits don't sum to 100% (10,000 BPS).
@@ -302,57 +285,6 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
             transfer::share_object(self);
         },
         _ => abort ENotInitializedState,
-    }
-}
-
-/// Distributes revenue to the release's composition and recording.
-/// Splits revenue according to track splits.
-/// Each track's revenue is further split between its composition and recording based on their split ratio.
-/// Required State: Published
-public fun distribute_revenue<Currency>(self: &mut Release, mut revenue: Balance<Currency>) {
-    match (self.state) {
-        ReleaseState::Published(_) => {
-            let release_id = self.id();
-
-            assert!(revenue.value() > 0, ENoRevenueToDistribute);
-
-            // Store the distribution's principal value.
-            let distribution_value = revenue.value();
-
-            // Iterate through all discs and tracks.
-            self.discs.do_ref!(|disc| {
-                disc.tracks().do_ref!(|track| {
-                    let track_split_bps = track.split_bps();
-
-                    if (track_split_bps.value() > 0) {
-                        let rec_split_value = track_split_bps.calc(distribution_value);
-                        let mut rec_split_balance = revenue.split(rec_split_value);
-
-                        // Calculate the composition's revenue share
-                        let comp_split_value = track.composition_split_bps().calc(rec_split_value);
-                        let comp_split_balance = rec_split_balance.split(comp_split_value);
-
-                        let composition_id = track.composition_id();
-                        let recording_id = track.recording_id();
-
-                        emit(ReleaseRevenueDistributedEvent<Currency> {
-                            release_id,
-                            composition_id,
-                            composition_split_value: comp_split_balance.value(),
-                            recording_id,
-                            recording_split_value: rec_split_balance.value(),
-                        });
-
-                        rec_split_balance.send_funds(recording_id.to_address());
-                        comp_split_balance.send_funds(composition_id.to_address());
-                    };
-                });
-            });
-
-            // Transfer dust back to the release.
-            revenue.send_funds(release_id.to_address());
-        },
-        _ => abort ENotPublishedState,
     }
 }
 
