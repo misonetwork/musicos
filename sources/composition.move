@@ -17,9 +17,10 @@ module musicos::composition;
 use interest_bps::bps::{Self, BPS};
 use musicos::audio::Audio;
 use musicos::composition_party_role::CompositionPartyRole;
+use ori::walrus_data::WalrusData;
 use partyos::credit::Credit;
 use partyos::party::Party;
-use musicos::share;
+use share::share;
 use std::string::String;
 use std::type_name::TypeName;
 use sui::balance::Balance;
@@ -29,7 +30,6 @@ use sui::coin_registry::Currency;
 use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
-use ori::walrus_data::WalrusData;
 
 // === Structs ===
 
@@ -88,22 +88,23 @@ public enum CompositionState has copy, drop, store {
 
 /// Emitted when a new composition is created.
 public struct CompositionInitializedEvent has copy, drop {
-    /// ID of the created composition.
     composition_id: ID,
+    title: String,
+    split_bps: BPS,
 }
 
 /// Emitted when a composition is published.
 public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop {
-    /// ID of the published composition.
     composition_id: ID,
+    title: String,
+    split_bps: BPS,
 }
 
 /// Emitted when a party is added to a composition.
 public struct CompositionPartyAddedEvent has copy, drop {
-    /// ID of the composition.
     composition_id: ID,
-    /// ID of the added party.
     party_id: ID,
+    credit: Credit<CompositionPartyRole>,
 }
 
 /// Emitted when the composition split is updated.
@@ -178,6 +179,7 @@ public fun new<CompositionShare>(
     split_value: u64,
     share_currency: &mut Currency<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
+    share_icon_blob_id: u256,
     ctx: &mut TxContext,
 ): (
     Composition<CompositionShare>,
@@ -207,10 +209,13 @@ public fun new<CompositionShare>(
     let composition_shares = share::initialize<CompositionShare>(
         share_currency,
         share_treasury_cap,
+        share_icon_blob_id,
     );
 
     emit(CompositionInitializedEvent {
         composition_id: composition.id(),
+        title: *composition.title(),
+        split_bps: composition.split_bps,
     });
 
     (composition, composition_admin_cap, composition_shares)
@@ -238,6 +243,8 @@ public fun publish<CompositionShare>(
 
             emit(CompositionPublishedEvent<CompositionShare> {
                 composition_id: self.id(),
+                title: *self.title(),
+                split_bps: self.split_bps,
             });
 
             transfer::share_object(self);
@@ -297,6 +304,7 @@ public fun add_credit<CompositionShare>(
             emit(CompositionPartyAddedEvent {
                 composition_id: self.id(),
                 party_id,
+                credit,
             });
         },
         _ => abort ENotInitializedState,

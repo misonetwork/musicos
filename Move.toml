@@ -9,3 +9,4 @@ interest_bps = { r.mvr = "@interest/bps" }
 gengo = { git = "https://github.com/unconfirmedlabs/gengo.git", rev = "main" }
 ori = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "main" }
 partyos = { git = "https://github.com/subsoniclabs/partyos.git", rev = "main" }
+share = { git = "https://github.com/subsoniclabs/share.git", rev = "main" }

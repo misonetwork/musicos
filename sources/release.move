@@ -97,11 +97,12 @@ public enum ReleaseState has copy, drop, store {
 
 /// Emitted when a release is published.
 public struct ReleasePublishedEvent has copy, drop {
-    /// ID of the published release.
     release_id: ID,
-    /// Timestamp (ms) when published.
+    kind: ReleaseKind,
+    title: String,
+    total_tracks: u64,
+    duration_ms: u64,
     timestamp_ms: u64,
-    /// Address of the sender.
     sender: address,
 }
 
@@ -149,8 +150,6 @@ const EMaxTitleLengthExceeded: u64 = 34;
 const EEmptyString: u64 = 35;
 
 // Reference errors (50-59)
-/// Revenue pool has no funds to distribute.
-const ENoRevenueToDistribute: u64 = 50;
 /// Release must contain at least one disc.
 const ENoDiscs: u64 = 51;
 /// Release must contain at least one credit.
@@ -278,6 +277,10 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
 
             emit(ReleasePublishedEvent {
                 release_id: self.id(),
+                kind: *self.kind(),
+                title: *self.title(),
+                total_tracks: self.total_tracks(),
+                duration_ms: self.duration_ms(),
                 timestamp_ms,
                 sender: ctx.sender(),
             });

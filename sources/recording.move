@@ -14,19 +14,20 @@
 /// - Deterministic addresses via derived object pattern
 module musicos::recording;
 
-use interest_bps::bps::BPS;
 use gengo::language_code::{Self, LanguageCode};
+use interest_bps::bps::BPS;
 use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
-use partyos::credit::Credit;
 use musicos::genre::Genre;
 use musicos::musical_key::MusicalKey;
-use partyos::party::Party;
 use musicos::recording_party_role::RecordingPartyRole;
-use musicos::share;
 use musicos::stem::Stem;
 use musicos::time_signature::TimeSignature;
+use ori::walrus_data::WalrusData;
+use partyos::credit::Credit;
+use partyos::party::Party;
+use share::share;
 use std::string::String;
 use std::type_name::TypeName;
 use sui::balance::Balance;
@@ -37,7 +38,6 @@ use sui::derived_object::claim;
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
 use sui::vec_set::{Self, VecSet};
-use ori::walrus_data::WalrusData;
 
 // === Structs ===
 
@@ -124,16 +124,23 @@ public enum RecordingState has copy, drop, store {
 
 /// Emitted when a recording is published.
 public struct RecordingPublishedEvent has copy, drop {
-    /// ID of the published recording.
     recording_id: ID,
+    composition_id: ID,
+    title: String,
+    primary_genre_id: ID,
+    secondary_genre_ids: VecSet<ID>,
+    primary_artist_ids: VecSet<ID>,
+    featured_artist_ids: VecSet<ID>,
+    duration_ms: u64,
+    is_explicit: bool,
+    is_instrumental: bool,
 }
 
 /// Emitted when a party is added to a recording.
 public struct RecordingPartyAddedEvent has copy, drop {
-    /// ID of the recording.
     recording_id: ID,
-    /// ID of the added party.
     party_id: ID,
+    credit: Credit<RecordingPartyRole>,
 }
 
 // === Constants ===
@@ -234,6 +241,7 @@ public fun new<RecordingShare, CompositionShare>(
     cover_art: CoverArt,
     share_currency: &mut Currency<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
+    share_icon_blob_id: u256,
 ): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>, Balance<RecordingShare>) {
     let composition_id = composition.id();
     let primary_genre_id = genre.id();
@@ -270,13 +278,10 @@ public fun new<RecordingShare, CompositionShare>(
         id: claim(&mut recording.id, RecordingAdminCapKey()),
     };
 
-    let mut description: String = "MusicOS Recording Shares for 0x";
-    description.append(recording.id().to_address().to_string());
-    description.append(".");
-
     let recording_shares = share::initialize<RecordingShare>(
         share_currency,
         share_treasury_cap,
+        share_icon_blob_id,
     );
 
     (recording, recording_admin_cap, recording_shares)
@@ -304,6 +309,15 @@ public fun publish<RecordingShare>(
 
             emit(RecordingPublishedEvent {
                 recording_id: self.id(),
+                composition_id: self.composition_id,
+                title: *self.title(),
+                primary_genre_id: self.primary_genre_id,
+                secondary_genre_ids: self.secondary_genre_ids,
+                primary_artist_ids: self.primary_artist_ids,
+                featured_artist_ids: self.featured_artist_ids,
+                duration_ms: self.master.duration_ms(),
+                is_explicit: self.is_explicit,
+                is_instrumental: self.is_instrumental,
             });
 
             transfer::share_object(self);
@@ -408,6 +422,7 @@ public fun add_credit<RecordingShare>(
             emit(RecordingPartyAddedEvent {
                 recording_id: self.id(),
                 party_id,
+                credit,
             });
         },
         _ => abort ENotInitializedState,
