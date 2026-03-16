@@ -260,7 +260,7 @@ MusicOS uses Sui's derived object mechanism to generate deterministic addresses 
 
 Similarly, a recording's address is derived from its parent composition's UID using the master audio's verifier type as a derivation key. This creates a discoverable, deterministic mapping from compositions to their recordings.
 
-Releases use a content-addressed derivation: the release UID is derived from a Blake2b-256 hash of its recording IDs, track split values, and the creation epoch. This ensures that the same set of recordings with the same splits produces a deterministic release address.
+Releases use a content-addressed derivation: the release UID is derived from a Blake2b-256 hash of its recording IDs, track split values, and a caller-provided nonce (`u256`). This ensures that collaborators can coordinate a deterministic release address offchain before creating Deals.
 
 ---
 

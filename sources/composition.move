@@ -179,7 +179,6 @@ public fun new<CompositionShare>(
     split_value: u64,
     share_currency: &mut Currency<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
-    share_icon_blob_id: u256,
     ctx: &mut TxContext,
 ): (
     Composition<CompositionShare>,
@@ -209,7 +208,6 @@ public fun new<CompositionShare>(
     let composition_shares = share::initialize<CompositionShare>(
         share_currency,
         share_treasury_cap,
-        share_icon_blob_id,
     );
 
     emit(CompositionInitializedEvent {

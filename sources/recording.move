@@ -241,7 +241,6 @@ public fun new<RecordingShare, CompositionShare>(
     cover_art: CoverArt,
     share_currency: &mut Currency<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
-    share_icon_blob_id: u256,
 ): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>, Balance<RecordingShare>) {
     let composition_id = composition.id();
     let primary_genre_id = genre.id();
@@ -281,7 +280,6 @@ public fun new<RecordingShare, CompositionShare>(
     let recording_shares = share::initialize<RecordingShare>(
         share_currency,
         share_treasury_cap,
-        share_icon_blob_id,
     );
 
     (recording, recording_admin_cap, recording_shares)

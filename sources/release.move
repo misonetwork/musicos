@@ -179,8 +179,9 @@ public fun new(
     description: String,
     cover_art: CoverArt,
     discs: vector<Disc>,
+    nonce: u256,
     registry: &mut ReleaseRegistry,
-    ctx: &TxContext,
+    _ctx: &TxContext,
 ): (Release, ReleaseAdminCap) {
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
@@ -200,7 +201,7 @@ public fun new(
     assert!(split_sum == bps::max_value!(), EInvalidTrackSplitsSum);
 
     // Calculate the release digest and claim the release UID.
-    let release_digest = calculate_release_digest(recording_ids, track_split_values, ctx);
+    let release_digest = calculate_release_digest(recording_ids, track_split_values, nonce);
     let release_uid = claim(&mut registry.id, ReleaseKey(release_digest));
 
     let mut release = Release {
@@ -426,16 +427,16 @@ fun extract_digest_inputs(discs: &vector<Disc>): (vector<ID>, vector<u64>, u64) 
     (recording_ids, track_split_values, split_sum)
 }
 
-/// Calculates the deterministic release digest from recording IDs, split values, and epoch.
+/// Calculates the deterministic release digest from recording IDs, split values, and nonce.
 fun calculate_release_digest(
     recording_ids: vector<ID>,
     track_split_values: vector<u64>,
-    ctx: &TxContext,
+    nonce: u256,
 ): vector<u8> {
     let mut hash_input = vector<u8>[];
     hash_input.append(to_bytes(&recording_ids));
     hash_input.append(to_bytes(&track_split_values));
-    hash_input.append(to_bytes(&ctx.epoch()));
+    hash_input.append(to_bytes(&nonce));
 
     blake2b256(&hash_input)
 }

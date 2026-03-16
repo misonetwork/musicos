@@ -69,6 +69,7 @@ fun test_new_title_too_long() {
         b"Description".to_string(),
         test_helpers::cover_art(),
         discs,
+        0u256,
         &mut registry,
         ctx,
     );
@@ -90,6 +91,7 @@ fun test_new_description_too_long() {
         test_helpers::long_string(MAX_DESCRIPTION_LENGTH + 1),
         test_helpers::cover_art(),
         discs,
+        0u256,
         &mut registry,
         ctx,
     );
@@ -120,6 +122,7 @@ fun test_new_exceeds_max_discs() {
         b"Description".to_string(),
         test_helpers::cover_art(),
         discs,
+        0u256,
         &mut registry,
         ctx,
     );
@@ -173,6 +176,7 @@ fun test_new_exceeds_max_tracks() {
         b"Description".to_string(),
         test_helpers::cover_art(),
         discs,
+        0u256,
         &mut registry,
         ctx,
     );
