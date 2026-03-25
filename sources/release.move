@@ -95,15 +95,26 @@ public enum ReleaseState has copy, drop, store {
 
 // === Events ===
 
+/// Emitted when a party is added to a release.
+public struct ReleasePartyAddedEvent has copy, drop {
+    release_id: ID,
+    party_id: ID,
+    credit: Credit<ReleasePartyRole>,
+}
+
 /// Emitted when a release is published.
 public struct ReleasePublishedEvent has copy, drop {
     release_id: ID,
     kind: ReleaseKind,
     title: String,
+    subtitle: Option<String>,
+    description: String,
+    total_discs: u64,
     total_tracks: u64,
     duration_ms: u64,
-    timestamp_ms: u64,
-    sender: address,
+    credits_count: u64,
+    published_at_ms: u64,
+    published_by: address,
 }
 
 // === Constants ===
@@ -253,6 +264,12 @@ public fun add_credit(
             let party_id = party.id();
             assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
             self.credits.insert(party_id, credit);
+
+            emit(ReleasePartyAddedEvent {
+                release_id: self.id(),
+                party_id,
+                credit,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -280,10 +297,14 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
                 release_id: self.id(),
                 kind: *self.kind(),
                 title: *self.title(),
+                subtitle: self.subtitle,
+                description: *self.description(),
+                total_discs: self.discs.length(),
                 total_tracks: self.total_tracks(),
                 duration_ms: self.duration_ms(),
-                timestamp_ms,
-                sender: ctx.sender(),
+                credits_count: self.credits.length(),
+                published_at_ms: timestamp_ms,
+                published_by: ctx.sender(),
             });
 
             transfer::share_object(self);

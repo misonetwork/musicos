@@ -86,18 +86,19 @@ public enum CompositionState has copy, drop, store {
 
 // === Events ===
 
-/// Emitted when a new composition is created.
-public struct CompositionInitializedEvent has copy, drop {
-    composition_id: ID,
-    title: String,
-    split_bps: BPS,
-}
-
 /// Emitted when a composition is published.
 public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop {
     composition_id: ID,
     title: String,
+    alternate_titles: vector<String>,
     split_bps: BPS,
+    has_lyrics: bool,
+    has_chart: bool,
+    has_score: bool,
+    has_demo: bool,
+    demo_duration_ms: Option<u64>,
+    credits_count: u64,
+    published_at_ms: u64,
 }
 
 /// Emitted when a party is added to a composition.
@@ -210,12 +211,6 @@ public fun new<CompositionShare>(
         share_treasury_cap,
     );
 
-    emit(CompositionInitializedEvent {
-        composition_id: composition.id(),
-        title: *composition.title(),
-        split_bps: composition.split_bps,
-    });
-
     (composition, composition_admin_cap, composition_shares)
 }
 
@@ -237,12 +232,27 @@ public fun publish<CompositionShare>(
                 ENoContent,
             );
 
-            self.state = CompositionState::Published(clock.timestamp_ms());
+            let published_at_ms = clock.timestamp_ms();
+            self.state = CompositionState::Published(published_at_ms);
+
+            let demo_duration_ms = if (self.demo.is_some()) {
+                option::some(self.demo.borrow().duration_ms())
+            } else {
+                option::none()
+            };
 
             emit(CompositionPublishedEvent<CompositionShare> {
                 composition_id: self.id(),
                 title: *self.title(),
+                alternate_titles: *self.alternate_titles(),
                 split_bps: self.split_bps,
+                has_lyrics: self.lyrics.is_some(),
+                has_chart: self.chart.is_some(),
+                has_score: self.score.is_some(),
+                has_demo: self.demo.is_some(),
+                demo_duration_ms,
+                credits_count: self.credits.length(),
+                published_at_ms,
             });
 
             transfer::share_object(self);

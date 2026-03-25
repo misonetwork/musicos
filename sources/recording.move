@@ -123,17 +123,27 @@ public enum RecordingState has copy, drop, store {
 // === Events ===
 
 /// Emitted when a recording is published.
-public struct RecordingPublishedEvent has copy, drop {
+public struct RecordingPublishedEvent<phantom RecordingShare> has copy, drop {
     recording_id: ID,
     composition_id: ID,
     title: String,
+    title_version: Option<String>,
+    subtitle: Option<String>,
+    composition_split_bps: BPS,
     primary_genre_id: ID,
     secondary_genre_ids: VecSet<ID>,
+    language: Option<LanguageCode>,
     primary_artist_ids: VecSet<ID>,
     featured_artist_ids: VecSet<ID>,
     duration_ms: u64,
+    musical_key: Option<MusicalKey>,
+    time_signature: Option<TimeSignature>,
+    tempo_bpm: Option<u16>,
+    stems_count: u64,
+    credits_count: u64,
     is_explicit: bool,
     is_instrumental: bool,
+    published_at_ms: u64,
 }
 
 /// Emitted when a party is added to a recording.
@@ -141,6 +151,16 @@ public struct RecordingPartyAddedEvent has copy, drop {
     recording_id: ID,
     party_id: ID,
     credit: Credit<RecordingPartyRole>,
+}
+
+/// Emitted when a stem is added to a recording.
+public struct RecordingStemAddedEvent has copy, drop {
+    recording_id: ID,
+    stem_idx: u64,
+    stem_name: String,
+    stem_description: Option<String>,
+    stem_duration_ms: u64,
+    contributors: vector<ID>,
 }
 
 // === Constants ===
@@ -303,19 +323,30 @@ public fun publish<RecordingShare>(
             assert!(!self.is_instrumental || self.lyrics.is_none(), ELyricsInstrumentalConflict);
 
             // Set the recording's publish timestamp.
-            self.state = RecordingState::Published(clock.timestamp_ms());
+            let published_at_ms = clock.timestamp_ms();
+            self.state = RecordingState::Published(published_at_ms);
 
-            emit(RecordingPublishedEvent {
+            emit(RecordingPublishedEvent<RecordingShare> {
                 recording_id: self.id(),
                 composition_id: self.composition_id,
                 title: *self.title(),
+                title_version: self.title_version,
+                subtitle: self.subtitle,
+                composition_split_bps: self.composition_split_bps,
                 primary_genre_id: self.primary_genre_id,
                 secondary_genre_ids: self.secondary_genre_ids,
+                language: self.language,
                 primary_artist_ids: self.primary_artist_ids,
                 featured_artist_ids: self.featured_artist_ids,
                 duration_ms: self.master.duration_ms(),
+                musical_key: self.musical_key,
+                time_signature: self.time_signature,
+                tempo_bpm: self.tempo_bpm,
+                stems_count: self.stems.length(),
+                credits_count: self.credits.length(),
                 is_explicit: self.is_explicit,
                 is_instrumental: self.is_instrumental,
+                published_at_ms,
             });
 
             transfer::share_object(self);
@@ -618,8 +649,24 @@ public fun add_stem<RecordingShare>(
             stem.contributors().do_ref!(|contributor_id| {
                 assert!(self.credits.contains(contributor_id), EPartyNotCredited);
             });
+
+            // Extract stem data before push_back consumes it.
+            let stem_name = *stem.name();
+            let stem_description = *stem.description();
+            let stem_duration_ms = stem.audio().duration_ms();
+            let contributors = *stem.contributors();
+
             // Add the stem to the recording.
             self.stems.push_back(stem);
+
+            emit(RecordingStemAddedEvent {
+                recording_id: self.id(),
+                stem_idx: self.stems.length() - 1,
+                stem_name,
+                stem_description,
+                stem_duration_ms,
+                contributors,
+            });
         },
         _ => abort ENotInitializedState,
     }
