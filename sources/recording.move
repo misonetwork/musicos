@@ -1,4 +1,4 @@
-// Copyright (c) Subsonic Labs, LLC
+// Copyright (c) Unconfirmed Labs, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents an audio recording of a composition in MusicOS.
@@ -129,15 +129,18 @@ public struct RecordingPublishedEvent<phantom RecordingShare> has copy, drop {
     title: String,
     title_version: Option<String>,
     subtitle: Option<String>,
-    composition_split_bps: BPS,
+    composition_split_bps_value: u16,
     primary_genre_id: ID,
-    secondary_genre_ids: VecSet<ID>,
-    language: Option<LanguageCode>,
-    primary_artist_ids: VecSet<ID>,
-    featured_artist_ids: VecSet<ID>,
+    secondary_genre_ids: vector<ID>,
+    language_code: Option<String>,
+    primary_artist_ids: vector<ID>,
+    featured_artist_ids: vector<ID>,
     duration_ms: u64,
-    musical_key: Option<MusicalKey>,
-    time_signature: Option<TimeSignature>,
+    musical_key_note: Option<String>,
+    musical_key_accidental: Option<String>,
+    musical_key_mode: Option<String>,
+    time_sig_beats_per_measure: Option<u8>,
+    time_sig_beat_unit: Option<u8>,
     tempo_bpm: Option<u16>,
     stems_count: u64,
     credits_count: u64,
@@ -150,7 +153,8 @@ public struct RecordingPublishedEvent<phantom RecordingShare> has copy, drop {
 public struct RecordingPartyAddedEvent has copy, drop {
     recording_id: ID,
     party_id: ID,
-    credit: Credit<RecordingPartyRole>,
+    credit_display_name: String,
+    credit_role_names: vector<String>,
 }
 
 /// Emitted when a stem is added to a recording.
@@ -326,21 +330,51 @@ public fun publish<RecordingShare>(
             let published_at_ms = clock.timestamp_ms();
             self.state = RecordingState::Published(published_at_ms);
 
+            // Flatten language code
+            let language_code = if (self.language.is_some()) {
+                option::some(self.language.borrow().code())
+            } else {
+                option::none()
+            };
+
+            // Flatten musical key
+            let (musical_key_note, musical_key_accidental, musical_key_mode) = if (self.musical_key.is_some()) {
+                let mk = self.musical_key.borrow();
+                (
+                    option::some(mk.note().note_name()),
+                    option::some(mk.accidental().accidental_name()),
+                    option::some(mk.mode().mode_name()),
+                )
+            } else {
+                (option::none(), option::none(), option::none())
+            };
+
+            // Flatten time signature
+            let (time_sig_beats_per_measure, time_sig_beat_unit) = if (self.time_signature.is_some()) {
+                let ts = self.time_signature.borrow();
+                (option::some(ts.beats_per_measure()), option::some(ts.beat_unit()))
+            } else {
+                (option::none(), option::none())
+            };
+
             emit(RecordingPublishedEvent<RecordingShare> {
                 recording_id: self.id(),
                 composition_id: self.composition_id,
                 title: *self.title(),
                 title_version: self.title_version,
                 subtitle: self.subtitle,
-                composition_split_bps: self.composition_split_bps,
+                composition_split_bps_value: (self.composition_split_bps.value() as u16),
                 primary_genre_id: self.primary_genre_id,
-                secondary_genre_ids: self.secondary_genre_ids,
-                language: self.language,
-                primary_artist_ids: self.primary_artist_ids,
-                featured_artist_ids: self.featured_artist_ids,
+                secondary_genre_ids: *self.secondary_genre_ids.keys(),
+                language_code,
+                primary_artist_ids: *self.primary_artist_ids.keys(),
+                featured_artist_ids: *self.featured_artist_ids.keys(),
                 duration_ms: self.master.duration_ms(),
-                musical_key: self.musical_key,
-                time_signature: self.time_signature,
+                musical_key_note,
+                musical_key_accidental,
+                musical_key_mode,
+                time_sig_beats_per_measure,
+                time_sig_beat_unit,
                 tempo_bpm: self.tempo_bpm,
                 stems_count: self.stems.length(),
                 credits_count: self.credits.length(),
@@ -448,10 +482,20 @@ public fun add_credit<RecordingShare>(
             assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
             self.credits.insert(party_id, credit);
 
+            let credit_display_name = *credit.display_name();
+            let roles = credit.roles();
+            let mut credit_role_names = vector[];
+            let mut i = 0;
+            while (i < roles.length()) {
+                credit_role_names.push_back(roles[i].name());
+                i = i + 1;
+            };
+
             emit(RecordingPartyAddedEvent {
                 recording_id: self.id(),
                 party_id,
-                credit,
+                credit_display_name,
+                credit_role_names,
             });
         },
         _ => abort ENotInitializedState,

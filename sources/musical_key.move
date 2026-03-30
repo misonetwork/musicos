@@ -1,4 +1,4 @@
-// Copyright (c) Subsonic Labs, LLC
+// Copyright (c) Unconfirmed Labs, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents the musical key of a composition or recording.
@@ -181,3 +181,33 @@ public fun accidental(self: &MusicalKey): Accidental { self.1 }
 
 /// Returns the mode (major or minor) of this key.
 public fun mode(self: &MusicalKey): Mode { self.2 }
+
+/// Returns the human-readable name of the note.
+public fun note_name(self: &Note): String {
+    match (self) {
+        Note::C => "C",
+        Note::D => "D",
+        Note::E => "E",
+        Note::F => "F",
+        Note::G => "G",
+        Note::A => "A",
+        Note::B => "B",
+    }
+}
+
+/// Returns the human-readable name of the accidental.
+public fun accidental_name(self: &Accidental): String {
+    match (self) {
+        Accidental::Natural => "Natural",
+        Accidental::Sharp => "Sharp",
+        Accidental::Flat => "Flat",
+    }
+}
+
+/// Returns the human-readable name of the mode.
+public fun mode_name(self: &Mode): String {
+    match (self) {
+        Mode::Major => "Major",
+        Mode::Minor => "Minor",
+    }
+}

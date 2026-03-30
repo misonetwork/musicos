@@ -1,4 +1,4 @@
-// Copyright (c) Subsonic Labs, LLC
+// Copyright (c) Unconfirmed Labs, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents a deal authorizing a recording to be included in a release.

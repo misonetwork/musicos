@@ -1,4 +1,4 @@
-// Copyright (c) Subsonic Labs, LLC
+// Copyright (c) Unconfirmed Labs, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents a musical composition (song, instrumental work) in MusicOS.
@@ -91,7 +91,7 @@ public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop
     composition_id: ID,
     title: String,
     alternate_titles: vector<String>,
-    split_bps: BPS,
+    split_bps_value: u16,
     has_lyrics: bool,
     has_chart: bool,
     has_score: bool,
@@ -105,7 +105,8 @@ public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop
 public struct CompositionPartyAddedEvent has copy, drop {
     composition_id: ID,
     party_id: ID,
-    credit: Credit<CompositionPartyRole>,
+    credit_display_name: String,
+    credit_role_names: vector<String>,
 }
 
 /// Emitted when the composition split is updated.
@@ -245,7 +246,7 @@ public fun publish<CompositionShare>(
                 composition_id: self.id(),
                 title: *self.title(),
                 alternate_titles: *self.alternate_titles(),
-                split_bps: self.split_bps,
+                split_bps_value: (self.split_bps.value() as u16),
                 has_lyrics: self.lyrics.is_some(),
                 has_chart: self.chart.is_some(),
                 has_score: self.score.is_some(),
@@ -309,10 +310,20 @@ public fun add_credit<CompositionShare>(
             assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
             self.credits.insert(party_id, credit);
 
+            let credit_display_name = *credit.display_name();
+            let roles = credit.roles();
+            let mut credit_role_names = vector[];
+            let mut i = 0;
+            while (i < roles.length()) {
+                credit_role_names.push_back(roles[i].name());
+                i = i + 1;
+            };
+
             emit(CompositionPartyAddedEvent {
                 composition_id: self.id(),
                 party_id,
-                credit,
+                credit_display_name,
+                credit_role_names,
             });
         },
         _ => abort ENotInitializedState,

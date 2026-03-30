@@ -1,4 +1,4 @@
-// Copyright (c) Subsonic Labs, LLC
+// Copyright (c) Unconfirmed Labs, LLC
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents a music release in MusicOS.
@@ -24,7 +24,7 @@ use std::string::String;
 use std::type_name::TypeName;
 use sui::bcs::to_bytes;
 use sui::clock::Clock;
-use sui::derived_object::claim;
+use sui::derived_object::{Self, claim};
 use sui::event::emit;
 use sui::hash::blake2b256;
 use sui::vec_map::{Self, VecMap};
@@ -99,13 +99,14 @@ public enum ReleaseState has copy, drop, store {
 public struct ReleasePartyAddedEvent has copy, drop {
     release_id: ID,
     party_id: ID,
-    credit: Credit<ReleasePartyRole>,
+    credit_display_name: String,
+    credit_role_names: vector<String>,
 }
 
 /// Emitted when a release is published.
 public struct ReleasePublishedEvent has copy, drop {
     release_id: ID,
-    kind: ReleaseKind,
+    kind: String,
     title: String,
     subtitle: Option<String>,
     description: String,
@@ -265,10 +266,20 @@ public fun add_credit(
             assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
             self.credits.insert(party_id, credit);
 
+            let credit_display_name = *credit.display_name();
+            let roles = credit.roles();
+            let mut credit_role_names = vector[];
+            let mut i = 0;
+            while (i < roles.length()) {
+                credit_role_names.push_back(roles[i].name());
+                i = i + 1;
+            };
+
             emit(ReleasePartyAddedEvent {
                 release_id: self.id(),
                 party_id,
-                credit,
+                credit_display_name,
+                credit_role_names,
             });
         },
         _ => abort ENotInitializedState,
@@ -295,7 +306,7 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
 
             emit(ReleasePublishedEvent {
                 release_id: self.id(),
-                kind: *self.kind(),
+                kind: self.kind().name(),
                 title: *self.title(),
                 subtitle: self.subtitle,
                 description: *self.description(),
@@ -319,6 +330,19 @@ public fun authorize(self: &Release, cap: &ReleaseAdminCap) {
 }
 
 // === Public View Functions ===
+
+/// Derives the release ID that `new()` would produce for the given inputs,
+/// without creating the object. This is the on-chain equivalent of the
+/// client-side `deriveReleaseId()` function.
+public fun derive_release_id(
+    recording_ids: vector<ID>,
+    track_split_values: vector<u64>,
+    nonce: u256,
+    registry: &ReleaseRegistry,
+): ID {
+    let release_digest = calculate_release_digest(recording_ids, track_split_values, nonce);
+    derived_object::derive_address(registry.id.to_inner(), ReleaseKey(release_digest)).to_id()
+}
 
 /// Returns the release's object ID.
 public fun id(self: &Release): ID {

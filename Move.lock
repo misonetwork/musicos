@@ -11,13 +11,13 @@ manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.MoveStdlib]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "655576caa3d7faaed39ebbc15d1bcc91d0761aee" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "b979a730b73afb8e5f9a9672fa7b09afbff6479b" }
 use_environment = "testnet"
 manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
 deps = {}
 
 [pinned.testnet.Sui]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "655576caa3d7faaed39ebbc15d1bcc91d0761aee" }
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "b979a730b73afb8e5f9a9672fa7b09afbff6479b" }
 use_environment = "testnet"
 manifest_digest = "7AFB66695545775FBFBB2D3078ADFD084244D5002392E837FDE21D9EA1C6D01C"
 deps = { MoveStdlib = "MoveStdlib" }
@@ -35,13 +35,13 @@ manifest_digest = "61CCD1F5ACABE6B204EE3369D3D5D66F809D8708E2D7103497833A0F4CB78
 deps = { gengo = "gengo", interest_bps = "InterestBPS", ori = "ori", partyos = "partyos", share = "share", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.ori]
-source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "6e046fef1491e9a50e99a904d3da382f2cbbdef6" }
+source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "f32c993cd5045e76b684bb9f82b167fe38ace067" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.partyos]
-source = { git = "https://github.com/subsoniclabs/partyos.git", subdir = ".", rev = "d3e52c30917e5d7bc5f0bcc2df0dcccf23ec0c30" }
+source = { git = "https://github.com/subsoniclabs/partyos.git", subdir = ".", rev = "fc40c13c17fc2b798d3870034300da9a552c29a2" }
 use_environment = "testnet"
 manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
 deps = { std = "MoveStdlib", sui = "Sui" }
