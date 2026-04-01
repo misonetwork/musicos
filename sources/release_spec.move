@@ -60,3 +60,44 @@ fun add_credit_aborts_duplicate(
     release::add_credit(self, cap, party, credit);
     ensures(false);
 }
+
+// === Credit role count (release requires exactly 1 role) ===
+
+/// add_credit aborts when credit has zero roles.
+#[spec(prove, ignore_abort)]
+fun add_credit_aborts_zero_roles(
+    self: &mut Release, cap: &ReleaseAdminCap,
+    party: &Party, credit: Credit<ReleasePartyRole>,
+) {
+    requires(self.id() == cap.release_id());
+    requires(self.is_initialized_state());
+    requires(credit.roles().length() == 0);
+    release::add_credit(self, cap, party, credit);
+    ensures(false);
+}
+
+/// add_credit aborts when credit has more than 1 role.
+#[spec(prove, ignore_abort)]
+fun add_credit_aborts_multiple_roles(
+    self: &mut Release, cap: &ReleaseAdminCap,
+    party: &Party, credit: Credit<ReleasePartyRole>,
+) {
+    requires(self.id() == cap.release_id());
+    requires(self.is_initialized_state());
+    requires(credit.roles().length() > 1);
+    release::add_credit(self, cap, party, credit);
+    ensures(false);
+}
+
+/// add_credit aborts when max credits (50) reached.
+#[spec(prove, ignore_abort)]
+fun add_credit_aborts_max_credits(
+    self: &mut Release, cap: &ReleaseAdminCap,
+    party: &Party, credit: Credit<ReleasePartyRole>,
+) {
+    requires(self.id() == cap.release_id());
+    requires(self.is_initialized_state());
+    requires(self.credits().length() >= 50);
+    release::add_credit(self, cap, party, credit);
+    ensures(false);
+}

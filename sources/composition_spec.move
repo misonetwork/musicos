@@ -110,3 +110,54 @@ fun add_alternate_title_increments_count<CS>(
     composition::add_alternate_title(self, cap, title);
     ensures(self.alternate_titles().length() == old_len + 1);
 }
+
+// === Credit role count bounds ===
+
+/// add_credit aborts when credit has zero roles.
+#[spec(prove, ignore_abort)]
+fun add_credit_aborts_zero_roles<CS>(
+    self: &mut Composition<CS>, cap: &CompositionAdminCap<CS>,
+    party: &Party, credit: Credit<CompositionPartyRole>,
+) {
+    requires(self.is_initialized_state());
+    requires(credit.roles().length() == 0);
+    composition::add_credit(self, cap, party, credit);
+    ensures(false);
+}
+
+/// add_credit aborts when credit has more than 5 roles.
+#[spec(prove, ignore_abort)]
+fun add_credit_aborts_too_many_roles<CS>(
+    self: &mut Composition<CS>, cap: &CompositionAdminCap<CS>,
+    party: &Party, credit: Credit<CompositionPartyRole>,
+) {
+    requires(self.is_initialized_state());
+    requires(credit.roles().length() > 5);
+    composition::add_credit(self, cap, party, credit);
+    ensures(false);
+}
+
+/// add_credit aborts when max credits (50) reached.
+#[spec(prove, ignore_abort)]
+fun add_credit_aborts_max_credits<CS>(
+    self: &mut Composition<CS>, cap: &CompositionAdminCap<CS>,
+    party: &Party, credit: Credit<CompositionPartyRole>,
+) {
+    requires(self.is_initialized_state());
+    requires(self.credits().length() >= 50);
+    composition::add_credit(self, cap, party, credit);
+    ensures(false);
+}
+
+// === Alternate title bounds ===
+
+/// add_alternate_title aborts when max (5) reached.
+#[spec(prove, ignore_abort)]
+fun add_alternate_title_aborts_at_max<CS>(
+    self: &mut Composition<CS>, cap: &CompositionAdminCap<CS>, title: std::string::String,
+) {
+    requires(self.is_initialized_state());
+    requires(self.alternate_titles().length() >= 5);
+    composition::add_alternate_title(self, cap, title);
+    ensures(false);
+}

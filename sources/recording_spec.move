@@ -234,3 +234,116 @@ fun add_stem_increments_count<RS>(
     recording::add_stem(self, cap, stem);
     ensures(self.stems().length() == old_len + 1);
 }
+
+// === Credit role count bounds ===
+
+/// add_credit aborts when credit has zero roles.
+#[spec(prove, ignore_abort)]
+fun add_credit_aborts_zero_roles<RS>(
+    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>,
+    party: &Party, credit: Credit<RecordingPartyRole>,
+) {
+    requires(self.is_initialized_state());
+    requires(credit.roles().length() == 0);
+    recording::add_credit(self, cap, party, credit);
+    ensures(false);
+}
+
+/// add_credit aborts when credit has more than 10 roles.
+#[spec(prove, ignore_abort)]
+fun add_credit_aborts_too_many_roles<RS>(
+    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>,
+    party: &Party, credit: Credit<RecordingPartyRole>,
+) {
+    requires(self.is_initialized_state());
+    requires(credit.roles().length() > 10);
+    recording::add_credit(self, cap, party, credit);
+    ensures(false);
+}
+
+/// add_credit aborts when max credits (150) reached.
+#[spec(prove, ignore_abort)]
+fun add_credit_aborts_max_credits<RS>(
+    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>,
+    party: &Party, credit: Credit<RecordingPartyRole>,
+) {
+    requires(self.is_initialized_state());
+    requires(self.credits().length() >= 150);
+    recording::add_credit(self, cap, party, credit);
+    ensures(false);
+}
+
+// === Stem bounds ===
+
+/// add_stem aborts when max stems (100) reached.
+#[spec(prove, ignore_abort)]
+fun add_stem_aborts_max_stems<RS>(
+    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>, stem: musicos::stem::Stem,
+) {
+    requires(self.is_initialized_state());
+    requires(self.stems().length() >= 100);
+    recording::add_stem(self, cap, stem);
+    ensures(false);
+}
+
+// === Artist bounds ===
+
+/// add_primary_artist aborts when max (20) reached.
+#[spec(prove, ignore_abort)]
+fun add_primary_artist_aborts_at_max<RS>(
+    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>, party: &Party,
+) {
+    requires(self.is_initialized_state());
+    requires(self.primary_artist_ids().length() >= 20);
+    recording::add_primary_artist(self, cap, party);
+    ensures(false);
+}
+
+/// add_featured_artist aborts when max (50) reached.
+#[spec(prove, ignore_abort)]
+fun add_featured_artist_aborts_at_max<RS>(
+    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>, party: &Party,
+) {
+    requires(self.is_initialized_state());
+    requires(self.featured_artist_ids().length() >= 50);
+    recording::add_featured_artist(self, cap, party);
+    ensures(false);
+}
+
+// === Secondary genre bounds ===
+
+/// add_secondary_genre aborts when max (3) reached.
+#[spec(prove, ignore_abort)]
+fun add_secondary_genre_aborts_at_max<RS>(
+    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>, genre: &musicos::genre::Genre,
+) {
+    requires(self.is_initialized_state());
+    requires(self.secondary_genre_ids().length() >= 3);
+    recording::add_secondary_genre(self, cap, genre);
+    ensures(false);
+}
+
+// === set_primary_genre genre conflict ===
+
+/// set_primary_genre aborts when new primary is already a secondary genre.
+#[spec(prove, ignore_abort)]
+fun set_primary_genre_aborts_if_secondary<RS>(
+    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>, genre: &musicos::genre::Genre,
+) {
+    requires(self.is_initialized_state());
+    requires(self.secondary_genre_ids().contains(&genre.id()));
+    recording::set_primary_genre(self, cap, genre);
+    ensures(false);
+}
+
+// === Tempo validation ===
+
+/// set_tempo_bpm aborts when bpm is 0.
+#[spec(prove, ignore_abort)]
+fun set_tempo_bpm_aborts_zero<RS>(
+    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>,
+) {
+    requires(self.is_initialized_state());
+    recording::set_tempo_bpm(self, cap, 0);
+    ensures(false);
+}
