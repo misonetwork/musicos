@@ -120,3 +120,14 @@ public fun new_for_testing(audio: Audio): Stem {
         contributors: vector[@0x0.to_id()],
     }
 }
+
+/// Creates a stem for testing with the given contributor IDs.
+#[test_only]
+public fun new_with_contributors_for_testing(audio: Audio, contributors: vector<ID>): Stem {
+    Stem {
+        audio,
+        name: b"Test Stem".to_string(),
+        description: option::none(),
+        contributors,
+    }
+}

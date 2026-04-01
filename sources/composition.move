@@ -97,6 +97,7 @@ public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop
     has_score: bool,
     has_demo: bool,
     demo_duration_ms: Option<u64>,
+    demo_blob_id: Option<u256>,
     credits_count: u64,
     published_at_ms: u64,
 }
@@ -106,7 +107,14 @@ public struct CompositionPartyAddedEvent has copy, drop {
     composition_id: ID,
     party_id: ID,
     credit_display_name: String,
-    credit_role_names: vector<String>,
+    credit_roles_count: u64,
+}
+
+/// Emitted for each role assigned to a credited party on a composition.
+public struct CompositionCreditRoleEvent has copy, drop {
+    composition_id: ID,
+    party_id: ID,
+    role_name: String,
 }
 
 /// Emitted when the composition split is updated.
@@ -115,6 +123,44 @@ public struct CompositionSplitSetEvent has copy, drop {
     composition_id: ID,
     /// New split value in basis points.
     split_value: u64,
+}
+
+/// Emitted when an alternate title is added to a composition.
+public struct CompositionAlternateTitleAddedEvent has copy, drop {
+    composition_id: ID,
+    alternate_title: String,
+}
+
+/// Emitted when lyrics are set on a composition.
+public struct CompositionLyricsSetEvent has copy, drop {
+    composition_id: ID,
+    is_walrus_blob: bool,
+    walrus_id: u256,
+}
+
+/// Emitted when the demo audio is set on a composition.
+public struct CompositionDemoSetEvent has copy, drop {
+    composition_id: ID,
+    blob_id: u256,
+    channels: u8,
+    bit_depth: u8,
+    sample_rate_hz: u32,
+    samples: u64,
+    duration_ms: u64,
+}
+
+/// Emitted when the chart data is set on a composition.
+public struct CompositionChartSetEvent has copy, drop {
+    composition_id: ID,
+    is_walrus_blob: bool,
+    walrus_id: u256,
+}
+
+/// Emitted when the score data is set on a composition.
+public struct CompositionScoreSetEvent has copy, drop {
+    composition_id: ID,
+    is_walrus_blob: bool,
+    walrus_id: u256,
 }
 
 // === Constants ===
@@ -236,22 +282,24 @@ public fun publish<CompositionShare>(
             let published_at_ms = clock.timestamp_ms();
             self.state = CompositionState::Published(published_at_ms);
 
-            let demo_duration_ms = if (self.demo.is_some()) {
-                option::some(self.demo.borrow().duration_ms())
+            let (demo_duration_ms, demo_blob_id) = if (self.demo.is_some()) {
+                let demo = self.demo.borrow();
+                (option::some(demo.duration_ms()), option::some(demo.data().blob_id()))
             } else {
-                option::none()
+                (option::none(), option::none())
             };
 
             emit(CompositionPublishedEvent<CompositionShare> {
                 composition_id: self.id(),
                 title: *self.title(),
-                alternate_titles: *self.alternate_titles(),
+                alternate_titles: self.alternate_titles,
                 split_bps_value: (self.split_bps.value() as u16),
                 has_lyrics: self.lyrics.is_some(),
                 has_chart: self.chart.is_some(),
                 has_score: self.score.is_some(),
                 has_demo: self.demo.is_some(),
                 demo_duration_ms,
+                demo_blob_id,
                 credits_count: self.credits.length(),
                 published_at_ms,
             });
@@ -283,6 +331,11 @@ public fun add_alternate_title<CompositionShare>(
                 EMaxAlternateTitlesExceeded,
             );
             self.alternate_titles.push_back(alternate_title);
+
+            emit(CompositionAlternateTitleAddedEvent {
+                composition_id: self.id(),
+                alternate_title,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -311,20 +364,25 @@ public fun add_credit<CompositionShare>(
             self.credits.insert(party_id, credit);
 
             let credit_display_name = *credit.display_name();
+            let composition_id = self.id();
             let roles = credit.roles();
-            let mut credit_role_names = vector[];
-            let mut i = 0;
-            while (i < roles.length()) {
-                credit_role_names.push_back(roles[i].name());
-                i = i + 1;
-            };
 
             emit(CompositionPartyAddedEvent {
-                composition_id: self.id(),
+                composition_id,
                 party_id,
                 credit_display_name,
-                credit_role_names,
+                credit_roles_count: roles.length(),
             });
+
+            let mut i = 0;
+            while (i < roles.length()) {
+                emit(CompositionCreditRoleEvent {
+                    composition_id,
+                    party_id,
+                    role_name: roles[i].name(),
+                });
+                i = i + 1;
+            };
         },
         _ => abort ENotInitializedState,
     }
@@ -366,7 +424,15 @@ public fun set_lyrics<CompositionShare>(
 ) {
     match (self.state) {
         CompositionState::Initialized => {
+            let is_walrus_blob = lyrics.is_blob();
+            let walrus_id = if (is_walrus_blob) { lyrics.blob_id() } else { lyrics.quilt_id() };
             self.lyrics = option::some(lyrics);
+
+            emit(CompositionLyricsSetEvent {
+                composition_id: self.id(),
+                is_walrus_blob,
+                walrus_id,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -381,7 +447,23 @@ public fun set_demo<CompositionShare>(
 ) {
     match (self.state) {
         CompositionState::Initialized => {
+            let blob_id = audio.data().blob_id();
+            let channels = audio.channels();
+            let bit_depth = audio.bit_depth();
+            let sample_rate_hz = audio.sample_rate_hz();
+            let samples = audio.samples();
+            let duration_ms = audio.duration_ms();
             self.demo = option::some(audio);
+
+            emit(CompositionDemoSetEvent {
+                composition_id: self.id(),
+                blob_id,
+                channels,
+                bit_depth,
+                sample_rate_hz,
+                samples,
+                duration_ms,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -396,7 +478,15 @@ public fun set_chart<CompositionShare>(
 ) {
     match (self.state) {
         CompositionState::Initialized => {
+            let is_walrus_blob = chart.is_blob();
+            let walrus_id = if (is_walrus_blob) { chart.blob_id() } else { chart.quilt_id() };
             self.chart = option::some(chart);
+
+            emit(CompositionChartSetEvent {
+                composition_id: self.id(),
+                is_walrus_blob,
+                walrus_id,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -411,7 +501,15 @@ public fun set_score<CompositionShare>(
 ) {
     match (self.state) {
         CompositionState::Initialized => {
+            let is_walrus_blob = score.is_blob();
+            let walrus_id = if (is_walrus_blob) { score.blob_id() } else { score.quilt_id() };
             self.score = option::some(score);
+
+            emit(CompositionScoreSetEvent {
+                composition_id: self.id(),
+                is_walrus_blob,
+                walrus_id,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -427,6 +525,16 @@ public fun id<CompositionShare>(self: &Composition<CompositionShare>): ID {
 /// Returns the current lifecycle state.
 public fun state<CompositionShare>(self: &Composition<CompositionShare>): CompositionState {
     self.state
+}
+
+/// Returns true if the composition is in the Initialized state.
+public fun is_initialized_state<CompositionShare>(self: &Composition<CompositionShare>): bool {
+    match (self.state) { CompositionState::Initialized => true, _ => false }
+}
+
+/// Returns true if the composition is in the Published state.
+public fun is_published_state<CompositionShare>(self: &Composition<CompositionShare>): bool {
+    match (self.state) { CompositionState::Published(_) => true, _ => false }
 }
 
 /// Returns the primary title.

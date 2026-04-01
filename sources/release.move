@@ -100,7 +100,32 @@ public struct ReleasePartyAddedEvent has copy, drop {
     release_id: ID,
     party_id: ID,
     credit_display_name: String,
-    credit_role_names: vector<String>,
+    credit_roles_count: u64,
+}
+
+/// Emitted for each role assigned to a credited party on a release.
+public struct ReleaseCreditRoleEvent has copy, drop {
+    release_id: ID,
+    party_id: ID,
+    role_name: String,
+}
+
+/// Emitted when a release is created.
+public struct ReleaseCreatedEvent has copy, drop {
+    release_id: ID,
+    kind: String,
+    title: String,
+    total_discs: u64,
+    total_tracks: u64,
+    duration_ms: u64,
+    /// Per-disc track counts for reconstructing disc boundaries.
+    disc_track_counts: vector<u64>,
+    /// Flat list of recording IDs across all discs/tracks (parallel with track_split_values).
+    recording_ids: vector<ID>,
+    /// Flat list of composition IDs across all discs/tracks (parallel with recording_ids).
+    composition_ids: vector<ID>,
+    /// Flat list of track split values in basis points (parallel with recording_ids).
+    track_split_values: vector<u64>,
 }
 
 /// Emitted when a release is published.
@@ -113,6 +138,14 @@ public struct ReleasePublishedEvent has copy, drop {
     total_discs: u64,
     total_tracks: u64,
     duration_ms: u64,
+    /// Per-disc track counts for reconstructing disc boundaries.
+    disc_track_counts: vector<u64>,
+    /// Flat list of recording IDs across all discs/tracks (parallel with track_split_values).
+    recording_ids: vector<ID>,
+    /// Flat list of composition IDs across all discs/tracks (parallel with recording_ids).
+    composition_ids: vector<ID>,
+    /// Flat list of track split values in basis points (parallel with recording_ids).
+    track_split_values: vector<u64>,
     credits_count: u64,
     published_at_ms: u64,
     published_by: address,
@@ -233,6 +266,22 @@ public fun new(
         release_id: release.id(),
     };
 
+    let (disc_track_counts, event_recording_ids, composition_ids, event_track_split_values) =
+        extract_event_lineup(&release.discs);
+
+    emit(ReleaseCreatedEvent {
+        release_id: release.id(),
+        kind: release.kind().name(),
+        title: *release.title(),
+        total_discs: release.discs.length(),
+        total_tracks: release.total_tracks(),
+        duration_ms: release.duration_ms(),
+        disc_track_counts,
+        recording_ids: event_recording_ids,
+        composition_ids,
+        track_split_values: event_track_split_values,
+    });
+
     (release, release_admin_cap)
 }
 
@@ -267,20 +316,25 @@ public fun add_credit(
             self.credits.insert(party_id, credit);
 
             let credit_display_name = *credit.display_name();
+            let release_id = self.id();
             let roles = credit.roles();
-            let mut credit_role_names = vector[];
-            let mut i = 0;
-            while (i < roles.length()) {
-                credit_role_names.push_back(roles[i].name());
-                i = i + 1;
-            };
 
             emit(ReleasePartyAddedEvent {
-                release_id: self.id(),
+                release_id,
                 party_id,
                 credit_display_name,
-                credit_role_names,
+                credit_roles_count: roles.length(),
             });
+
+            let mut i = 0;
+            while (i < roles.length()) {
+                emit(ReleaseCreditRoleEvent {
+                    release_id,
+                    party_id,
+                    role_name: roles[i].name(),
+                });
+                i = i + 1;
+            };
         },
         _ => abort ENotInitializedState,
     }
@@ -304,6 +358,9 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
             // Update the release state to published.
             self.state = ReleaseState::Published(timestamp_ms);
 
+            let (disc_track_counts, recording_ids, composition_ids, track_split_values) =
+                extract_event_lineup(&self.discs);
+
             emit(ReleasePublishedEvent {
                 release_id: self.id(),
                 kind: self.kind().name(),
@@ -313,6 +370,10 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock, ctx:
                 total_discs: self.discs.length(),
                 total_tracks: self.total_tracks(),
                 duration_ms: self.duration_ms(),
+                disc_track_counts,
+                recording_ids,
+                composition_ids,
+                track_split_values,
                 credits_count: self.credits.length(),
                 published_at_ms: timestamp_ms,
                 published_by: ctx.sender(),
@@ -357,6 +418,16 @@ public fun kind(self: &Release): &ReleaseKind {
 /// Returns the release state.
 public fun state(self: &Release): ReleaseState {
     self.state
+}
+
+/// Returns true if the release is in the Initialized state.
+public fun is_initialized_state(self: &Release): bool {
+    match (self.state) { ReleaseState::Initialized(_) => true, _ => false }
+}
+
+/// Returns true if the release is in the Published state.
+public fun is_published_state(self: &Release): bool {
+    match (self.state) { ReleaseState::Published(_) => true, _ => false }
 }
 
 /// Returns the release title.
@@ -484,6 +555,26 @@ fun calculate_release_digest(
     hash_input.append(to_bytes(&nonce));
 
     blake2b256(&hash_input)
+}
+
+/// Extracts disc-track-counts, recording IDs, composition IDs, and split values from discs.
+/// All vectors are parallel: recording_ids[i] corresponds to composition_ids[i] and track_split_values[i].
+fun extract_event_lineup(discs: &vector<Disc>): (vector<u64>, vector<ID>, vector<ID>, vector<u64>) {
+    let mut disc_track_counts = vector[];
+    let mut recording_ids = vector[];
+    let mut composition_ids = vector[];
+    let mut track_split_values = vector[];
+
+    discs.do_ref!(|disc| {
+        disc_track_counts.push_back(disc.tracks().length());
+        disc.tracks().do_ref!(|track| {
+            recording_ids.push_back(track.recording_id());
+            composition_ids.push_back(track.composition_id());
+            track_split_values.push_back(track.split_bps().value());
+        });
+    });
+
+    (disc_track_counts, recording_ids, composition_ids, track_split_values)
 }
 
 /// Assigns all tracks to this release, verifying each track's target release ID matches.

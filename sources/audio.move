@@ -39,6 +39,11 @@ public struct Audio has drop, store {
 /// Emitted when an audio file is ingested.
 public struct AudioIngestedEvent<phantom Ingester: drop> has copy, drop {
     blob_id: u256,
+    channels: u8,
+    bit_depth: u8,
+    sample_rate_hz: u32,
+    samples: u64,
+    duration_ms: u64,
 }
 
 // === Constants ===
@@ -87,8 +92,15 @@ public fun new<Ingester: drop>(
     // Storing audio files as blobs makes them directly addressable.
     data.assert_is_blob();
 
+    let duration_ms = samples * 1_000 / (sample_rate_hz as u64);
+
     emit(AudioIngestedEvent<Ingester> {
         blob_id: data.blob_id(),
+        channels,
+        bit_depth,
+        sample_rate_hz,
+        samples,
+        duration_ms,
     });
 
     Audio {

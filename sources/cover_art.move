@@ -44,3 +44,13 @@ public fun static(self: &CoverArt): &WalrusData {
 public fun animated(self: &CoverArt): &Option<WalrusData> {
     &self.animated
 }
+
+/// Creates cover art for testing with a dummy blob.
+#[test_only]
+public fun new_for_testing(): CoverArt {
+    use ori::walrus_data;
+    CoverArt {
+        static: walrus_data::new_blob(0),
+        animated: option::none(),
+    }
+}

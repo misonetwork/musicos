@@ -136,6 +136,7 @@ public struct RecordingPublishedEvent<phantom RecordingShare> has copy, drop {
     primary_artist_ids: vector<ID>,
     featured_artist_ids: vector<ID>,
     duration_ms: u64,
+    master_blob_id: u256,
     musical_key_note: Option<String>,
     musical_key_accidental: Option<String>,
     musical_key_mode: Option<String>,
@@ -144,6 +145,7 @@ public struct RecordingPublishedEvent<phantom RecordingShare> has copy, drop {
     tempo_bpm: Option<u16>,
     stems_count: u64,
     credits_count: u64,
+    has_lyrics: bool,
     is_explicit: bool,
     is_instrumental: bool,
     published_at_ms: u64,
@@ -154,7 +156,14 @@ public struct RecordingPartyAddedEvent has copy, drop {
     recording_id: ID,
     party_id: ID,
     credit_display_name: String,
-    credit_role_names: vector<String>,
+    credit_roles_count: u64,
+}
+
+/// Emitted for each role assigned to a credited party on a recording.
+public struct RecordingCreditRoleEvent has copy, drop {
+    recording_id: ID,
+    party_id: ID,
+    role_name: String,
 }
 
 /// Emitted when a stem is added to a recording.
@@ -163,8 +172,92 @@ public struct RecordingStemAddedEvent has copy, drop {
     stem_idx: u64,
     stem_name: String,
     stem_description: Option<String>,
+    stem_blob_id: u256,
     stem_duration_ms: u64,
-    contributors: vector<ID>,
+    contributors_count: u64,
+}
+
+/// Emitted for each contributor on a stem.
+public struct RecordingStemContributorEvent has copy, drop {
+    recording_id: ID,
+    stem_idx: u64,
+    contributor_id: ID,
+}
+
+/// Emitted when the title version is set on a recording.
+public struct RecordingTitleVersionSetEvent has copy, drop {
+    recording_id: ID,
+    title_version: String,
+}
+
+/// Emitted when the subtitle is set on a recording.
+public struct RecordingSubtitleSetEvent has copy, drop {
+    recording_id: ID,
+    subtitle: String,
+}
+
+/// Emitted when the language is set on a recording.
+public struct RecordingLanguageSetEvent has copy, drop {
+    recording_id: ID,
+    language_code: String,
+}
+
+/// Emitted when lyrics are set on a recording.
+public struct RecordingLyricsSetEvent has copy, drop {
+    recording_id: ID,
+    is_walrus_blob: bool,
+    walrus_id: u256,
+}
+
+/// Emitted when the primary genre is changed on a recording.
+public struct RecordingPrimaryGenreSetEvent has copy, drop {
+    recording_id: ID,
+    genre_id: ID,
+}
+
+/// Emitted when a secondary genre is added to a recording.
+public struct RecordingSecondaryGenreAddedEvent has copy, drop {
+    recording_id: ID,
+    genre_id: ID,
+}
+
+/// Emitted when a secondary genre is removed from a recording.
+public struct RecordingSecondaryGenreRemovedEvent has copy, drop {
+    recording_id: ID,
+    genre_id: ID,
+}
+
+/// Emitted when a primary artist is added to a recording.
+public struct RecordingPrimaryArtistAddedEvent has copy, drop {
+    recording_id: ID,
+    party_id: ID,
+}
+
+/// Emitted when a featured artist is added to a recording.
+public struct RecordingFeaturedArtistAddedEvent has copy, drop {
+    recording_id: ID,
+    party_id: ID,
+}
+
+/// Emitted when the musical key is set on a recording.
+public struct RecordingMusicalKeySetEvent has copy, drop {
+    recording_id: ID,
+    note: String,
+    accidental: String,
+    mode: String,
+}
+
+/// Emitted when the time signature is set on a recording.
+public struct RecordingTimeSignatureSetEvent has copy, drop {
+    recording_id: ID,
+    beats_per_measure: u8,
+    beat_unit: u8,
+}
+
+/// Emitted when the tempo is set on a recording.
+public struct RecordingTempoBpmSetEvent has copy, drop {
+    recording_id: ID,
+    tempo_bpm: u16,
 }
 
 // === Constants ===
@@ -370,6 +463,7 @@ public fun publish<RecordingShare>(
                 primary_artist_ids: *self.primary_artist_ids.keys(),
                 featured_artist_ids: *self.featured_artist_ids.keys(),
                 duration_ms: self.master.duration_ms(),
+                master_blob_id: self.master.data().blob_id(),
                 musical_key_note,
                 musical_key_accidental,
                 musical_key_mode,
@@ -378,6 +472,7 @@ public fun publish<RecordingShare>(
                 tempo_bpm: self.tempo_bpm,
                 stems_count: self.stems.length(),
                 credits_count: self.credits.length(),
+                has_lyrics: self.lyrics.is_some(),
                 is_explicit: self.is_explicit,
                 is_instrumental: self.is_instrumental,
                 published_at_ms,
@@ -406,6 +501,11 @@ public fun set_title_version<RecordingShare>(
                 EMaxTitleVersionLengthExceeded,
             );
             self.title_version.swap_or_fill(title_version);
+
+            emit(RecordingTitleVersionSetEvent {
+                recording_id: self.id(),
+                title_version,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -423,6 +523,11 @@ public fun set_subtitle<RecordingShare>(
             assert!(!subtitle.is_empty(), EEmptyString);
             assert!(subtitle.length() <= MAX_SUBTITLE_LENGTH, EMaxSubtitleLengthExceeded);
             self.subtitle.swap_or_fill(subtitle);
+
+            emit(RecordingSubtitleSetEvent {
+                recording_id: self.id(),
+                subtitle,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -438,6 +543,11 @@ public fun set_language<RecordingShare>(
     match (self.state) {
         RecordingState::Initialized => {
             self.language.swap_or_fill(language_code::new(language_code));
+
+            emit(RecordingLanguageSetEvent {
+                recording_id: self.id(),
+                language_code,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -454,7 +564,15 @@ public fun set_lyrics<RecordingShare>(
         RecordingState::Initialized => {
             // Abort early if recording is instrumental - lyrics not allowed.
             assert!(!self.is_instrumental, ELyricsInstrumentalConflict);
+            let is_walrus_blob = lyrics.is_blob();
+            let walrus_id = if (is_walrus_blob) { lyrics.blob_id() } else { lyrics.quilt_id() };
             self.lyrics.swap_or_fill(lyrics);
+
+            emit(RecordingLyricsSetEvent {
+                recording_id: self.id(),
+                is_walrus_blob,
+                walrus_id,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -483,20 +601,25 @@ public fun add_credit<RecordingShare>(
             self.credits.insert(party_id, credit);
 
             let credit_display_name = *credit.display_name();
+            let recording_id = self.id();
             let roles = credit.roles();
-            let mut credit_role_names = vector[];
-            let mut i = 0;
-            while (i < roles.length()) {
-                credit_role_names.push_back(roles[i].name());
-                i = i + 1;
-            };
 
             emit(RecordingPartyAddedEvent {
-                recording_id: self.id(),
+                recording_id,
                 party_id,
                 credit_display_name,
-                credit_role_names,
+                credit_roles_count: roles.length(),
             });
+
+            let mut i = 0;
+            while (i < roles.length()) {
+                emit(RecordingCreditRoleEvent {
+                    recording_id,
+                    party_id,
+                    role_name: roles[i].name(),
+                });
+                i = i + 1;
+            };
         },
         _ => abort ENotInitializedState,
     }
@@ -526,6 +649,11 @@ public fun add_primary_artist<RecordingShare>(
             assert!(!self.primary_artist_ids.contains(&party_id), EAlreadyPrimaryArtist);
 
             self.primary_artist_ids.insert(party_id);
+
+            emit(RecordingPrimaryArtistAddedEvent {
+                recording_id: self.id(),
+                party_id,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -555,6 +683,11 @@ public fun add_featured_artist<RecordingShare>(
             assert!(!self.featured_artist_ids.contains(&party_id), EAlreadyFeaturedArtist);
 
             self.featured_artist_ids.insert(party_id);
+
+            emit(RecordingFeaturedArtistAddedEvent {
+                recording_id: self.id(),
+                party_id,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -576,6 +709,11 @@ public fun set_primary_genre<RecordingShare>(
                 EAlreadyAssignedAsSecondaryGenre,
             );
             self.primary_genre_id = genre.id();
+
+            emit(RecordingPrimaryGenreSetEvent {
+                recording_id: self.id(),
+                genre_id: genre.id(),
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -603,6 +741,11 @@ public fun add_secondary_genre<RecordingShare>(
                 EAlreadyAssignedAsSecondaryGenre,
             );
             self.secondary_genre_ids.insert(genre_id);
+
+            emit(RecordingSecondaryGenreAddedEvent {
+                recording_id: self.id(),
+                genre_id,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -618,6 +761,11 @@ public fun remove_secondary_genre<RecordingShare>(
     match (self.state) {
         RecordingState::Initialized => {
             self.secondary_genre_ids.remove(&genre_id);
+
+            emit(RecordingSecondaryGenreRemovedEvent {
+                recording_id: self.id(),
+                genre_id,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -635,6 +783,13 @@ public fun set_musical_key<RecordingShare>(
     match (self.state) {
         RecordingState::Initialized => {
             self.musical_key.swap_or_fill(musical_key);
+
+            emit(RecordingMusicalKeySetEvent {
+                recording_id: self.id(),
+                note: musical_key.note().note_name(),
+                accidental: musical_key.accidental().accidental_name(),
+                mode: musical_key.mode().mode_name(),
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -650,6 +805,12 @@ public fun set_time_signature<RecordingShare>(
     match (self.state) {
         RecordingState::Initialized => {
             self.time_signature.swap_or_fill(time_signature);
+
+            emit(RecordingTimeSignatureSetEvent {
+                recording_id: self.id(),
+                beats_per_measure: time_signature.beats_per_measure(),
+                beat_unit: time_signature.beat_unit(),
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -666,6 +827,11 @@ public fun set_tempo_bpm<RecordingShare>(
         RecordingState::Initialized => {
             assert!(tempo_bpm >= 1, EInvalidTempoBpm);
             self.tempo_bpm.swap_or_fill(tempo_bpm);
+
+            emit(RecordingTempoBpmSetEvent {
+                recording_id: self.id(),
+                tempo_bpm,
+            });
         },
         _ => abort ENotInitializedState,
     }
@@ -697,19 +863,32 @@ public fun add_stem<RecordingShare>(
             // Extract stem data before push_back consumes it.
             let stem_name = *stem.name();
             let stem_description = *stem.description();
+            let stem_blob_id = stem.audio().data().blob_id();
             let stem_duration_ms = stem.audio().duration_ms();
             let contributors = *stem.contributors();
 
             // Add the stem to the recording.
             self.stems.push_back(stem);
 
+            let recording_id = self.id();
+            let stem_idx = self.stems.length() - 1;
+
             emit(RecordingStemAddedEvent {
-                recording_id: self.id(),
-                stem_idx: self.stems.length() - 1,
+                recording_id,
+                stem_idx,
                 stem_name,
                 stem_description,
+                stem_blob_id,
                 stem_duration_ms,
-                contributors,
+                contributors_count: contributors.length(),
+            });
+
+            contributors.do!(|contributor_id| {
+                emit(RecordingStemContributorEvent {
+                    recording_id,
+                    stem_idx,
+                    contributor_id,
+                });
             });
         },
         _ => abort ENotInitializedState,
@@ -726,6 +905,16 @@ public fun id<RecordingShare>(self: &Recording<RecordingShare>): ID {
 /// Returns the current lifecycle state.
 public fun state<RecordingShare>(self: &Recording<RecordingShare>): RecordingState {
     self.state
+}
+
+/// Returns true if the recording is in the Initialized state.
+public fun is_initialized_state<RecordingShare>(self: &Recording<RecordingShare>): bool {
+    match (self.state) { RecordingState::Initialized => true, _ => false }
+}
+
+/// Returns true if the recording is in the Published state.
+public fun is_published_state<RecordingShare>(self: &Recording<RecordingShare>): bool {
+    match (self.state) { RecordingState::Published(_) => true, _ => false }
 }
 
 /// Returns the primary title.
@@ -1015,6 +1204,23 @@ public fun prefill_stems_for_testing<RecordingShare>(self: &mut Recording<Record
         );
         self.stems.push_back(stem::new_for_testing(test_audio));
     });
+}
+
+/// Adds a custom stem to the recording for testing (bypasses public API validation).
+#[test_only]
+public fun add_stem_for_testing<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    stem: Stem,
+) {
+    self.stems.push_back(stem);
+}
+
+/// Creates a test Audio object.
+#[test_only]
+public fun new_test_audio(): Audio {
+    use musicos::audio;
+    use ori::walrus_data;
+    audio::new(2, 16, 44100, 441000, walrus_data::new_blob(1), TestWitness())
 }
 
 /// Witness for creating test Audio objects.

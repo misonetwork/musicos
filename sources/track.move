@@ -169,6 +169,16 @@ public fun split_bps(self: &Track): BPS {
     self.split_bps
 }
 
+/// Returns true if the track is in the Assigned state.
+public fun is_assigned_state(self: &Track): bool {
+    match (self.state) { TrackState::Assigned => true, _ => false }
+}
+
+/// Returns true if the track is in the Unassigned state.
+public fun is_unassigned_state(self: &Track): bool {
+    match (self.state) { TrackState::Unassigned { .. } => true, _ => false }
+}
+
 // === Test Only ===
 
 #[test_only]
