@@ -1,29 +1,18 @@
 module musicos::time_signature_spec;
 
 #[spec_only]
-use prover::prover::{requires, ensures};
+use prover::prover::{requires, ensures, asserts};
 use musicos::time_signature;
 
-#[spec(prove)]
+/// Comprehensive spec for time_signature::new.
+/// Proves: aborts iff beats_per_measure == 0 or beat_unit == 0,
+/// and on success returns the exact values provided.
+#[spec(prove, target = musicos::time_signature::new)]
 fun new_spec(beats_per_measure: u8, beat_unit: u8): time_signature::TimeSignature {
-    requires(beats_per_measure > 0);
-    requires(beat_unit > 0);
+    asserts(beats_per_measure > 0);
+    asserts(beat_unit > 0);
     let result = time_signature::new(beats_per_measure, beat_unit);
     ensures(result.beats_per_measure() == beats_per_measure);
     ensures(result.beat_unit() == beat_unit);
     result
-}
-
-#[spec(prove, ignore_abort)]
-fun new_aborts_zero_beats_spec(beat_unit: u8) {
-    requires(beat_unit > 0);
-    let _result = time_signature::new(0, beat_unit);
-    ensures(false);
-}
-
-#[spec(prove, ignore_abort)]
-fun new_aborts_zero_beat_unit_spec(beats_per_measure: u8) {
-    requires(beats_per_measure > 0);
-    let _result = time_signature::new(beats_per_measure, 0);
-    ensures(false);
 }
