@@ -6,23 +6,18 @@ use musicos::composition_party_role;
 use partyos::credit;
 use musicos::test_helpers::{Self, CompositionShare};
 use std::unit_test::{assert_eq, destroy};
-use ori::walrus_data;
 
 // Error codes from composition.move
 const EMinRolesNotMet: u64 = 20;
-const EMaxAlternateTitlesExceeded: u64 = 31;
 const EMaxCreditsExceeded: u64 = 32;
 const EMaxTitleLengthExceeded: u64 = 33;
-const EMaxAlternateTitleLengthExceeded: u64 = 34;
 const EEmptyString: u64 = 35;
 const EPartyAlreadyCredited: u64 = 40;
 const ENoParties: u64 = 50;
 
 // Must match composition.move
-const MAX_ALTERNATE_TITLES: u64 = 5;
 const MAX_CREDITS: u64 = 50;
 const MAX_TITLE_LENGTH: u64 = 300;
-const MAX_ALTERNATE_TITLE_LENGTH: u64 = 300;
 
 // === Lifecycle ===
 
@@ -35,7 +30,6 @@ fun test_new_composition() {
         ctx,
     );
     assert_eq!(*comp.title(), b"My Song".to_string());
-    assert!(comp.alternate_titles().is_empty());
     assert!(comp.credits().is_empty());
     destroy(comp);
     destroy(cap);
@@ -64,9 +58,6 @@ fun test_publish_composition() {
     );
     comp.add_credit(&cap, &party, cred);
 
-    // Add content (required for publish)
-    comp.set_lyrics(&cap, walrus_data::new_blob(1));
-
     // Publish
     let clock = sui::clock::create_for_testing(ctx);
     comp.publish(&cap, &clock, ctx);
@@ -77,51 +68,8 @@ fun test_publish_composition() {
     destroy(party_cap);
 }
 
-// Note: In expected_failure tests (test_publish_no_parties, test_publish_no_content),
-// cap cleanup is not needed because the abort handles value cleanup automatically.
-
-// === Alternate Titles ===
-
-#[test]
-fun test_add_alternate_title() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
-
-    comp.add_alternate_title(&cap, b"Mi Cancion".to_string());
-    assert_eq!(comp.alternate_titles().length(), 1);
-
-    destroy(comp);
-    destroy(cap);
-}
-
-#[test]
-fun test_add_alternate_title_at_max_count() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
-
-    MAX_ALTERNATE_TITLES.do!(|i| {
-        let mut title = b"Title ".to_string();
-        title.append(i.to_string());
-        comp.add_alternate_title(&cap, title);
-    });
-
-    assert_eq!(comp.alternate_titles().length(), MAX_ALTERNATE_TITLES);
-
-    destroy(comp);
-    destroy(cap);
-}
-
-#[test]
-fun test_add_alternate_title_at_max_length() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
-
-    comp.add_alternate_title(&cap, test_helpers::long_string(MAX_ALTERNATE_TITLE_LENGTH));
-    assert_eq!(comp.alternate_titles().length(), 1);
-
-    destroy(comp);
-    destroy(cap);
-}
+// Note: In the expected_failure test (test_publish_no_parties), cap cleanup is
+// not needed because the abort handles value cleanup automatically.
 
 // === Credits ===
 
@@ -193,20 +141,6 @@ fun test_add_max_credits() {
     destroy(cap);
 }
 
-// === Content ===
-
-#[test]
-fun test_set_lyrics() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
-
-    comp.set_lyrics(&cap, walrus_data::new_blob(1));
-    assert!(comp.lyrics().is_some());
-
-    destroy(comp);
-    destroy(cap);
-}
-
 // === Split ===
 
 #[test]
@@ -239,43 +173,6 @@ fun test_new_title_too_long() {
         5000,
         ctx,
     );
-    destroy(comp);
-    destroy(cap);
-}
-
-#[test, expected_failure(abort_code = EEmptyString, location = musicos::composition)]
-fun test_add_alternate_title_empty() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
-    comp.add_alternate_title(&cap, b"".to_string());
-    destroy(comp);
-    destroy(cap);
-}
-
-#[test, expected_failure(abort_code = EMaxAlternateTitleLengthExceeded, location = musicos::composition)]
-fun test_add_alternate_title_too_long() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
-    comp.add_alternate_title(&cap, test_helpers::long_string(MAX_ALTERNATE_TITLE_LENGTH + 1));
-    destroy(comp);
-    destroy(cap);
-}
-
-#[test, expected_failure(abort_code = EMaxAlternateTitlesExceeded, location = musicos::composition)]
-fun test_add_alternate_title_exceeds_max() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
-
-    // Fill to max
-    MAX_ALTERNATE_TITLES.do!(|i| {
-        let mut title = b"Title ".to_string();
-        title.append(i.to_string());
-        comp.add_alternate_title(&cap, title);
-    });
-
-    // One more should fail
-    comp.add_alternate_title(&cap, b"One Too Many".to_string());
-
     destroy(comp);
     destroy(cap);
 }
@@ -356,7 +253,6 @@ fun test_add_credit_duplicate_party() {
 fun test_publish_no_parties() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
-    comp.set_lyrics(&cap, walrus_data::new_blob(1));
 
     let clock = sui::clock::create_for_testing(ctx);
     comp.publish(&cap, &clock, ctx);
