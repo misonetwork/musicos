@@ -55,8 +55,8 @@ public struct Recording<phantom RecordingShare> has key {
     subtitle: Option<String>,
     /// ID of the underlying composition.
     composition_id: ID,
-    /// Revenue split for the composition in basis points (captured at creation time).
-    composition_split_bps: BPS,
+    /// Royalty rate owed to the composition (captured from the composition at creation time).
+    composition_royalty_rate: BPS,
     /// Primary genre of the recording.
     primary_genre_id: ID,
     /// Additional genres for the recording.
@@ -122,7 +122,7 @@ public struct RecordingPublishedEvent<phantom RecordingShare> has copy, drop {
     title: String,
     title_version: Option<String>,
     subtitle: Option<String>,
-    composition_split_bps_value: u16,
+    composition_royalty_rate_bps: u16,
     primary_genre_id: ID,
     language_code: Option<String>,
     duration_ms: u64,
@@ -317,7 +317,7 @@ public fun new<RecordingShare, CompositionShare>(
         title_version: option::none(),
         subtitle: option::none(),
         composition_id,
-        composition_split_bps: composition.split_bps(),
+        composition_royalty_rate: composition.royalty_rate(),
         primary_genre_id,
         secondary_genre_ids: vec_set::empty(),
         primary_artist_ids: vec_set::empty(),
@@ -385,7 +385,7 @@ public fun publish<RecordingShare>(
                 title: *self.title(),
                 title_version: self.title_version,
                 subtitle: self.subtitle,
-                composition_split_bps_value: self.composition_split_bps.value(),
+                composition_royalty_rate_bps: self.composition_royalty_rate.value(),
                 primary_genre_id: self.primary_genre_id,
                 language_code,
                 duration_ms: self.master.duration_ms(),
@@ -785,9 +785,9 @@ public fun composition_id<RecordingShare>(self: &Recording<RecordingShare>): ID 
     self.composition_id
 }
 
-/// Returns the composition's revenue split in basis points.
-public fun composition_split_bps<RecordingShare>(self: &Recording<RecordingShare>): BPS {
-    self.composition_split_bps
+/// Returns the royalty rate owed to the composition.
+public fun composition_royalty_rate<RecordingShare>(self: &Recording<RecordingShare>): BPS {
+    self.composition_royalty_rate
 }
 
 /// Returns the primary genre ID.
@@ -908,7 +908,7 @@ public(package) fun uid_mut_internal<RecordingShare>(
 public fun new_for_testing<RecordingShare>(
     title: String,
     composition_id: ID,
-    composition_split_value: u16,
+    composition_royalty_rate_bps: u16,
     primary_genre_id: ID,
     is_explicit: bool,
     is_instrumental: bool,
@@ -923,7 +923,7 @@ public fun new_for_testing<RecordingShare>(
         title_version: option::none(),
         subtitle: option::none(),
         composition_id,
-        composition_split_bps: bps::new(composition_split_value),
+        composition_royalty_rate: bps::new(composition_royalty_rate_bps),
         primary_genre_id,
         secondary_genre_ids: vec_set::empty(),
         primary_artist_ids: vec_set::empty(),

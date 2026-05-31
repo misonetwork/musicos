@@ -31,8 +31,8 @@ public struct Track has drop, store {
     composition_id: ID,
     /// Type of the composition's share token.
     composition_share_type: TypeName,
-    /// Split of revenue allocated to composition vs recording (in basis points).
-    composition_split_bps: BPS,
+    /// Royalty rate owed to the composition.
+    composition_royalty_rate: BPS,
     /// ID of the recording on this track.
     recording_id: ID,
     /// Type of the recording's share token.
@@ -78,7 +78,7 @@ public fun new(deal: Deal): Track {
         state: TrackState::Unassigned { release_id: deal.release_id() },
         composition_id: deal.composition_id(),
         composition_share_type: *deal.composition_share_type(),
-        composition_split_bps: deal.composition_split_bps(),
+        composition_royalty_rate: deal.composition_royalty_rate(),
         recording_id: deal.recording_id(),
         recording_share_type: *deal.recording_share_type(),
         recording_master_ingester_type: *deal.recording_master_ingester_type(),
@@ -118,9 +118,9 @@ public fun composition_share_type(self: &Track): &TypeName {
     &self.composition_share_type
 }
 
-/// Returns the composition's revenue split in basis points.
-public fun composition_split_bps(self: &Track): BPS {
-    self.composition_split_bps
+/// Returns the royalty rate owed to the composition.
+public fun composition_royalty_rate(self: &Track): BPS {
+    self.composition_royalty_rate
 }
 
 
@@ -185,13 +185,13 @@ public fun new_for_testing<CompositionShare, RecordingShare, V: drop>(
     duration_ms: u64,
     cover_art: CoverArt,
     split_bps_value: u16,
-    composition_split_bps_value: u16,
+    composition_royalty_rate_bps: u16,
 ): Track {
     Track {
         state: TrackState::Unassigned { release_id },
         composition_id,
         composition_share_type: std::type_name::with_defining_ids<CompositionShare>(),
-        composition_split_bps: bps::new(composition_split_bps_value),
+        composition_royalty_rate: bps::new(composition_royalty_rate_bps),
         recording_id,
         recording_share_type: std::type_name::with_defining_ids<RecordingShare>(),
         recording_master_ingester_type: std::type_name::with_defining_ids<V>(),

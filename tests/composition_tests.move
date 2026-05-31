@@ -9,6 +9,7 @@ use std::unit_test::{assert_eq, destroy};
 
 // Error codes from composition.move
 const EMinRolesNotMet: u64 = 20;
+const EBelowMinRoyaltyRate: u64 = 21;
 const EMaxCreditsExceeded: u64 = 32;
 const EMaxTitleLengthExceeded: u64 = 33;
 const EEmptyString: u64 = 35;
@@ -141,16 +142,33 @@ fun test_add_max_credits() {
     destroy(cap);
 }
 
-// === Split ===
+// === Royalty rate ===
 
 #[test]
-fun test_set_split_bps() {
+fun test_set_royalty_rate() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
-    comp.set_split_bps(&cap, 3000);
-    assert_eq!(comp.split_bps().value(), 3000);
+    comp.set_royalty_rate(&cap, 3000);
+    assert_eq!(comp.royalty_rate().value(), 3000);
 
+    destroy(comp);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EBelowMinRoyaltyRate, location = musicos::composition)]
+fun test_set_royalty_rate_below_floor() {
+    let ctx = &mut tx_context::dummy();
+    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
+    comp.set_royalty_rate(&cap, 999); // below 10% floor
+    destroy(comp);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EBelowMinRoyaltyRate, location = musicos::composition)]
+fun test_new_below_floor() {
+    let ctx = &mut tx_context::dummy();
+    let (comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 500, ctx);
     destroy(comp);
     destroy(cap);
 }

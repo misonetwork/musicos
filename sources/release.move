@@ -139,7 +139,7 @@ public struct ReleaseTrackAddedEvent has copy, drop {
     track_cover_art_static_blob_id: u256,
     track_cover_art_animated_blob_id: Option<u256>,
     split_bps_value: u64,
-    composition_split_bps_value: u16,
+    composition_royalty_rate_bps: u16,
 }
 
 /// Emitted when a release is published.
@@ -612,7 +612,7 @@ fun emit_track_events(release: &Release) {
                 track_cover_art_static_blob_id: track_cover_art.static().blob_id(),
                 track_cover_art_animated_blob_id,
                 split_bps_value: track.split_bps().value() as u64,
-                composition_split_bps_value: track.composition_split_bps().value(),
+                composition_royalty_rate_bps: track.composition_royalty_rate().value(),
             });
         });
     });

@@ -35,8 +35,8 @@ public struct Deal has key, store {
     composition_id: ID,
     /// Type of the composition's share token.
     composition_share_type: TypeName,
-    /// Revenue split for the composition in basis points.
-    composition_split_bps: BPS,
+    /// Royalty rate owed to the composition.
+    composition_royalty_rate: BPS,
     /// ID of the recording being authorized.
     recording_id: ID,
     /// Type of the recording's share token.
@@ -117,7 +117,7 @@ public fun new<CompositionShare, RecordingShare>(
         release_id,
         composition_id,
         composition_share_type: with_defining_ids<CompositionShare>(),
-        composition_split_bps: recording.composition_split_bps(),
+        composition_royalty_rate: recording.composition_royalty_rate(),
         recording_id,
         recording_share_type: with_defining_ids<RecordingShare>(),
         recording_duration_ms: recording.master().duration_ms(),
@@ -185,9 +185,9 @@ public fun composition_share_type(self: &Deal): &TypeName {
     &self.composition_share_type
 }
 
-/// Returns the composition's revenue split in basis points.
-public fun composition_split_bps(self: &Deal): BPS {
-    self.composition_split_bps
+/// Returns the royalty rate owed to the composition.
+public fun composition_royalty_rate(self: &Deal): BPS {
+    self.composition_royalty_rate
 }
 
 /// Returns the ID of the recording being authorized.

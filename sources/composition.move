@@ -41,8 +41,8 @@ public struct Composition<phantom CompositionShare> has key {
     title: String,
     /// Map of party IDs to their roles on this composition.
     credits: VecMap<ID, Credit<CompositionPartyRole>>,
-    /// Revenue split rate allocated to this composition vs recording (in basis points).
-    split_bps: BPS,
+    /// Royalty rate this composition earns from each recording's revenue.
+    royalty_rate: BPS,
 }
 
 /// Capability that authorizes modifications to a specific composition.
@@ -77,7 +77,7 @@ public enum CompositionState has copy, drop, store {
 public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop {
     composition_id: ID,
     title: String,
-    split_bps_value: u16,
+    royalty_rate_bps: u16,
     published_at_ms: u64,
     published_by: address,
 }
@@ -96,6 +96,12 @@ public struct CompositionCreditRoleAssignedEvent has copy, drop {
     role_name: String,
 }
 
+/// Emitted when the composition's royalty rate is set or changed.
+public struct CompositionRoyaltySetEvent has copy, drop {
+    composition_id: ID,
+    royalty_rate_bps: u16,
+}
+
 // === Constants ===
 
 /// Minimum number of roles a party must have.
@@ -106,6 +112,11 @@ const MAX_ROLES_PER_PARTY: u64 = 5;
 const MAX_CREDITS: u64 = 50;
 /// Maximum length of a title in bytes.
 const MAX_TITLE_LENGTH: u64 = 300;
+/// Protocol-immutable floor for a composition's royalty rate (10%). A composition
+/// can set its rate at or above this, never below — preventing songwriters from
+/// being pressured into a sub-floor share. There is no protocol ceiling: an
+/// over-greedy rate is disciplined by the market (no one records it).
+const MIN_ROYALTY_RATE_BPS: u16 = 1000;
 
 // === Errors ===
 
@@ -116,6 +127,8 @@ const ENotInitializedState: u64 = 10;
 // Validation errors (20-29)
 /// Party must have at least one role.
 const EMinRolesNotMet: u64 = 20;
+/// Royalty rate is below the protocol minimum.
+const EBelowMinRoyaltyRate: u64 = 21;
 
 // Constraint errors (30-39)
 /// Party has too many roles.
@@ -139,7 +152,8 @@ const ENoParties: u64 = 50;
 
 // === Lifecycle ===
 
-/// Creates a new composition with the given title and split.
+/// Creates a new composition with the given title and royalty rate.
+/// The royalty rate must be at least `MIN_ROYALTY_RATE_BPS`.
 /// Initializes share tokens (100M supply, 6 decimals) and returns:
 /// - The composition object
 /// - Admin capability for the owner
@@ -147,7 +161,7 @@ const ENoParties: u64 = 50;
 /// - Promise that must be consumed by calling `share()`
 public fun new<CompositionShare>(
     title: String,
-    split_value: u16,
+    royalty_rate_bps: u16,
     share_currency: &mut Currency<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
     ctx: &mut TxContext,
@@ -158,13 +172,14 @@ public fun new<CompositionShare>(
 ) {
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
+    assert!(royalty_rate_bps >= MIN_ROYALTY_RATE_BPS, EBelowMinRoyaltyRate);
 
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
         credits: vec_map::empty(),
-        split_bps: bps::new(split_value),
+        royalty_rate: bps::new(royalty_rate_bps),
     };
 
     let composition_admin_cap = CompositionAdminCap<CompositionShare> {
@@ -198,7 +213,7 @@ public fun publish<CompositionShare>(
             emit(CompositionPublishedEvent<CompositionShare> {
                 composition_id: self.id(),
                 title: *self.title(),
-                split_bps_value: self.split_bps.value(),
+                royalty_rate_bps: self.royalty_rate.value(),
                 published_at_ms,
                 published_by: ctx.sender(),
             });
@@ -255,22 +270,24 @@ public fun add_credit<CompositionShare>(
 
 // === Financial ===
 
-/// Sets the revenue split rate for this composition.
-/// The split determines what percentage of track revenue goes to the composition
-/// vs the recording. Must be set before publishing. Note that updating the split_bps
-/// only impacts future recordings of the composition.
-/// Required State: Initialized
-public fun set_split_bps<CompositionShare>(
+/// Sets the royalty rate this composition earns from each recording.
+/// Must be at least the protocol minimum (`MIN_ROYALTY_RATE_BPS`); there is no
+/// maximum. The rate can be changed at any time, including after publishing —
+/// because each recording snapshots the rate when it is created, a change only
+/// affects recordings created afterward (existing recordings keep the rate they
+/// captured).
+public fun set_royalty_rate<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
-    split_value: u16,
+    royalty_rate_bps: u16,
 ) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            self.split_bps = bps::new(split_value);
-        },
-        _ => abort ENotInitializedState,
-    }
+    assert!(royalty_rate_bps >= MIN_ROYALTY_RATE_BPS, EBelowMinRoyaltyRate);
+    self.royalty_rate = bps::new(royalty_rate_bps);
+
+    emit(CompositionRoyaltySetEvent {
+        composition_id: self.id(),
+        royalty_rate_bps,
+    });
 }
 
 // === Public View Functions ===
@@ -307,9 +324,9 @@ public fun credits<CompositionShare>(
     &self.credits
 }
 
-/// Returns the revenue split rate in basis points.
-public fun split_bps<CompositionShare>(self: &Composition<CompositionShare>): BPS {
-    self.split_bps
+/// Returns the royalty rate this composition earns from each recording.
+public fun royalty_rate<CompositionShare>(self: &Composition<CompositionShare>): BPS {
+    self.royalty_rate
 }
 
 // === UID Functions ===
@@ -339,18 +356,19 @@ public(package) fun uid_mut_internal<CompositionShare>(
 #[test_only]
 public fun new_for_testing<CompositionShare>(
     title: String,
-    split_value: u16,
+    royalty_rate_bps: u16,
     ctx: &mut TxContext,
 ): (Composition<CompositionShare>, CompositionAdminCap<CompositionShare>) {
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
+    assert!(royalty_rate_bps >= MIN_ROYALTY_RATE_BPS, EBelowMinRoyaltyRate);
 
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
         credits: vec_map::empty(),
-        split_bps: bps::new(split_value),
+        royalty_rate: bps::new(royalty_rate_bps),
     };
 
     let composition_admin_cap = CompositionAdminCap<CompositionShare> {
