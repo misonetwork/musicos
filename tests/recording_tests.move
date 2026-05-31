@@ -509,7 +509,7 @@ fun test_publish_recording() {
     rec.add_primary_artist(&cap, &party);
 
     let clock = sui::clock::create_for_testing(ctx);
-    rec.publish(&cap, &clock);
+    rec.publish(&cap, &clock, ctx);
 
     clock.destroy_for_testing();
     destroy(cap);
@@ -523,7 +523,7 @@ fun test_publish_no_parties() {
     let (rec, cap) = new_test_recording(ctx);
 
     let clock = sui::clock::create_for_testing(ctx);
-    rec.publish(&cap, &clock);
+    rec.publish(&cap, &clock, ctx);
 
     clock.destroy_for_testing();
     destroy(cap);
@@ -543,7 +543,7 @@ fun test_publish_no_primary_artist() {
     rec.add_credit(&cap, &party, cred);
 
     let clock = sui::clock::create_for_testing(ctx);
-    rec.publish(&cap, &clock);
+    rec.publish(&cap, &clock, ctx);
 
     clock.destroy_for_testing();
     destroy(cap);

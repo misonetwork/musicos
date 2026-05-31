@@ -70,7 +70,7 @@ fun test_publish_composition() {
 
     // Publish
     let clock = sui::clock::create_for_testing(ctx);
-    comp.publish(&cap, &clock);
+    comp.publish(&cap, &clock, ctx);
 
     clock.destroy_for_testing();
     destroy(cap);
@@ -373,7 +373,7 @@ fun test_publish_no_parties() {
     comp.set_lyrics(&cap, walrus_data::new_blob(1));
 
     let clock = sui::clock::create_for_testing(ctx);
-    comp.publish(&cap, &clock);
+    comp.publish(&cap, &clock, ctx);
 
     clock.destroy_for_testing();
     destroy(cap);
@@ -393,7 +393,7 @@ fun test_publish_no_content() {
     comp.add_credit(&cap, &party, cred);
 
     let clock = sui::clock::create_for_testing(ctx);
-    comp.publish(&cap, &clock);
+    comp.publish(&cap, &clock, ctx);
 
     clock.destroy_for_testing();
     destroy(cap);

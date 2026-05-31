@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Unconfirmed Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents a deal authorizing a recording to be included in a release.
@@ -14,7 +14,7 @@
 /// - Deals can be destroyed if no longer needed.
 module musicos::deal;
 
-use interest_bps::bps::{Self, BPS};
+use bps::bps::{Self, BPS};
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
 use musicos::recording::{Recording, RecordingAdminCap};
@@ -67,6 +67,14 @@ public struct DealCreatedEvent has copy, drop {
     recording_id: ID,
     /// ID of the composition.
     composition_id: ID,
+    /// Title for the track (may override recording title).
+    track_title: String,
+    /// Track-level revenue split in basis points.
+    track_split_bps_value: u16,
+    /// Static cover art blob ID for the track.
+    track_cover_art_static_blob_id: u256,
+    /// Animated cover art blob ID for the track, if present.
+    track_cover_art_animated_blob_id: Option<u256>,
 }
 
 /// Emitted when a deal is destroyed.
@@ -96,7 +104,7 @@ public fun new<CompositionShare, RecordingShare>(
     composition: &Composition<CompositionShare>,
     recording: &Recording<RecordingShare>,
     release_id: ID,
-    track_split_bps_value: u64,
+    track_split_bps_value: u16,
     track_title: Option<String>,
     track_cover_art: Option<CoverArt>,
     ctx: &mut TxContext,
@@ -123,11 +131,21 @@ public fun new<CompositionShare, RecordingShare>(
         track_cover_art: track_cover_art.destroy_with_default(*recording.cover_art()),
     };
 
+    let track_cover_art_animated_blob_id = if (deal.track_cover_art.animated().is_some()) {
+        option::some(deal.track_cover_art.animated().borrow().blob_id())
+    } else {
+        option::none()
+    };
+
     emit(DealCreatedEvent {
         deal_id: deal.id(),
         release_id,
         recording_id: recording.id(),
         composition_id: recording.composition_id(),
+        track_title: deal.track_title,
+        track_split_bps_value: deal.track_split_bps.value(),
+        track_cover_art_static_blob_id: deal.track_cover_art.static().blob_id(),
+        track_cover_art_animated_blob_id,
     });
 
     deal

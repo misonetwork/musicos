@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Unconfirmed Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents a track on a release, linking a recording to its position
@@ -12,7 +12,9 @@
 /// - Stores composition split for royalty calculations
 module musicos::track;
 
-use interest_bps::bps::BPS;
+use bps::bps::BPS;
+#[test_only]
+use bps::bps;
 use musicos::cover_art::CoverArt;
 use musicos::deal::Deal;
 use std::string::String;
@@ -189,15 +191,15 @@ public fun new_for_testing<CompositionShare, RecordingShare, V: drop>(
     title: String,
     duration_ms: u64,
     cover_art: CoverArt,
-    split_bps_value: u64,
-    composition_split_bps_value: u64,
+    split_bps_value: u16,
+    composition_split_bps_value: u16,
 ): Track {
     Track {
         state: TrackState::Unassigned { release_id },
         composition_id,
         composition_share_type: std::type_name::with_defining_ids<CompositionShare>(),
         composition_demo_ingester_type: option::none(),
-        composition_split_bps: interest_bps::bps::new(composition_split_bps_value),
+        composition_split_bps: bps::new(composition_split_bps_value),
         recording_id,
         recording_share_type: std::type_name::with_defining_ids<RecordingShare>(),
         recording_master_ingester_type: std::type_name::with_defining_ids<V>(),
@@ -205,7 +207,7 @@ public fun new_for_testing<CompositionShare, RecordingShare, V: drop>(
         title,
         duration_ms,
         cover_art,
-        split_bps: interest_bps::bps::new(split_bps_value),
+        split_bps: bps::new(split_bps_value),
     }
 }
 

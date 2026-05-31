@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Unconfirmed Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents a musical composition (song, instrumental work) in MusicOS.
@@ -14,7 +14,7 @@
 /// - Deterministic addresses via derived object pattern
 module musicos::composition;
 
-use interest_bps::bps::{Self, BPS};
+use bps::bps::{Self, BPS};
 use musicos::audio::Audio;
 use musicos::composition_party_role::CompositionPartyRole;
 use ori::walrus_data::WalrusData;
@@ -90,16 +90,13 @@ public enum CompositionState has copy, drop, store {
 public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop {
     composition_id: ID,
     title: String,
-    alternate_titles: vector<String>,
     split_bps_value: u16,
     has_lyrics: bool,
     has_chart: bool,
     has_score: bool,
     has_demo: bool,
-    demo_duration_ms: Option<u64>,
-    demo_blob_id: Option<u256>,
-    credits_count: u64,
     published_at_ms: u64,
+    published_by: address,
 }
 
 /// Emitted when a party is added to a composition.
@@ -107,22 +104,13 @@ public struct CompositionPartyAddedEvent has copy, drop {
     composition_id: ID,
     party_id: ID,
     credit_display_name: String,
-    credit_roles_count: u64,
 }
 
 /// Emitted for each role assigned to a credited party on a composition.
-public struct CompositionCreditRoleEvent has copy, drop {
+public struct CompositionCreditRoleAssignedEvent has copy, drop {
     composition_id: ID,
     party_id: ID,
     role_name: String,
-}
-
-/// Emitted when the composition split is updated.
-public struct CompositionSplitSetEvent has copy, drop {
-    /// ID of the composition.
-    composition_id: ID,
-    /// New split value in basis points.
-    split_value: u64,
 }
 
 /// Emitted when an alternate title is added to a composition.
@@ -134,8 +122,7 @@ public struct CompositionAlternateTitleAddedEvent has copy, drop {
 /// Emitted when lyrics are set on a composition.
 public struct CompositionLyricsSetEvent has copy, drop {
     composition_id: ID,
-    is_walrus_blob: bool,
-    walrus_id: u256,
+    blob_id: u256,
 }
 
 /// Emitted when the demo audio is set on a composition.
@@ -152,15 +139,13 @@ public struct CompositionDemoSetEvent has copy, drop {
 /// Emitted when the chart data is set on a composition.
 public struct CompositionChartSetEvent has copy, drop {
     composition_id: ID,
-    is_walrus_blob: bool,
-    walrus_id: u256,
+    blob_id: u256,
 }
 
 /// Emitted when the score data is set on a composition.
 public struct CompositionScoreSetEvent has copy, drop {
     composition_id: ID,
-    is_walrus_blob: bool,
-    walrus_id: u256,
+    blob_id: u256,
 }
 
 // === Constants ===
@@ -224,7 +209,7 @@ const ENoContent: u64 = 51;
 /// - Promise that must be consumed by calling `share()`
 public fun new<CompositionShare>(
     title: String,
-    split_value: u64,
+    split_value: u16,
     share_currency: &mut Currency<CompositionShare>,
     share_treasury_cap: TreasuryCap<CompositionShare>,
     ctx: &mut TxContext,
@@ -268,6 +253,7 @@ public fun publish<CompositionShare>(
     mut self: Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
     clock: &Clock,
+    ctx: &TxContext,
 ) {
     match (self.state) {
         CompositionState::Initialized => {
@@ -282,26 +268,16 @@ public fun publish<CompositionShare>(
             let published_at_ms = clock.timestamp_ms();
             self.state = CompositionState::Published(published_at_ms);
 
-            let (demo_duration_ms, demo_blob_id) = if (self.demo.is_some()) {
-                let demo = self.demo.borrow();
-                (option::some(demo.duration_ms()), option::some(demo.data().blob_id()))
-            } else {
-                (option::none(), option::none())
-            };
-
             emit(CompositionPublishedEvent<CompositionShare> {
                 composition_id: self.id(),
                 title: *self.title(),
-                alternate_titles: self.alternate_titles,
-                split_bps_value: (self.split_bps.value() as u16),
+                split_bps_value: self.split_bps.value(),
                 has_lyrics: self.lyrics.is_some(),
                 has_chart: self.chart.is_some(),
                 has_score: self.score.is_some(),
                 has_demo: self.demo.is_some(),
-                demo_duration_ms,
-                demo_blob_id,
-                credits_count: self.credits.length(),
                 published_at_ms,
+                published_by: ctx.sender(),
             });
 
             transfer::share_object(self);
@@ -363,20 +339,17 @@ public fun add_credit<CompositionShare>(
             assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
             self.credits.insert(party_id, credit);
 
-            let credit_display_name = *credit.display_name();
             let composition_id = self.id();
-            let roles = credit.roles();
-
             emit(CompositionPartyAddedEvent {
                 composition_id,
                 party_id,
-                credit_display_name,
-                credit_roles_count: roles.length(),
+                credit_display_name: *credit.display_name(),
             });
 
+            let roles = credit.roles();
             let mut i = 0;
             while (i < roles.length()) {
-                emit(CompositionCreditRoleEvent {
+                emit(CompositionCreditRoleAssignedEvent {
                     composition_id,
                     party_id,
                     role_name: roles[i].name(),
@@ -398,16 +371,11 @@ public fun add_credit<CompositionShare>(
 public fun set_split_bps<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
-    split_value: u64,
+    split_value: u16,
 ) {
     match (self.state) {
         CompositionState::Initialized => {
             self.split_bps = bps::new(split_value);
-
-            emit(CompositionSplitSetEvent {
-                composition_id: self.id(),
-                split_value: self.split_bps.value(),
-            });
         },
         _ => abort ENotInitializedState,
     }
@@ -424,14 +392,13 @@ public fun set_lyrics<CompositionShare>(
 ) {
     match (self.state) {
         CompositionState::Initialized => {
-            let is_walrus_blob = lyrics.is_blob();
-            let walrus_id = if (is_walrus_blob) { lyrics.blob_id() } else { lyrics.quilt_id() };
+            lyrics.assert_is_blob();
+            let blob_id = lyrics.blob_id();
             self.lyrics = option::some(lyrics);
 
             emit(CompositionLyricsSetEvent {
                 composition_id: self.id(),
-                is_walrus_blob,
-                walrus_id,
+                blob_id,
             });
         },
         _ => abort ENotInitializedState,
@@ -447,23 +414,16 @@ public fun set_demo<CompositionShare>(
 ) {
     match (self.state) {
         CompositionState::Initialized => {
-            let blob_id = audio.data().blob_id();
-            let channels = audio.channels();
-            let bit_depth = audio.bit_depth();
-            let sample_rate_hz = audio.sample_rate_hz();
-            let samples = audio.samples();
-            let duration_ms = audio.duration_ms();
-            self.demo = option::some(audio);
-
             emit(CompositionDemoSetEvent {
                 composition_id: self.id(),
-                blob_id,
-                channels,
-                bit_depth,
-                sample_rate_hz,
-                samples,
-                duration_ms,
+                blob_id: audio.data().blob_id(),
+                channels: audio.channels(),
+                bit_depth: audio.bit_depth(),
+                sample_rate_hz: audio.sample_rate_hz(),
+                samples: audio.samples(),
+                duration_ms: audio.duration_ms(),
             });
+            self.demo = option::some(audio);
         },
         _ => abort ENotInitializedState,
     }
@@ -478,14 +438,13 @@ public fun set_chart<CompositionShare>(
 ) {
     match (self.state) {
         CompositionState::Initialized => {
-            let is_walrus_blob = chart.is_blob();
-            let walrus_id = if (is_walrus_blob) { chart.blob_id() } else { chart.quilt_id() };
+            chart.assert_is_blob();
+            let blob_id = chart.blob_id();
             self.chart = option::some(chart);
 
             emit(CompositionChartSetEvent {
                 composition_id: self.id(),
-                is_walrus_blob,
-                walrus_id,
+                blob_id,
             });
         },
         _ => abort ENotInitializedState,
@@ -501,14 +460,13 @@ public fun set_score<CompositionShare>(
 ) {
     match (self.state) {
         CompositionState::Initialized => {
-            let is_walrus_blob = score.is_blob();
-            let walrus_id = if (is_walrus_blob) { score.blob_id() } else { score.quilt_id() };
+            score.assert_is_blob();
+            let blob_id = score.blob_id();
             self.score = option::some(score);
 
             emit(CompositionScoreSetEvent {
                 composition_id: self.id(),
-                is_walrus_blob,
-                walrus_id,
+                blob_id,
             });
         },
         _ => abort ENotInitializedState,
@@ -615,7 +573,7 @@ public(package) fun uid_mut_internal<CompositionShare>(
 #[test_only]
 public fun new_for_testing<CompositionShare>(
     title: String,
-    split_value: u64,
+    split_value: u16,
     ctx: &mut TxContext,
 ): (Composition<CompositionShare>, CompositionAdminCap<CompositionShare>) {
     assert!(!title.is_empty(), EEmptyString);

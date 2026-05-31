@@ -39,7 +39,7 @@ fun test_track(ctx: &mut TxContext): track::Track {
 }
 
 /// Helper to create a disc with n tracks that share splits evenly.
-fun test_disc_with_n_tracks(n: u64, split_bps: u64, ctx: &mut TxContext): disc::Disc {
+fun test_disc_with_n_tracks(n: u64, split_bps: u16, ctx: &mut TxContext): disc::Disc {
     let mut tracks = vector[];
     n.do!(|_| {
         tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare, V>(

@@ -120,7 +120,7 @@ fun test_recording_kitchen_sink() {
 
     // Publish - proves all max bounds are achievable together
     let clock = sui::clock::create_for_testing(ctx);
-    rec.publish(&cap, &clock);
+    rec.publish(&cap, &clock, ctx);
 
     // Cleanup
     clock.destroy_for_testing();

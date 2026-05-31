@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, LLC
+// Copyright (c) Unconfirmed Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents cover artwork for releases and tracks in MusicOS.
@@ -27,6 +27,10 @@ public struct CoverArt has copy, drop, store {
 /// `static` - Required static image data reference.
 /// `animated` - Optional animated image/video data reference.
 public fun new(static: WalrusData, animated: Option<WalrusData>): CoverArt {
+    static.assert_is_blob();
+    if (animated.is_some()) {
+        animated.borrow().assert_is_blob();
+    };
     CoverArt {
         static,
         animated,
