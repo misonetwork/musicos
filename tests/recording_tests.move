@@ -7,14 +7,11 @@ use musicos::recording;
 use musicos::recording_party_role;
 use musicos::stem;
 use musicos::test_helpers::{Self, RecordingShare};
-use musicos::time_signature;
-use musicos::musical_key;
 use std::unit_test::{assert_eq, destroy};
 use ori::walrus_data;
 
 // Error codes from recording.move
 const EMinRolesNotMet: u64 = 20;
-const EInvalidTempoBpm: u64 = 21;
 const EExceedsMaxRoles: u64 = 30;
 const EMaxStemsExceeded: u64 = 31;
 const EMaxCreditsExceeded: u64 = 32;
@@ -366,58 +363,6 @@ fun test_set_subtitle_too_long() {
     let ctx = &mut tx_context::dummy();
     let (mut rec, cap) = new_test_recording(ctx);
     rec.set_subtitle(&cap, test_helpers::long_string(MAX_SUBTITLE_LENGTH + 1));
-    destroy(rec);
-    destroy(cap);
-}
-
-// === Musical Properties ===
-
-#[test]
-fun test_set_tempo_bpm() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_test_recording(ctx);
-
-    rec.set_tempo_bpm(&cap, 120);
-    assert_eq!(*rec.tempo_bpm(), option::some(120));
-
-    destroy(rec);
-    destroy(cap);
-}
-
-#[test, expected_failure(abort_code = EInvalidTempoBpm, location = musicos::recording)]
-fun test_set_tempo_bpm_zero() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_test_recording(ctx);
-    rec.set_tempo_bpm(&cap, 0);
-    destroy(rec);
-    destroy(cap);
-}
-
-#[test]
-fun test_set_musical_key() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_test_recording(ctx);
-
-    let key = musical_key::new(
-        musical_key::new_note_c(),
-        musical_key::new_accidental_natural(),
-        musical_key::new_mode_major(),
-    );
-    rec.set_musical_key(&cap, key);
-    assert!(rec.musical_key().is_some());
-
-    destroy(rec);
-    destroy(cap);
-}
-
-#[test]
-fun test_set_time_signature() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_test_recording(ctx);
-
-    rec.set_time_signature(&cap, time_signature::new(4, 4));
-    assert!(rec.time_signature().is_some());
-
     destroy(rec);
     destroy(cap);
 }

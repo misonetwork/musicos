@@ -10,7 +10,6 @@
 /// - Share token initialization with fixed supply (100M tokens, 6 decimals)
 /// - Party management with role assignments (Producer, Vocalist, etc.)
 /// - State machine: Initialized -> Published (immutable after publish)
-/// - Musical metadata (key, tempo, time signature)
 /// - Deterministic addresses via derived object pattern
 module musicos::recording;
 
@@ -22,10 +21,8 @@ use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
 use musicos::genre::Genre;
-use musicos::musical_key::MusicalKey;
 use musicos::recording_party_role::RecordingPartyRole;
 use musicos::stem::Stem;
-use musicos::time_signature::TimeSignature;
 use ori::walrus_data::WalrusData;
 use partyos::credit::Credit;
 use partyos::party::Party;
@@ -78,12 +75,6 @@ public struct Recording<phantom RecordingShare> has key {
     is_instrumental: bool,
     /// Optional timed lyrics file (WebVTT format on Walrus).
     lyrics: Option<WalrusData>,
-    /// Musical key of the recording.
-    musical_key: Option<MusicalKey>,
-    /// Time signature of the recording.
-    time_signature: Option<TimeSignature>,
-    /// Tempo in beats per minute.
-    tempo_bpm: Option<u16>,
     /// The final mixed/mastered audio file.
     master: Audio,
     /// The stems of the recording.
@@ -143,12 +134,6 @@ public struct RecordingPublishedEvent<phantom RecordingShare> has copy, drop {
     master_ingester_type: String,
     cover_art_static_blob_id: u256,
     cover_art_animated_blob_id: Option<u256>,
-    musical_key_note: Option<String>,
-    musical_key_accidental: Option<String>,
-    musical_key_mode: Option<String>,
-    time_sig_beats_per_measure: Option<u8>,
-    time_sig_beat_unit: Option<u8>,
-    tempo_bpm: Option<u16>,
     has_lyrics: bool,
     is_explicit: bool,
     is_instrumental: bool,
@@ -254,8 +239,6 @@ const ENotInitializedState: u64 = 10;
 // Validation errors (20-29)
 /// Party must have at least one role.
 const EMinRolesNotMet: u64 = 20;
-/// Tempo BPM must be at least 1.
-const EInvalidTempoBpm: u64 = 21;
 
 // Constraint errors (30-39)
 /// Party has too many roles.
@@ -344,9 +327,6 @@ public fun new<RecordingShare, CompositionShare>(
         is_explicit,
         is_instrumental,
         lyrics: option::none(),
-        musical_key: option::none(),
-        time_signature: option::none(),
-        tempo_bpm: option::none(),
         master,
         stems: vector[],
         cover_art,
@@ -393,26 +373,6 @@ public fun publish<RecordingShare>(
                 option::none()
             };
 
-            // Flatten musical key
-            let (musical_key_note, musical_key_accidental, musical_key_mode) = if (self.musical_key.is_some()) {
-                let mk = self.musical_key.borrow();
-                (
-                    option::some(mk.note().note_name()),
-                    option::some(mk.accidental().accidental_name()),
-                    option::some(mk.mode().mode_name()),
-                )
-            } else {
-                (option::none(), option::none(), option::none())
-            };
-
-            // Flatten time signature
-            let (time_sig_beats_per_measure, time_sig_beat_unit) = if (self.time_signature.is_some()) {
-                let ts = self.time_signature.borrow();
-                (option::some(ts.beats_per_measure()), option::some(ts.beat_unit()))
-            } else {
-                (option::none(), option::none())
-            };
-
             let cover_art_animated_blob_id = if (self.cover_art.animated().is_some()) {
                 option::some(self.cover_art.animated().borrow().blob_id())
             } else {
@@ -437,12 +397,6 @@ public fun publish<RecordingShare>(
                 master_ingester_type: string::from_ascii(*self.master.ingester_type().as_string()),
                 cover_art_static_blob_id: self.cover_art.static().blob_id(),
                 cover_art_animated_blob_id,
-                musical_key_note,
-                musical_key_accidental,
-                musical_key_mode,
-                time_sig_beats_per_measure,
-                time_sig_beat_unit,
-                tempo_bpm: self.tempo_bpm,
                 has_lyrics: self.lyrics.is_some(),
                 is_explicit: self.is_explicit,
                 is_instrumental: self.is_instrumental,
@@ -719,53 +673,7 @@ public fun remove_secondary_genre<RecordingShare>(
     }
 }
 
-// === Musical Properties ===
-
-/// Sets the musical key of the recording.
-/// Required State: Initialized
-public fun set_musical_key<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    musical_key: MusicalKey,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.musical_key.swap_or_fill(musical_key);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Sets the time signature of the recording.
-/// Required State: Initialized
-public fun set_time_signature<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    time_signature: TimeSignature,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.time_signature.swap_or_fill(time_signature);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Sets the tempo in beats per minute.
-/// Required State: Initialized
-public fun set_tempo_bpm<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    tempo_bpm: u16,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            assert!(tempo_bpm >= 1, EInvalidTempoBpm);
-            self.tempo_bpm.swap_or_fill(tempo_bpm);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
+// === Stems ===
 
 /// Adds an audio stem to the recording.
 /// Each stem must have at least one contributor, and all contributors must be
@@ -929,23 +837,6 @@ public fun lyrics<RecordingShare>(self: &Recording<RecordingShare>): &Option<Wal
     &self.lyrics
 }
 
-/// Returns the optional musical key.
-public fun musical_key<RecordingShare>(self: &Recording<RecordingShare>): &Option<MusicalKey> {
-    &self.musical_key
-}
-
-/// Returns the optional time signature.
-public fun time_signature<RecordingShare>(
-    self: &Recording<RecordingShare>,
-): &Option<TimeSignature> {
-    &self.time_signature
-}
-
-/// Returns the optional tempo in BPM.
-public fun tempo_bpm<RecordingShare>(self: &Recording<RecordingShare>): &Option<u16> {
-    &self.tempo_bpm
-}
-
 /// Returns a reference to the master audio file.
 public fun master<RecordingShare>(self: &Recording<RecordingShare>): &Audio {
     &self.master
@@ -1042,9 +933,6 @@ public fun new_for_testing<RecordingShare>(
         is_explicit,
         is_instrumental,
         lyrics: option::none(),
-        musical_key: option::none(),
-        time_signature: option::none(),
-        tempo_bpm: option::none(),
         master,
         stems: vector[],
         cover_art,

@@ -4,7 +4,6 @@ module musicos::kitchen_sink_tests;
 use partyos::credit;
 use musicos::disc;
 use musicos::genre;
-use musicos::musical_key;
 use musicos::recording;
 use musicos::recording_party_role;
 use musicos::release;
@@ -12,7 +11,6 @@ use musicos::release_kind;
 use musicos::release_party_role;
 use musicos::stem;
 use musicos::test_helpers::{Self, CompositionShare, RecordingShare, V};
-use musicos::time_signature;
 use musicos::track;
 use std::unit_test::destroy;
 
@@ -44,7 +42,7 @@ fun make_10_roles(): vector<recording_party_role::RecordingPartyRole> {
 /// - 100 stems (MAX_STEMS), each with 1 contributor
 /// - title_version at 100 bytes (MAX_TITLE_VERSION_LENGTH)
 /// - subtitle at 200 bytes (MAX_SUBTITLE_LENGTH)
-/// - language, lyrics, musical_key, time_signature, tempo_bpm all set
+/// - language, lyrics all set
 /// - Successfully publishes
 #[test]
 fun test_recording_kitchen_sink() {
@@ -110,13 +108,6 @@ fun test_recording_kitchen_sink() {
     rec.set_subtitle(&cap, test_helpers::long_string(200));       // MAX_SUBTITLE_LENGTH
     rec.set_language(&cap, b"en".to_string());
     rec.set_lyrics(&cap, test_helpers::walrus());
-    rec.set_musical_key(&cap, musical_key::new(
-        musical_key::new_note_c(),
-        musical_key::new_accidental_natural(),
-        musical_key::new_mode_major(),
-    ));
-    rec.set_time_signature(&cap, time_signature::new(4, 4));
-    rec.set_tempo_bpm(&cap, 120);
 
     // Publish - proves all max bounds are achievable together
     let clock = sui::clock::create_for_testing(ctx);

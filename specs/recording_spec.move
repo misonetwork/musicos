@@ -93,25 +93,6 @@ fun add_secondary_genre_aborts_when_published<RS>(
 }
 
 #[spec(prove, ignore_abort)]
-fun set_musical_key_aborts_when_published<RS>(
-    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>,
-    key: musicos::musical_key::MusicalKey,
-) {
-    requires(self.is_published_state());
-    recording::set_musical_key(self, cap, key);
-    ensures(false);
-}
-
-#[spec(prove, ignore_abort)]
-fun set_tempo_bpm_aborts_when_published<RS>(
-    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>, bpm: u16,
-) {
-    requires(self.is_published_state());
-    recording::set_tempo_bpm(self, cap, bpm);
-    ensures(false);
-}
-
-#[spec(prove, ignore_abort)]
 fun add_stem_aborts_when_published<RS>(
     self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>, stem: musicos::stem::Stem,
 ) {
@@ -336,14 +317,3 @@ fun set_primary_genre_aborts_if_secondary<RS>(
     ensures(false);
 }
 
-// === Tempo validation ===
-
-/// set_tempo_bpm aborts when bpm is 0.
-#[spec(prove, ignore_abort)]
-fun set_tempo_bpm_aborts_zero<RS>(
-    self: &mut Recording<RS>, cap: &RecordingAdminCap<RS>,
-) {
-    requires(self.is_initialized_state());
-    recording::set_tempo_bpm(self, cap, 0);
-    ensures(false);
-}
