@@ -17,7 +17,6 @@ const EMaxAlternateTitleLengthExceeded: u64 = 34;
 const EEmptyString: u64 = 35;
 const EPartyAlreadyCredited: u64 = 40;
 const ENoParties: u64 = 50;
-const ENoContent: u64 = 51;
 
 // Must match composition.move
 const MAX_ALTERNATE_TITLES: u64 = 5;
@@ -197,25 +196,12 @@ fun test_add_max_credits() {
 // === Content ===
 
 #[test]
-fun test_set_and_clear_content() {
+fun test_set_lyrics() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
-    // Set lyrics
     comp.set_lyrics(&cap, walrus_data::new_blob(1));
     assert!(comp.lyrics().is_some());
-
-    // Set chart
-    comp.set_chart(&cap, walrus_data::new_blob(2));
-    assert!(comp.chart().is_some());
-
-    // Set score
-    comp.set_score(&cap, walrus_data::new_blob(3));
-    assert!(comp.score().is_some());
-
-    // Set demo (requires verified Audio)
-    comp.set_demo(&cap, test_helpers::audio());
-    assert!(comp.demo().is_some());
 
     destroy(comp);
     destroy(cap);
@@ -377,26 +363,4 @@ fun test_publish_no_parties() {
 
     clock.destroy_for_testing();
     destroy(cap);
-}
-
-#[test, expected_failure(abort_code = ENoContent, location = musicos::composition)]
-fun test_publish_no_content() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
-
-    // Add a credit but no content
-    let (party, party_cap) = test_helpers::individual(ctx);
-    let cred = credit::new(
-        b"Artist".to_string(),
-        vector[composition_party_role::new_composer_role()],
-    );
-    comp.add_credit(&cap, &party, cred);
-
-    let clock = sui::clock::create_for_testing(ctx);
-    comp.publish(&cap, &clock, ctx);
-
-    clock.destroy_for_testing();
-    destroy(cap);
-    destroy(party);
-    destroy(party_cap);
 }

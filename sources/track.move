@@ -31,8 +31,6 @@ public struct Track has drop, store {
     composition_id: ID,
     /// Type of the composition's share token.
     composition_share_type: TypeName,
-    /// Ingester of the composition's demo audio file.
-    composition_demo_ingester_type: Option<TypeName>,
     /// Split of revenue allocated to composition vs recording (in basis points).
     composition_split_bps: BPS,
     /// ID of the recording on this track.
@@ -80,7 +78,6 @@ public fun new(deal: Deal): Track {
         state: TrackState::Unassigned { release_id: deal.release_id() },
         composition_id: deal.composition_id(),
         composition_share_type: *deal.composition_share_type(),
-        composition_demo_ingester_type: *deal.composition_demo_ingester_type(),
         composition_split_bps: deal.composition_split_bps(),
         recording_id: deal.recording_id(),
         recording_share_type: *deal.recording_share_type(),
@@ -126,10 +123,6 @@ public fun composition_split_bps(self: &Track): BPS {
     self.composition_split_bps
 }
 
-/// Returns the ingester of the composition's demo audio file.
-public fun composition_demo_ingester_type(self: &Track): &Option<TypeName> {
-    &self.composition_demo_ingester_type
-}
 
 /// Returns the ID of the recording.
 public fun recording_id(self: &Track): ID {
@@ -198,7 +191,6 @@ public fun new_for_testing<CompositionShare, RecordingShare, V: drop>(
         state: TrackState::Unassigned { release_id },
         composition_id,
         composition_share_type: std::type_name::with_defining_ids<CompositionShare>(),
-        composition_demo_ingester_type: option::none(),
         composition_split_bps: bps::new(composition_split_bps_value),
         recording_id,
         recording_share_type: std::type_name::with_defining_ids<RecordingShare>(),

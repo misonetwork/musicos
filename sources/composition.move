@@ -15,14 +15,12 @@
 module musicos::composition;
 
 use bps::bps::{Self, BPS};
-use musicos::audio::Audio;
 use musicos::composition_party_role::CompositionPartyRole;
 use ori::walrus_data::WalrusData;
 use partyos::credit::Credit;
 use partyos::party::Party;
 use share::share;
 use std::string::String;
-use std::type_name::TypeName;
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
@@ -50,12 +48,6 @@ public struct Composition<phantom CompositionShare> has key {
     split_bps: BPS,
     /// Optional lyrics data reference.
     lyrics: Option<WalrusData>,
-    /// Optional chart data reference.
-    chart: Option<WalrusData>,
-    /// Optional score data reference.
-    score: Option<WalrusData>,
-    /// Optional audio demo of the composition.
-    demo: Option<Audio>,
 }
 
 /// Capability that authorizes modifications to a specific composition.
@@ -92,9 +84,6 @@ public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop
     title: String,
     split_bps_value: u16,
     has_lyrics: bool,
-    has_chart: bool,
-    has_score: bool,
-    has_demo: bool,
     published_at_ms: u64,
     published_by: address,
 }
@@ -121,29 +110,6 @@ public struct CompositionAlternateTitleAddedEvent has copy, drop {
 
 /// Emitted when lyrics are set on a composition.
 public struct CompositionLyricsSetEvent has copy, drop {
-    composition_id: ID,
-    blob_id: u256,
-}
-
-/// Emitted when the demo audio is set on a composition.
-public struct CompositionDemoSetEvent has copy, drop {
-    composition_id: ID,
-    blob_id: u256,
-    channels: u8,
-    bit_depth: u8,
-    sample_rate_hz: u32,
-    samples: u64,
-    duration_ms: u64,
-}
-
-/// Emitted when the chart data is set on a composition.
-public struct CompositionChartSetEvent has copy, drop {
-    composition_id: ID,
-    blob_id: u256,
-}
-
-/// Emitted when the score data is set on a composition.
-public struct CompositionScoreSetEvent has copy, drop {
     composition_id: ID,
     blob_id: u256,
 }
@@ -194,8 +160,6 @@ const EPartyAlreadyCredited: u64 = 40;
 // Reference errors (50-59)
 /// Composition must have at least one party to publish.
 const ENoParties: u64 = 50;
-/// Composition must have at least one of demo, chart, or score to publish.
-const ENoContent: u64 = 51;
 
 // === Public Functions ===
 
@@ -229,9 +193,6 @@ public fun new<CompositionShare>(
         credits: vec_map::empty(),
         split_bps: bps::new(split_value),
         lyrics: option::none(),
-        chart: option::none(),
-        score: option::none(),
-        demo: option::none(),
     };
 
     let composition_admin_cap = CompositionAdminCap<CompositionShare> {
@@ -247,7 +208,7 @@ public fun new<CompositionShare>(
 }
 
 /// Publishes the composition, making it immutable.
-/// Requires at least one party and at least one of lyrics, chart, score, or demo.
+/// Requires at least one party.
 /// Required State: Initialized
 public fun publish<CompositionShare>(
     mut self: Composition<CompositionShare>,
@@ -259,12 +220,6 @@ public fun publish<CompositionShare>(
         CompositionState::Initialized => {
             assert!(!self.credits.is_empty(), ENoParties);
 
-            // Assert the composition has at least one of lyrics, chart, score, or demo.
-            assert!(
-                self.lyrics.is_some() || self.chart.is_some() || self.score.is_some() || self.demo.is_some(),
-                ENoContent,
-            );
-
             let published_at_ms = clock.timestamp_ms();
             self.state = CompositionState::Published(published_at_ms);
 
@@ -273,9 +228,6 @@ public fun publish<CompositionShare>(
                 title: *self.title(),
                 split_bps_value: self.split_bps.value(),
                 has_lyrics: self.lyrics.is_some(),
-                has_chart: self.chart.is_some(),
-                has_score: self.score.is_some(),
-                has_demo: self.demo.is_some(),
                 published_at_ms,
                 published_by: ctx.sender(),
             });
@@ -405,74 +357,6 @@ public fun set_lyrics<CompositionShare>(
     }
 }
 
-/// Sets the demo audio reference for the composition.
-/// Required State: Initialized
-public fun set_demo<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-    audio: Audio,
-) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            emit(CompositionDemoSetEvent {
-                composition_id: self.id(),
-                blob_id: audio.data().blob_id(),
-                channels: audio.channels(),
-                bit_depth: audio.bit_depth(),
-                sample_rate_hz: audio.sample_rate_hz(),
-                samples: audio.samples(),
-                duration_ms: audio.duration_ms(),
-            });
-            self.demo = option::some(audio);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Sets the chart data reference for the composition.
-/// Required State: Initialized
-public fun set_chart<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-    chart: WalrusData,
-) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            chart.assert_is_blob();
-            let blob_id = chart.blob_id();
-            self.chart = option::some(chart);
-
-            emit(CompositionChartSetEvent {
-                composition_id: self.id(),
-                blob_id,
-            });
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Sets the score data reference for the composition.
-/// Required State: Initialized
-public fun set_score<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-    score: WalrusData,
-) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            score.assert_is_blob();
-            let blob_id = score.blob_id();
-            self.score = option::some(score);
-
-            emit(CompositionScoreSetEvent {
-                composition_id: self.id(),
-                blob_id,
-            });
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
 // === Public View Functions ===
 
 /// Returns the composition's object ID.
@@ -524,28 +408,6 @@ public fun lyrics<CompositionShare>(self: &Composition<CompositionShare>): &Opti
     &self.lyrics
 }
 
-/// Returns the optional demo audio reference.
-public fun demo<CompositionShare>(self: &Composition<CompositionShare>): &Option<Audio> {
-    &self.demo
-}
-
-/// Returns the ingester type of the composition's demo audio file.
-public fun demo_ingester_type<CompositionShare>(
-    self: &Composition<CompositionShare>,
-): Option<TypeName> {
-    self.demo.map_ref!(|audio| *audio.ingester_type())
-}
-
-/// Returns the optional chart data reference.
-public fun chart<CompositionShare>(self: &Composition<CompositionShare>): &Option<WalrusData> {
-    &self.chart
-}
-
-/// Returns the optional score data reference.
-public fun score<CompositionShare>(self: &Composition<CompositionShare>): &Option<WalrusData> {
-    &self.score
-}
-
 // === UID Functions ===
 
 /// Returns a reference to the composition's UID for reading dynamic fields.
@@ -587,9 +449,6 @@ public fun new_for_testing<CompositionShare>(
         credits: vec_map::empty(),
         split_bps: bps::new(split_value),
         lyrics: option::none(),
-        chart: option::none(),
-        score: option::none(),
-        demo: option::none(),
     };
 
     let composition_admin_cap = CompositionAdminCap<CompositionShare> {

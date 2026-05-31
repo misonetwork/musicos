@@ -4,7 +4,6 @@ module musicos::composition_spec;
 use prover::prover::{requires, ensures, clone};
 use musicos::composition::{Self, Composition, CompositionAdminCap};
 use musicos::composition_party_role::CompositionPartyRole;
-use musicos::audio::Audio;
 use ori::walrus_data::WalrusData;
 use partyos::credit::Credit;
 use partyos::party::Party;
@@ -27,33 +26,6 @@ fun set_lyrics_aborts_when_published<CS>(
 ) {
     requires(self.is_published_state());
     composition::set_lyrics(self, cap, lyrics);
-    ensures(false);
-}
-
-#[spec(prove, ignore_abort)]
-fun set_demo_aborts_when_published<CS>(
-    self: &mut Composition<CS>, cap: &CompositionAdminCap<CS>, audio: Audio,
-) {
-    requires(self.is_published_state());
-    composition::set_demo(self, cap, audio);
-    ensures(false);
-}
-
-#[spec(prove, ignore_abort)]
-fun set_chart_aborts_when_published<CS>(
-    self: &mut Composition<CS>, cap: &CompositionAdminCap<CS>, chart: WalrusData,
-) {
-    requires(self.is_published_state());
-    composition::set_chart(self, cap, chart);
-    ensures(false);
-}
-
-#[spec(prove, ignore_abort)]
-fun set_score_aborts_when_published<CS>(
-    self: &mut Composition<CS>, cap: &CompositionAdminCap<CS>, score: WalrusData,
-) {
-    requires(self.is_published_state());
-    composition::set_score(self, cap, score);
     ensures(false);
 }
 

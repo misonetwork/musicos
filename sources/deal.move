@@ -37,8 +37,6 @@ public struct Deal has key, store {
     composition_share_type: TypeName,
     /// Revenue split for the composition in basis points.
     composition_split_bps: BPS,
-    /// Ingester of the composition's demo audio file.
-    composition_demo_ingester_type: Option<TypeName>,
     /// ID of the recording being authorized.
     recording_id: ID,
     /// Type of the recording's share token.
@@ -120,7 +118,6 @@ public fun new<CompositionShare, RecordingShare>(
         composition_id,
         composition_share_type: with_defining_ids<CompositionShare>(),
         composition_split_bps: recording.composition_split_bps(),
-        composition_demo_ingester_type: composition.demo_ingester_type(),
         recording_id,
         recording_share_type: with_defining_ids<RecordingShare>(),
         recording_duration_ms: recording.master().duration_ms(),
@@ -186,11 +183,6 @@ public fun composition_id(self: &Deal): ID {
 /// Returns the type of the composition's share token.
 public fun composition_share_type(self: &Deal): &TypeName {
     &self.composition_share_type
-}
-
-/// Returns the ingester of the composition's demo audio file.
-public fun composition_demo_ingester_type(self: &Deal): &Option<TypeName> {
-    &self.composition_demo_ingester_type
 }
 
 /// Returns the composition's revenue split in basis points.

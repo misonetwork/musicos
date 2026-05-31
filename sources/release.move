@@ -499,10 +499,6 @@ public fun audio_ingester_types(self: &Release): vector<TypeName> {
 
     self.discs.do_ref!(|disc| {
         disc.tracks().do_ref!(|track| {
-            // Add the composition's demo audio ingester type.
-            track.composition_demo_ingester_type().do_ref!(|t| {
-                if (!unique.contains(t)) unique.push_back(*t);
-            });
             // Add the recording's master audio ingester type.
             let master = track.recording_master_ingester_type();
             if (!unique.contains(master)) unique.push_back(*master);
