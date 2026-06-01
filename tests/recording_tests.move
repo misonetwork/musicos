@@ -2,11 +2,12 @@
 module musicos::recording_tests;
 
 use partyos::credit;
+use musicos::composition;
 use musicos::genre;
 use musicos::recording;
 use musicos::recording_party_role;
 use musicos::stem;
-use musicos::test_helpers::{Self, RecordingShare};
+use musicos::test_helpers::{Self, RecordingShare, CompositionShare};
 use std::unit_test::{assert_eq, destroy};
 use ori::walrus_data;
 
@@ -676,3 +677,64 @@ fun test_add_secondary_genre_exceeds_max() {
     destroy(cap);
 }
 
+
+// === Address derivation (RecordingKey) ===
+
+// Two masters with different content yield two distinct recordings of one composition.
+#[test]
+fun test_two_recordings_different_masters() {
+    let ctx = &mut tx_context::dummy();
+    let (mut comp, comp_cap) =
+        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
+
+    let master_a = recording::test_audio_with_blob(1);
+    let master_b = recording::test_audio_with_blob(2);
+
+    let id_a = recording::derive_recording_id_for_testing(&mut comp, &master_a);
+    let id_b = recording::derive_recording_id_for_testing(&mut comp, &master_b);
+    assert!(id_a.to_inner() != id_b.to_inner());
+
+    id_a.delete();
+    id_b.delete();
+    destroy(comp);
+    destroy(comp_cap);
+}
+
+// Same blob, different ingester => distinct recordings (verifier namespacing).
+#[test]
+fun test_same_blob_different_ingester() {
+    let ctx = &mut tx_context::dummy();
+    let (mut comp, comp_cap) =
+        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
+
+    let master_a = recording::test_audio_with_blob(1); // TestWitness
+    let master_b = recording::test_audio_with_blob_b(1); // TestWitnessB, same blob
+
+    let id_a = recording::derive_recording_id_for_testing(&mut comp, &master_a);
+    let id_b = recording::derive_recording_id_for_testing(&mut comp, &master_b);
+    assert!(id_a.to_inner() != id_b.to_inner());
+
+    id_a.delete();
+    id_b.delete();
+    destroy(comp);
+    destroy(comp_cap);
+}
+
+// Same blob AND same ingester => second derivation aborts (correct dedup).
+#[test, expected_failure]
+fun test_same_blob_same_ingester_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (mut comp, comp_cap) =
+        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
+
+    let master_a = recording::test_audio_with_blob(1);
+    let master_b = recording::test_audio_with_blob(1); // identical key
+
+    let id_a = recording::derive_recording_id_for_testing(&mut comp, &master_a);
+    let id_b = recording::derive_recording_id_for_testing(&mut comp, &master_b); // aborts
+
+    id_a.delete();
+    id_b.delete();
+    destroy(comp);
+    destroy(comp_cap);
+}

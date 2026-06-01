@@ -97,8 +97,11 @@ public struct RecordingAdminCap<phantom RecordingShare> has key, store {
 public struct RecordingAdminCapKey() has copy, drop, store;
 
 /// Key for deriving the recording's address from the composition.
-/// Derived from the master audio's verifier type.
-public struct RecordingKey(TypeName) has copy, drop, store;
+/// Derived from the master audio's content (Walrus blob id) and its verifier
+/// (ingester type). Content gives one recording per distinct master; the
+/// verifier namespaces it so an untrusted ingester cannot squat the address a
+/// trusted ingester would derive for the same bytes.
+public struct RecordingKey(u256, TypeName) has copy, drop, store;
 
 // === Enums ===
 
@@ -310,7 +313,7 @@ public fun new<RecordingShare, CompositionShare>(
     let mut recording = Recording<RecordingShare> {
         id: claim(
             composition.uid_mut_internal(),
-            RecordingKey(*master.ingester_type()),
+            RecordingKey(master.data().blob_id(), *master.ingester_type()),
         ),
         state: RecordingState::Initialized,
         title: *composition.title(),
@@ -1054,3 +1057,37 @@ public fun new_test_audio(): Audio {
 /// Witness for creating test Audio objects.
 #[test_only]
 public struct TestWitness() has drop;
+
+/// A second test ingester witness, for exercising verifier namespacing in the
+/// recording address derivation.
+#[test_only]
+public struct TestWitnessB() has drop;
+
+/// Creates a test Audio with the given blob id, ingested by `TestWitness`.
+#[test_only]
+public fun test_audio_with_blob(blob: u256): Audio {
+    use musicos::audio;
+    use ori::walrus_data;
+    audio::new(2, 16, 44100, 441000, walrus_data::new_blob(blob), TestWitness())
+}
+
+/// Creates a test Audio with the given blob id, ingested by `TestWitnessB`.
+#[test_only]
+public fun test_audio_with_blob_b(blob: u256): Audio {
+    use musicos::audio;
+    use ori::walrus_data;
+    audio::new(2, 16, 44100, 441000, walrus_data::new_blob(blob), TestWitnessB())
+}
+
+/// Claims a recording id off a composition via the real RecordingKey derivation.
+/// (The production path; `new_for_testing` bypasses it with `object::new`.)
+#[test_only]
+public fun derive_recording_id_for_testing<CompositionShare>(
+    composition: &mut Composition<CompositionShare>,
+    master: &Audio,
+): UID {
+    claim(
+        composition.uid_mut_internal(),
+        RecordingKey(master.data().blob_id(), *master.ingester_type()),
+    )
+}
