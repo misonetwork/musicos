@@ -6,14 +6,28 @@ import type { SuiGraphQLClient } from "@mysten/sui/graphql";
 import * as parsers from "./parsers.ts";
 import * as queries from "./queries.ts";
 import * as transactions from "./transactions.ts";
-import type { Composition, CompositionAdminCap, RecordingAdminCap, ReleaseAdminCap, Recording, Release, Party } from "./types.ts";
+import type { Composition, CompositionAdminCap, Party, Recording, RecordingAdminCap, Release, ReleaseAdminCap } from "./types.ts";
+
+// Generated call modules (type-safe Move calls) and BCS structs.
+import * as composition from "./contracts/musicos/composition.ts";
+import * as recording from "./contracts/musicos/recording.ts";
+import * as release from "./contracts/musicos/release.ts";
+import * as deal from "./contracts/musicos/deal.ts";
+import * as track from "./contracts/musicos/track.ts";
+import * as disc from "./contracts/musicos/disc.ts";
+import * as coverArt from "./contracts/musicos/cover_art.ts";
+import * as compositionRole from "./contracts/musicos/composition_party_role.ts";
+import * as recordingRole from "./contracts/musicos/recording_party_role.ts";
+import * as releaseRole from "./contracts/musicos/release_party_role.ts";
+import * as releaseKind from "./contracts/musicos/release_kind.ts";
+import { Audio } from "./contracts/musicos/deps/audio/audio.ts";
 
 export interface MusicOSOptions<Name extends string = "musicos"> {
   /** Name for the client extension. Defaults to "musicos". */
   name?: Name;
   /** The MusicOS package ID. Required for type-based queries and derivation. */
   musicOsPackageId: string;
-  /** Optional GraphQL client for type-based queries (getByShareType, getOwned, etc.). */
+  /** Optional GraphQL client for type-based queries (getByShareType, getOwned*, etc.). */
   graphqlClient?: SuiGraphQLClient;
 }
 
@@ -24,7 +38,6 @@ export interface MusicOSOptions<Name extends string = "musicos"> {
  * ```ts
  * const client = new SuiGrpcClient({ network: 'testnet' })
  *   .$extend(musicos({ musicOsPackageId: '0x...' }));
- *
  * const composition = await client.musicos.getCompositionById('0x...');
  * ```
  */
@@ -49,137 +62,91 @@ export class MusicOSClient {
     this.#musicOsPackageId = options.musicOsPackageId;
   }
 
-  // ============================================================================
-  // Composition (Core API)
-  // ============================================================================
+  // === Composition ===
 
   async getCompositionById(compositionId: string): Promise<Composition> {
     return queries.getCompositionById(this.#client, compositionId);
   }
-
+  async getCompositionsByIds(ids: string[]): Promise<Record<string, Composition>> {
+    return queries.getCompositionsByIds(this.#client, ids);
+  }
+  async getCompositionShareType(compositionId: string): Promise<string> {
+    return queries.getCompositionShareType(this.#client, compositionId);
+  }
+  async getCompositionByShareType(shareType: string): Promise<Composition> {
+    return queries.getCompositionByShareType(this.#client, this.#requireGraphQL(), shareType, this.#musicOsPackageId);
+  }
   async getCompositionAdminCapById(adminCapId: string): Promise<CompositionAdminCap> {
     return queries.getCompositionAdminCapById(this.#client, adminCapId);
   }
-
+  async getOwnedCompositionAdminCaps(owner: string): Promise<CompositionAdminCap[]> {
+    return queries.getOwnedCompositionAdminCaps(this.#requireGraphQL(), owner, this.#musicOsPackageId);
+  }
   deriveCompositionAdminCapId(compositionId: string): string {
     return queries.deriveCompositionAdminCapId(compositionId, this.#musicOsPackageId);
   }
 
-  async getCompositionShareType(compositionId: string): Promise<string> {
-    return queries.getCompositionShareType(this.#client, compositionId);
-  }
-
-  // ============================================================================
-  // Composition (GraphQL)
-  // ============================================================================
-
-  async getCompositionByShareType(shareType: string): Promise<Composition> {
-    return queries.getCompositionByShareType(this.#requireGraphQL(), shareType, this.#musicOsPackageId);
-  }
-
-  async getCompositionAdminCapByShareType(shareType: string): Promise<CompositionAdminCap> {
-    return queries.getCompositionAdminCapByShareType(this.#requireGraphQL(), shareType, this.#musicOsPackageId);
-  }
-
-  async getOwnedCompositionAdminCaps(owner: string): Promise<CompositionAdminCap[]> {
-    return queries.getOwnedCompositionAdminCaps(this.#requireGraphQL(), owner, this.#musicOsPackageId);
-  }
-
-  // ============================================================================
-  // Recording (Core API)
-  // ============================================================================
+  // === Recording ===
 
   async getRecordingById(recordingId: string): Promise<Recording> {
     return queries.getRecordingById(this.#client, recordingId);
   }
-
-  async getRecordingsByIds(recordingIds: string[]): Promise<Record<string, Recording>> {
-    return queries.getRecordingsByIds(this.#client, recordingIds);
+  async getRecordingsByIds(ids: string[]): Promise<Record<string, Recording>> {
+    return queries.getRecordingsByIds(this.#client, ids);
   }
-
-  async getRecordingAdminCapById(adminCapId: string): Promise<RecordingAdminCap> {
-    return queries.getRecordingAdminCapById(this.#client, adminCapId);
-  }
-
-  deriveRecordingAdminCapId(recordingId: string): string {
-    return queries.deriveRecordingAdminCapId(recordingId, this.#musicOsPackageId);
-  }
-
   async getRecordingShareType(recordingId: string): Promise<string> {
     return queries.getRecordingShareType(this.#client, recordingId);
   }
-
-  // ============================================================================
-  // Recording (GraphQL)
-  // ============================================================================
-
   async getRecordingByShareType(shareType: string): Promise<Recording> {
-    return queries.getRecordingByShareType(this.#requireGraphQL(), shareType, this.#musicOsPackageId);
+    return queries.getRecordingByShareType(this.#client, this.#requireGraphQL(), shareType, this.#musicOsPackageId);
   }
-
-  async getRecordingAdminCapByShareType(shareType: string): Promise<RecordingAdminCap> {
-    return queries.getRecordingAdminCapByShareType(this.#requireGraphQL(), shareType, this.#musicOsPackageId);
+  async getRecordingAdminCapById(adminCapId: string): Promise<RecordingAdminCap> {
+    return queries.getRecordingAdminCapById(this.#client, adminCapId);
   }
-
   async getOwnedRecordingAdminCaps(owner: string): Promise<RecordingAdminCap[]> {
     return queries.getOwnedRecordingAdminCaps(this.#requireGraphQL(), owner, this.#musicOsPackageId);
   }
-
+  deriveRecordingAdminCapId(recordingId: string): string {
+    return queries.deriveRecordingAdminCapId(recordingId, this.#musicOsPackageId);
+  }
   async getAdministeredRecordings(owner: string): Promise<Recording[]> {
-    return queries.getAdministeredRecordings(this.#requireGraphQL(), owner, this.#musicOsPackageId);
+    return queries.getAdministeredRecordings(this.#client, this.#requireGraphQL(), owner, this.#musicOsPackageId);
   }
 
-  // ============================================================================
-  // Release (Core API)
-  // ============================================================================
+  // === Release ===
 
   async getReleaseById(releaseId: string): Promise<Release> {
     return queries.getReleaseById(this.#client, releaseId);
   }
-
+  async getReleasesByIds(ids: string[]): Promise<Record<string, Release>> {
+    return queries.getReleasesByIds(this.#client, ids);
+  }
   async getReleaseAdminCapById(adminCapId: string): Promise<ReleaseAdminCap> {
     return queries.getReleaseAdminCapById(this.#client, adminCapId);
   }
-
   deriveReleaseAdminCapId(releaseId: string): string {
     return queries.deriveReleaseAdminCapId(releaseId, this.#musicOsPackageId);
   }
-
   async getOwnedReleaseAdminCaps(owner: string): Promise<ReleaseAdminCap[]> {
     return queries.getOwnedReleaseAdminCaps(this.#client, owner, this.#musicOsPackageId);
   }
-
-  // ============================================================================
-  // Party, Share Currency (Core API)
-  // ============================================================================
-
-  async getParty(partyId: string): Promise<Party> {
-    return queries.getParty(this.#client, partyId);
-  }
-
-  async getShareCurrencyType(shareCurrencyId: string): Promise<string> {
-    return queries.getShareCurrencyType(this.#client, shareCurrencyId);
-  }
-
-  async getShareCurrencyTreasuryCap(shareCurrencyId: string, owner: string): Promise<string> {
-    return queries.getShareCurrencyTreasuryCap(this.#client, shareCurrencyId, owner);
-  }
-
-  async getObjects(objectIds: string[]): Promise<Record<string, unknown>> {
-    return queries.getObjects(this.#client, objectIds);
-  }
-
-  // ============================================================================
-  // Registry (GraphQL)
-  // ============================================================================
-
   async getReleaseRegistry(): Promise<string> {
     return queries.getReleaseRegistry(this.#requireGraphQL(), this.#musicOsPackageId);
   }
 
-  // ============================================================================
-  // Transaction Builders
-  // ============================================================================
+  // === Party & Share Currency ===
+
+  async getParty(partyId: string): Promise<Party> {
+    return queries.getParty(this.#client, partyId);
+  }
+  async getShareCurrencyType(shareCurrencyId: string): Promise<string> {
+    return queries.getShareCurrencyType(this.#client, shareCurrencyId);
+  }
+  async getShareCurrencyTreasuryCap(shareCurrencyId: string, owner: string): Promise<string> {
+    return queries.getShareCurrencyTreasuryCap(this.#client, shareCurrencyId, owner);
+  }
+
+  // === Transaction builders (thunks) ===
 
   get tx() {
     const client = this.#client;
@@ -187,19 +154,44 @@ export class MusicOSClient {
       createParty: transactions.createParty,
       publishShareCurrency: transactions.publishShareCurrency,
       initializeShareCurrency: transactions.initializeShareCurrency,
-      publishComposition: (params: Omit<transactions.PublishCompositionParams, "client">) =>
-        transactions.publishComposition({ ...params, client }),
-      publishRecording: (params: Omit<transactions.PublishRecordingParams, "client">) =>
-        transactions.publishRecording({ ...params, client }),
+      publishComposition: (p: Omit<transactions.PublishCompositionParams, "client">) =>
+        transactions.publishComposition({ ...p, client }),
+      publishRecording: (p: Omit<transactions.PublishRecordingParams, "client">) =>
+        transactions.publishRecording({ ...p, client }),
       createDeal: transactions.createDeal,
       publishRelease: transactions.publishRelease,
       publishReleaseFromDeals: transactions.publishReleaseFromDeals,
     };
   }
 
-  // ============================================================================
-  // Event Parsers
-  // ============================================================================
+  // === Generated type-safe Move calls (for tx.add) ===
+
+  get call() {
+    return { composition, recording, release, deal, track, disc, coverArt, compositionRole, recordingRole, releaseRole, releaseKind };
+  }
+
+  // === Generated BCS structs (for parsing object/event content) ===
+
+  get bcs() {
+    return {
+      Composition: composition.Composition,
+      Recording: recording.Recording,
+      Release: release.Release,
+      Deal: deal.Deal,
+      Track: track.Track,
+      Disc: disc.Disc,
+      CoverArt: coverArt.CoverArt,
+      Audio,
+      CompositionPublishedEvent: composition.CompositionPublishedEvent,
+      CompositionRoyaltySetEvent: composition.CompositionRoyaltySetEvent,
+      RecordingPublishedEvent: recording.RecordingPublishedEvent,
+      ReleasePublishedEvent: release.ReleasePublishedEvent,
+      DealCreatedEvent: deal.DealCreatedEvent,
+      DealDestroyedEvent: deal.DealDestroyedEvent,
+    };
+  }
+
+  // === Event parsers ===
 
   get parse() {
     return {
@@ -212,10 +204,6 @@ export class MusicOSClient {
       dealDestroyedEvent: parsers.parseDealDestroyedEvent,
     };
   }
-
-  // ============================================================================
-  // Private
-  // ============================================================================
 
   #requireGraphQL(): SuiGraphQLClient {
     if (!this.#graphqlClient) {

@@ -50,7 +50,7 @@ export const AudioSchema = z.object({
 });
 
 export const CoverArtSchema = z.object({
-  static: WalrusDataSchema,
+  still: WalrusDataSchema,
   animated: WalrusDataSchema.optional(),
 });
 

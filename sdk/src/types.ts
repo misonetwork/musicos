@@ -70,10 +70,10 @@ export interface Audio {
   data: WalrusData;
 }
 
-/** Cover artwork with required static image and optional animation. */
+/** Cover artwork with a required still image and optional animation. */
 export interface CoverArt {
-  /** Required static image. */
-  static: WalrusData;
+  /** Required still image. */
+  still: WalrusData;
   /** Optional animated version (GIF, video, etc.). */
   animated?: WalrusData;
 }

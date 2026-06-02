@@ -1,7 +1,21 @@
 // Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Event parsers. The BCS layouts come from the codegen-generated structs (so
+// they track the on-chain ABI automatically); these functions parse raw event
+// bytes and map them to the public camelCase event types.
+
 import { bcs } from "@mysten/sui/bcs";
+import {
+  CompositionPublishedEvent as CompositionPublishedEventBcs,
+  CompositionRoyaltySetEvent as CompositionRoyaltySetEventBcs,
+} from "./contracts/musicos/composition.ts";
+import { RecordingPublishedEvent as RecordingPublishedEventBcs } from "./contracts/musicos/recording.ts";
+import { ReleasePublishedEvent as ReleasePublishedEventBcs } from "./contracts/musicos/release.ts";
+import {
+  DealCreatedEvent as DealCreatedEventBcs,
+  DealDestroyedEvent as DealDestroyedEventBcs,
+} from "./contracts/musicos/deal.ts";
 import type {
   CompositionPublishedEvent,
   CompositionRoyaltySetEvent,
@@ -12,44 +26,9 @@ import type {
   DealDestroyedEvent,
 } from "./types.ts";
 
-// ============================================================================
-// Helpers
-// ============================================================================
-
-/** Lowercase hex-encodes a byte sequence (no `0x` prefix). */
-function toHex(bytes: Iterable<number>): string {
-  let out = "";
-  for (const b of bytes) out += b.toString(16).padStart(2, "0");
-  return out;
-}
-
-// ============================================================================
-// Event BCS Definitions
-//
-// MusicOS uses a lean publish-only event model: build-then-freeze objects emit
-// a single pointer event on publish, and indexers fetch the immutable object by
-// ID. The only non-pointer events are CompositionRoyaltySetEvent (the royalty
-// rate can change after publish), AudioIngestedEvent, and the Deal events.
-// ============================================================================
-
-const CompositionPublishedEventBcs = bcs.struct("CompositionPublishedEvent", {
-  composition_id: bcs.Address,
-});
-
-const CompositionRoyaltySetEventBcs = bcs.struct("CompositionRoyaltySetEvent", {
-  composition_id: bcs.Address,
-  royalty_rate_bps: bcs.u16(),
-});
-
-const RecordingPublishedEventBcs = bcs.struct("RecordingPublishedEvent", {
-  recording_id: bcs.Address,
-  composition_id: bcs.Address,
-});
-
-const ReleasePublishedEventBcs = bcs.struct("ReleasePublishedEvent", {
-  release_id: bcs.Address,
-});
-
+// `AudioIngestedEvent` is emitted by the `audio` package and is not referenced
+// by any MusicOS function signature, so codegen does not emit it. Its layout
+// mirrors `audio::audio::AudioIngestedEvent`.
 const AudioIngestedEventBcs = bcs.struct("AudioIngestedEvent", {
   blob_id: bcs.u256(),
   format: bcs.string(),
@@ -61,104 +40,71 @@ const AudioIngestedEventBcs = bcs.struct("AudioIngestedEvent", {
   pcm_digest: bcs.vector(bcs.u8()),
 });
 
-const DealCreatedEventBcs = bcs.struct("DealCreatedEvent", {
-  deal_id: bcs.Address,
-  release_id: bcs.Address,
-  recording_id: bcs.Address,
-  composition_id: bcs.Address,
-  track_title: bcs.string(),
-  track_split_bps_value: bcs.u16(),
-  track_cover_art_static_blob_id: bcs.u256(),
-  track_cover_art_animated_blob_id: bcs.option(bcs.u256()),
-});
+// === Composition ===
 
-const DealDestroyedEventBcs = bcs.struct("DealDestroyedEvent", {
-  deal_id: bcs.Address,
-  release_id: bcs.Address,
-  recording_id: bcs.Address,
-  composition_id: bcs.Address,
-});
-
-// ============================================================================
-// Composition Event Parsers
-// ============================================================================
-
-export function parseCompositionPublishedEvent(bcsBytes: Uint8Array): CompositionPublishedEvent {
-  const parsed = CompositionPublishedEventBcs.parse(bcsBytes);
-  return { compositionId: parsed.composition_id };
+export function parseCompositionPublishedEvent(bytes: Uint8Array): CompositionPublishedEvent {
+  const e = CompositionPublishedEventBcs.parse(bytes);
+  return { compositionId: e.composition_id };
 }
 
-export function parseCompositionRoyaltySetEvent(bcsBytes: Uint8Array): CompositionRoyaltySetEvent {
-  const parsed = CompositionRoyaltySetEventBcs.parse(bcsBytes);
+export function parseCompositionRoyaltySetEvent(bytes: Uint8Array): CompositionRoyaltySetEvent {
+  const e = CompositionRoyaltySetEventBcs.parse(bytes);
+  return { compositionId: e.composition_id, royaltyRateBps: e.royalty_rate_bps };
+}
+
+// === Recording ===
+
+export function parseRecordingPublishedEvent(bytes: Uint8Array): RecordingPublishedEvent {
+  const e = RecordingPublishedEventBcs.parse(bytes);
+  return { recordingId: e.recording_id, compositionId: e.composition_id };
+}
+
+// === Release ===
+
+export function parseReleasePublishedEvent(bytes: Uint8Array): ReleasePublishedEvent {
+  const e = ReleasePublishedEventBcs.parse(bytes);
+  return { releaseId: e.release_id };
+}
+
+// === Audio ===
+
+export function parseAudioIngestedEvent(bytes: Uint8Array): AudioIngestedEvent {
+  const e = AudioIngestedEventBcs.parse(bytes);
   return {
-    compositionId: parsed.composition_id,
-    royaltyRateBps: parsed.royalty_rate_bps,
+    blobId: e.blob_id.toString(),
+    format: e.format,
+    channels: e.channels,
+    bitDepth: e.bit_depth,
+    sampleRateHz: e.sample_rate_hz,
+    samples: Number(e.samples),
+    durationMs: Number(e.duration_ms),
+    pcmDigest: e.pcm_digest.map((b) => b.toString(16).padStart(2, "0")).join(""),
   };
 }
 
-// ============================================================================
-// Recording Event Parsers
-// ============================================================================
+// === Deal ===
 
-export function parseRecordingPublishedEvent(bcsBytes: Uint8Array): RecordingPublishedEvent {
-  const parsed = RecordingPublishedEventBcs.parse(bcsBytes);
+export function parseDealCreatedEvent(bytes: Uint8Array): DealCreatedEvent {
+  const e = DealCreatedEventBcs.parse(bytes);
   return {
-    recordingId: parsed.recording_id,
-    compositionId: parsed.composition_id,
+    dealId: e.deal_id,
+    releaseId: e.release_id,
+    recordingId: e.recording_id,
+    compositionId: e.composition_id,
+    trackTitle: e.track_title,
+    trackSplitBps: { value: e.track_split_bps_value },
+    trackCoverArtStaticBlobId: e.track_cover_art_static_blob_id.toString(),
+    trackCoverArtAnimatedBlobId:
+      e.track_cover_art_animated_blob_id != null ? e.track_cover_art_animated_blob_id.toString() : undefined,
   };
 }
 
-// ============================================================================
-// Release Event Parsers
-// ============================================================================
-
-export function parseReleasePublishedEvent(bcsBytes: Uint8Array): ReleasePublishedEvent {
-  const parsed = ReleasePublishedEventBcs.parse(bcsBytes);
-  return { releaseId: parsed.release_id };
-}
-
-// ============================================================================
-// Audio Event Parsers
-// ============================================================================
-
-export function parseAudioIngestedEvent(bcsBytes: Uint8Array): AudioIngestedEvent {
-  const parsed = AudioIngestedEventBcs.parse(bcsBytes);
+export function parseDealDestroyedEvent(bytes: Uint8Array): DealDestroyedEvent {
+  const e = DealDestroyedEventBcs.parse(bytes);
   return {
-    blobId: parsed.blob_id.toString(),
-    format: parsed.format,
-    channels: parsed.channels,
-    bitDepth: parsed.bit_depth,
-    sampleRateHz: parsed.sample_rate_hz,
-    samples: Number(parsed.samples),
-    durationMs: Number(parsed.duration_ms),
-    pcmDigest: toHex(parsed.pcm_digest),
-  };
-}
-
-// ============================================================================
-// Deal Event Parsers
-// ============================================================================
-
-export function parseDealCreatedEvent(bcsBytes: Uint8Array): DealCreatedEvent {
-  const parsed = DealCreatedEventBcs.parse(bcsBytes);
-  return {
-    dealId: parsed.deal_id,
-    releaseId: parsed.release_id,
-    recordingId: parsed.recording_id,
-    compositionId: parsed.composition_id,
-    trackTitle: parsed.track_title,
-    trackSplitBps: { value: parsed.track_split_bps_value },
-    trackCoverArtStaticBlobId: parsed.track_cover_art_static_blob_id.toString(),
-    trackCoverArtAnimatedBlobId: parsed.track_cover_art_animated_blob_id != null ? parsed.track_cover_art_animated_blob_id.toString() : undefined,
-  };
-}
-
-export function parseDealDestroyedEvent(bcsBytes: Uint8Array): DealDestroyedEvent {
-  const parsed = DealDestroyedEventBcs.parse(bcsBytes);
-  return {
-    dealId: parsed.deal_id,
-    releaseId: parsed.release_id,
-    recordingId: parsed.recording_id,
-    compositionId: parsed.composition_id,
+    dealId: e.deal_id,
+    releaseId: e.release_id,
+    recordingId: e.recording_id,
+    compositionId: e.composition_id,
   };
 }
