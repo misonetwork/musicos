@@ -49,7 +49,7 @@ cover_art
 |------------|--------|---------|
 | `audio`    | `misonetwork/audio` | Attested audio primitive (recording master) |
 | `share`    | `unconfirmedlabs/share` | Fixed-supply share/ownership currency |
-| `partyos`  | `unconfirmedlabs/partyos` | Party identity & credits |
+| `partyos`  | `misonetwork/partyos` | Party identity & credits |
 | `ori`      | `unconfirmedlabs/ori` | Walrus data references |
 | `gengo`    | `unconfirmedlabs/gengo` | Language codes |
 | `bps`      | `unconfirmedlabs/bps` | Basis-point math |
