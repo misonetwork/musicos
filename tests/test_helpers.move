@@ -21,7 +21,7 @@ public fun walrus(): walrus_data::WalrusData {
 
 /// Creates a verified Audio object for testing (stereo, 16-bit, 44100 Hz, 10 seconds).
 public fun audio(): audio::Audio {
-    audio::new(2, 16, 44100, 441000, walrus_data::new_blob(1), V())
+    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, walrus_data::new_blob(1), V())
 }
 
 /// Creates a valid CoverArt object for testing.
