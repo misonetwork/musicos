@@ -3,13 +3,11 @@ module musicos::kitchen_sink_tests;
 
 use partyos::credit;
 use musicos::disc;
-use musicos::genre;
 use musicos::recording;
 use musicos::recording_party_role;
 use musicos::release;
 use musicos::release_kind;
 use musicos::release_party_role;
-use musicos::stem;
 use musicos::test_helpers::{Self, CompositionShare, RecordingShare, V};
 use musicos::track;
 use std::unit_test::destroy;
@@ -38,11 +36,9 @@ fun make_10_roles(): vector<recording_party_role::RecordingPartyRole> {
 /// - 150 credits (MAX_CREDITS), each with 10 roles (MAX_ROLES_PER_CREDIT)
 /// - 20 primary artists (MAX_PRIMARY_ARTISTS)
 /// - 50 featured artists (MAX_FEATURED_ARTISTS)
-/// - 3 secondary genres (MAX_SECONDARY_GENRES)
-/// - 100 stems (MAX_STEMS), each with 1 contributor
 /// - title_version at 100 bytes (MAX_TITLE_VERSION_LENGTH)
 /// - subtitle at 200 bytes (MAX_SUBTITLE_LENGTH)
-/// - language, lyrics all set
+/// - language set
 /// - Successfully publishes
 #[test]
 fun test_recording_kitchen_sink() {
@@ -50,14 +46,12 @@ fun test_recording_kitchen_sink() {
 
     // Create recording
     let comp_id = test_helpers::fake_id(ctx);
-    let genre_id = test_helpers::fake_id(ctx);
     let (mut rec, cap) = recording::new_for_testing<RecordingShare>(
         b"Kitchen Sink Recording".to_string(),
         comp_id,
         5000,
-        genre_id,
         true,  // is_explicit
-        false, // is_instrumental (need lyrics)
+        false, // is_instrumental
         test_helpers::audio(),
         test_helpers::cover_art(),
         ctx,
@@ -88,37 +82,18 @@ fun test_recording_kitchen_sink() {
         rec.add_featured_artist(&cap, &parties[20 + i]);
     });
 
-    // Add 3 secondary genres (MAX_SECONDARY_GENRES)
-    let g0 = genre::new_for_testing(b"GENRE_A".to_string(), ctx);
-    rec.add_secondary_genre(&cap, &g0);
-    let g1 = genre::new_for_testing(b"GENRE_B".to_string(), ctx);
-    rec.add_secondary_genre(&cap, &g1);
-    let g2 = genre::new_for_testing(b"GENRE_C".to_string(), ctx);
-    rec.add_secondary_genre(&cap, &g2);
-
-    // Add 100 stems (MAX_STEMS), each with 1 contributor from credited parties
-    100u64.do!(|i| {
-        let mut s = stem::new(test_helpers::audio(), b"Stem".to_string());
-        s.add_contributor(&parties[i]);
-        rec.add_stem(&cap, s);
-    });
-
     // Set all optional fields at max bounds
     rec.set_title_version(&cap, test_helpers::long_string(100)); // MAX_TITLE_VERSION_LENGTH
     rec.set_subtitle(&cap, test_helpers::long_string(200));       // MAX_SUBTITLE_LENGTH
     rec.set_language(&cap, b"en".to_string());
-    rec.set_lyrics(&cap, test_helpers::walrus());
 
     // Publish - proves all max bounds are achievable together
     let clock = sui::clock::create_for_testing(ctx);
-    rec.publish(&cap, &clock, ctx);
+    rec.publish(&cap, &clock);
 
     // Cleanup
     clock.destroy_for_testing();
     destroy(cap);
-    destroy(g0);
-    destroy(g1);
-    destroy(g2);
     parties.destroy!(|p| destroy(p));
     party_caps.destroy!(|c| destroy(c));
 }
@@ -236,7 +211,7 @@ fun test_release_kitchen_sink() {
 
     // Publish - proves all max bounds are achievable together
     let clock = sui::clock::create_for_testing(ctx);
-    rel.publish(&rel_cap, &clock, ctx);
+    rel.publish(&rel_cap, &clock);
 
     // Cleanup
     clock.destroy_for_testing();

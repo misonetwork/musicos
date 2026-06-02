@@ -71,7 +71,6 @@ fun test_new_title_too_long() {
         discs,
         0u256,
         &mut registry,
-        ctx,
     );
     destroy(rel);
     destroy(cap);
@@ -93,7 +92,6 @@ fun test_new_description_too_long() {
         discs,
         0u256,
         &mut registry,
-        ctx,
     );
     destroy(rel);
     destroy(cap);
@@ -124,7 +122,6 @@ fun test_new_exceeds_max_discs() {
         discs,
         0u256,
         &mut registry,
-        ctx,
     );
     destroy(rel);
     destroy(cap);
@@ -178,7 +175,6 @@ fun test_new_exceeds_max_tracks() {
         discs,
         0u256,
         &mut registry,
-        ctx,
     );
     destroy(rel);
     destroy(cap);

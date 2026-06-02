@@ -66,7 +66,7 @@ fun test_publish_composition() {
 
     // Publish
     let clock = sui::clock::create_for_testing(ctx);
-    comp.publish(&cap, &clock, ctx);
+    comp.publish(&cap, &clock);
 
     clock.destroy_for_testing();
     destroy(cap);
@@ -358,7 +358,7 @@ fun test_publish_no_parties() {
     let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 5000, ctx);
 
     let clock = sui::clock::create_for_testing(ctx);
-    comp.publish(&cap, &clock, ctx);
+    comp.publish(&cap, &clock);
 
     clock.destroy_for_testing();
     destroy(cap);

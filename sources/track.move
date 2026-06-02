@@ -39,8 +39,6 @@ public struct Track has drop, store {
     recording_share_type: TypeName,
     /// Ingester of the recording's master audio file.
     recording_master_ingester_type: TypeName,
-    /// Ingester types of the recording's stem audio files.
-    recording_stem_ingester_types: vector<TypeName>,
     /// Description of the track.
     title: String,
     /// Duration of the track in milliseconds.
@@ -82,7 +80,6 @@ public fun new(deal: Deal): Track {
         recording_id: deal.recording_id(),
         recording_share_type: *deal.recording_share_type(),
         recording_master_ingester_type: *deal.recording_master_ingester_type(),
-        recording_stem_ingester_types: *deal.recording_stem_ingester_types(),
         title: *deal.track_title(),
         duration_ms: deal.recording_duration_ms(),
         cover_art: *deal.track_cover_art(),
@@ -139,11 +136,6 @@ public fun recording_master_ingester_type(self: &Track): &TypeName {
     &self.recording_master_ingester_type
 }
 
-/// Returns the ingester types of the recording's stem audio files.
-public fun recording_stem_ingester_types(self: &Track): &vector<TypeName> {
-    &self.recording_stem_ingester_types
-}
-
 /// Returns the title of the track.
 public fun title(self: &Track): &String {
     &self.title
@@ -195,7 +187,6 @@ public fun new_for_testing<CompositionShare, RecordingShare, V: drop>(
         recording_id,
         recording_share_type: std::type_name::with_defining_ids<RecordingShare>(),
         recording_master_ingester_type: std::type_name::with_defining_ids<V>(),
-        recording_stem_ingester_types: vector[],
         title,
         duration_ms,
         cover_art,

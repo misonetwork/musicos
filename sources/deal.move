@@ -45,8 +45,6 @@ public struct Deal has key, store {
     recording_duration_ms: u64,
     /// Ingester of the recording's master audio file.
     recording_master_ingester_type: TypeName,
-    /// Ingester types of the recording's stem audio files.
-    recording_stem_ingester_types: vector<TypeName>,
     /// Title for the track (defaults to recording title).
     track_title: String,
     /// Revenue split allocated to this track in basis points.
@@ -122,7 +120,6 @@ public fun new<CompositionShare, RecordingShare>(
         recording_share_type: with_defining_ids<RecordingShare>(),
         recording_duration_ms: recording.master().duration_ms(),
         recording_master_ingester_type: *recording.master().ingester_type(),
-        recording_stem_ingester_types: recording.stem_ingester_types(),
         track_title: track_title.destroy_or!(*recording.title()),
         track_split_bps: bps::new(track_split_bps_value),
         track_cover_art: track_cover_art.destroy_with_default(*recording.cover_art()),
@@ -208,11 +205,6 @@ public fun recording_duration_ms(self: &Deal): u64 {
 /// Returns the ingester of the recording's master audio file.
 public fun recording_master_ingester_type(self: &Deal): &TypeName {
     &self.recording_master_ingester_type
-}
-
-/// Returns the ingester types of the recording's stem audio files.
-public fun recording_stem_ingester_types(self: &Deal): &vector<TypeName> {
-    &self.recording_stem_ingester_types
 }
 
 /// Returns the track title.

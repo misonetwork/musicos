@@ -3,20 +3,15 @@ module musicos::recording_tests;
 
 use partyos::credit;
 use musicos::composition;
-use musicos::genre;
 use musicos::recording;
 use musicos::recording_party_role;
-use musicos::stem;
 use musicos::test_helpers::{Self, RecordingShare, CompositionShare};
 use std::unit_test::{assert_eq, destroy};
-use ori::walrus_data;
 
 // Error codes from recording.move
 const EMinRolesNotMet: u64 = 20;
 const EExceedsMaxRoles: u64 = 30;
-const EMaxStemsExceeded: u64 = 31;
 const EMaxCreditsExceeded: u64 = 32;
-const EMaxSecondaryGenresExceeded: u64 = 33;
 const EMaxPrimaryArtistsExceeded: u64 = 34;
 const EMaxFeaturedArtistsExceeded: u64 = 35;
 const EMaxTitleVersionLengthExceeded: u64 = 36;
@@ -25,16 +20,12 @@ const EEmptyString: u64 = 38;
 const EPartyAlreadyCredited: u64 = 40;
 const EAlreadyPrimaryArtist: u64 = 41;
 const EAlreadyFeaturedArtist: u64 = 42;
-const ELyricsInstrumentalConflict: u64 = 45;
 const ENoParties: u64 = 50;
 const ENoPrimaryArtistAssigned: u64 = 51;
 const EPartyNotCredited: u64 = 52;
-const EMinStemContributorsNotMet: u64 = 53;
 
 // Must match recording.move
-const MAX_STEMS: u64 = 100;
 const MAX_CREDITS: u64 = 150;
-const MAX_SECONDARY_GENRES: u64 = 3;
 const MAX_PRIMARY_ARTISTS: u64 = 20;
 const MAX_FEATURED_ARTISTS: u64 = 50;
 const MAX_TITLE_VERSION_LENGTH: u64 = 100;
@@ -46,34 +37,12 @@ fun new_test_recording(ctx: &mut TxContext): (
     recording::RecordingAdminCap<RecordingShare>,
 ) {
     let comp_id = test_helpers::fake_id(ctx);
-    let genre_id = test_helpers::fake_id(ctx);
     recording::new_for_testing<RecordingShare>(
         b"Test Song".to_string(),
         comp_id,
         5000,
-        genre_id,
         false,
         false,
-        test_helpers::audio(),
-        test_helpers::cover_art(),
-        ctx,
-    )
-}
-
-/// Helper to create an instrumental test recording.
-fun new_instrumental_recording(ctx: &mut TxContext): (
-    recording::Recording<RecordingShare>,
-    recording::RecordingAdminCap<RecordingShare>,
-) {
-    let comp_id = test_helpers::fake_id(ctx);
-    let genre_id = test_helpers::fake_id(ctx);
-    recording::new_for_testing<RecordingShare>(
-        b"Test Instrumental".to_string(),
-        comp_id,
-        5000,
-        genre_id,
-        false,
-        true,
         test_helpers::audio(),
         test_helpers::cover_art(),
         ctx,
@@ -262,26 +231,6 @@ fun test_add_featured_artist_already_primary() {
     destroy(party_cap);
 }
 
-// === Genres ===
-
-#[test]
-fun test_add_secondary_genre() {
-    let ctx = &mut tx_context::dummy();
-    let (rec, cap) = new_test_recording(ctx);
-    let mut registry = genre::new_genre_registry_for_testing(ctx);
-
-    genre::new(b"JAZZ".to_string(), &mut registry);
-
-    // We need the Genre object - use test_scenario for this
-    // Since genre::new shares the object, we can't easily get a reference in unit tests.
-    // Instead, verify the secondary_genre_ids set starts empty.
-    assert_eq!(rec.secondary_genre_ids().length(), 0);
-
-    destroy(rec);
-    destroy(cap);
-    destroy(registry);
-}
-
 // === String Bounds ===
 
 #[test]
@@ -368,75 +317,6 @@ fun test_set_subtitle_too_long() {
     destroy(cap);
 }
 
-// === Stems ===
-
-#[test]
-fun test_add_stem() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_test_recording(ctx);
-    let (party, party_cap) = test_helpers::individual(ctx);
-
-    // Credit the party first (required for stem contributor validation)
-    let cred = credit::new(
-        b"Vocalist".to_string(),
-        vector[recording_party_role::new_vocalist_role(option::none())],
-    );
-    rec.add_credit(&cap, &party, cred);
-
-    // Create a stem with the credited party as contributor
-    let mut s = stem::new(test_helpers::audio(), b"Vocals".to_string());
-    s.add_contributor(&party);
-    rec.add_stem(&cap, s);
-
-    assert_eq!(rec.stems().length(), 1);
-
-    destroy(rec);
-    destroy(cap);
-    destroy(party);
-    destroy(party_cap);
-}
-
-#[test, expected_failure(abort_code = EMinStemContributorsNotMet, location = musicos::recording)]
-fun test_add_stem_no_contributors() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_test_recording(ctx);
-
-    let s = stem::new(test_helpers::audio(), b"Vocals".to_string());
-    rec.add_stem(&cap, s); // no contributors
-
-    destroy(rec);
-    destroy(cap);
-}
-
-#[test, expected_failure(abort_code = EPartyNotCredited, location = musicos::recording)]
-fun test_add_stem_contributor_not_credited() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_test_recording(ctx);
-    let (party, party_cap) = test_helpers::individual(ctx);
-
-    // Don't credit the party on the recording
-    let mut s = stem::new(test_helpers::audio(), b"Vocals".to_string());
-    s.add_contributor(&party);
-    rec.add_stem(&cap, s); // contributor not credited
-
-    destroy(rec);
-    destroy(cap);
-    destroy(party);
-    destroy(party_cap);
-}
-
-// === Lyrics/Instrumental Conflict ===
-
-#[test, expected_failure(abort_code = ELyricsInstrumentalConflict, location = musicos::recording)]
-fun test_set_lyrics_on_instrumental() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_instrumental_recording(ctx);
-
-    rec.set_lyrics(&cap, walrus_data::new_blob(1)); // should fail
-
-    destroy(rec);
-    destroy(cap);
-}
 
 // === Publish ===
 
@@ -455,7 +335,7 @@ fun test_publish_recording() {
     rec.add_primary_artist(&cap, &party);
 
     let clock = sui::clock::create_for_testing(ctx);
-    rec.publish(&cap, &clock, ctx);
+    rec.publish(&cap, &clock);
 
     clock.destroy_for_testing();
     destroy(cap);
@@ -469,7 +349,7 @@ fun test_publish_no_parties() {
     let (rec, cap) = new_test_recording(ctx);
 
     let clock = sui::clock::create_for_testing(ctx);
-    rec.publish(&cap, &clock, ctx);
+    rec.publish(&cap, &clock);
 
     clock.destroy_for_testing();
     destroy(cap);
@@ -489,7 +369,7 @@ fun test_publish_no_primary_artist() {
     rec.add_credit(&cap, &party, cred);
 
     let clock = sui::clock::create_for_testing(ctx);
-    rec.publish(&cap, &clock, ctx);
+    rec.publish(&cap, &clock);
 
     clock.destroy_for_testing();
     destroy(cap);
@@ -549,32 +429,6 @@ fun test_add_credit_exceeds_max() {
     destroy(cap);
 }
 
-#[test, expected_failure(abort_code = EMaxStemsExceeded, location = musicos::recording)]
-fun test_add_stem_exceeds_max() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_test_recording(ctx);
-    let (party, party_cap) = test_helpers::individual(ctx);
-
-    // Credit a party so we can create stems with a contributor
-    let cred = credit::new(
-        b"Artist".to_string(),
-        vector[recording_party_role::new_vocalist_role(option::none())],
-    );
-    rec.add_credit(&cap, &party, cred);
-
-    // Pre-fill to MAX_STEMS
-    rec.prefill_stems_for_testing(MAX_STEMS);
-
-    // One more should fail
-    let mut s = stem::new(test_helpers::audio(), b"Overflow".to_string());
-    s.add_contributor(&party);
-    rec.add_stem(&cap, s);
-
-    destroy(party);
-    destroy(party_cap);
-    destroy(rec);
-    destroy(cap);
-}
 
 #[test, expected_failure(abort_code = EExceedsMaxRoles, location = musicos::recording)]
 fun test_add_credit_exceeds_max_roles() {
@@ -652,31 +506,6 @@ fun test_add_featured_artist_exceeds_max() {
     destroy(rec);
     destroy(cap);
 }
-
-#[test, expected_failure(abort_code = EMaxSecondaryGenresExceeded, location = musicos::recording)]
-fun test_add_secondary_genre_exceeds_max() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rec, cap) = new_test_recording(ctx);
-
-    // Fill to MAX_SECONDARY_GENRES using valid genre names (A-Z and _ only)
-    let names = vector[b"JAZZ", b"ROCK", b"POP"];
-    let mut genres = vector[];
-    MAX_SECONDARY_GENRES.do!(|i| {
-        let g = genre::new_for_testing(names[i].to_string(), ctx);
-        rec.add_secondary_genre(&cap, &g);
-        genres.push_back(g);
-    });
-
-    // One more should fail
-    let extra = genre::new_for_testing(b"BLUES".to_string(), ctx);
-    rec.add_secondary_genre(&cap, &extra);
-
-    destroy(extra);
-    genres.destroy!(|g| destroy(g));
-    destroy(rec);
-    destroy(cap);
-}
-
 
 // === Address derivation (RecordingKey) ===
 

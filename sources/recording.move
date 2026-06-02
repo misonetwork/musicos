@@ -20,14 +20,11 @@ use bps::bps;
 use musicos::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
-use musicos::genre::Genre;
 use musicos::recording_party_role::RecordingPartyRole;
-use musicos::stem::Stem;
-use ori::walrus_data::WalrusData;
 use partyos::credit::Credit;
 use partyos::party::Party;
 use share::share;
-use std::string::{Self, String};
+use std::string::String;
 use std::type_name::TypeName;
 use sui::balance::Balance;
 use sui::clock::Clock;
@@ -57,10 +54,6 @@ public struct Recording<phantom RecordingShare> has key {
     composition_id: ID,
     /// Royalty rate owed to the composition (captured from the composition at creation time).
     composition_royalty_rate: BPS,
-    /// Primary genre of the recording.
-    primary_genre_id: ID,
-    /// Additional genres for the recording.
-    secondary_genre_ids: VecSet<ID>,
     // IDs of the primary artists on the recording.
     primary_artist_ids: VecSet<ID>,
     // IDs of the featured artists on the recording.
@@ -73,12 +66,8 @@ public struct Recording<phantom RecordingShare> has key {
     is_explicit: bool,
     /// Whether the recording is instrumental (no vocals).
     is_instrumental: bool,
-    /// Optional timed lyrics file (WebVTT format on Walrus).
-    lyrics: Option<WalrusData>,
     /// The final mixed/mastered audio file.
     master: Audio,
-    /// The stems of the recording.
-    stems: vector<Stem>,
     /// Cover art for the recording.
     cover_art: CoverArt,
 }
@@ -118,96 +107,14 @@ public enum RecordingState has copy, drop, store {
 
 // === Events ===
 
-/// Emitted when a recording is published.
+/// Emitted once when a recording is published. A pure pointer: it carries the
+/// recording's identity and its parent composition (for routing). A recording is
+/// immutable after publishing, so an indexer treats this as a signal to fetch
+/// the full, final object by `recording_id`; all indexed data — including the
+/// publish timestamp — lives in the object itself.
 public struct RecordingPublishedEvent<phantom RecordingShare> has copy, drop {
     recording_id: ID,
     composition_id: ID,
-    title: String,
-    title_version: Option<String>,
-    subtitle: Option<String>,
-    composition_royalty_rate_bps: u16,
-    primary_genre_id: ID,
-    language_code: Option<String>,
-    duration_ms: u64,
-    master_blob_id: u256,
-    master_channels: u8,
-    master_bit_depth: u8,
-    master_sample_rate_hz: u32,
-    master_samples: u64,
-    master_ingester_type: String,
-    cover_art_static_blob_id: u256,
-    cover_art_animated_blob_id: Option<u256>,
-    has_lyrics: bool,
-    is_explicit: bool,
-    is_instrumental: bool,
-    published_at_ms: u64,
-    published_by: address,
-}
-
-/// Emitted when a party is added to a recording.
-public struct RecordingPartyAddedEvent has copy, drop {
-    recording_id: ID,
-    party_id: ID,
-    credit_display_name: String,
-}
-
-/// Emitted for each role assigned to a credited party on a recording.
-public struct RecordingCreditRoleAssignedEvent has copy, drop {
-    recording_id: ID,
-    party_id: ID,
-    role_name: String,
-}
-
-/// Emitted when a stem is added to a recording.
-public struct RecordingStemAddedEvent has copy, drop {
-    recording_id: ID,
-    stem_idx: u64,
-    stem_name: String,
-    stem_description: Option<String>,
-    stem_blob_id: u256,
-    stem_channels: u8,
-    stem_bit_depth: u8,
-    stem_sample_rate_hz: u32,
-    stem_samples: u64,
-    stem_duration_ms: u64,
-    stem_ingester_type: String,
-}
-
-/// Emitted for each contributor on a stem.
-public struct RecordingStemContributorAddedEvent has copy, drop {
-    recording_id: ID,
-    stem_idx: u64,
-    contributor_id: ID,
-}
-
-/// Emitted when lyrics are set on a recording.
-public struct RecordingLyricsSetEvent has copy, drop {
-    recording_id: ID,
-    blob_id: u256,
-}
-
-/// Emitted when a secondary genre is added to a recording.
-public struct RecordingSecondaryGenreAddedEvent has copy, drop {
-    recording_id: ID,
-    genre_id: ID,
-}
-
-/// Emitted when a secondary genre is removed from a recording.
-public struct RecordingSecondaryGenreRemovedEvent has copy, drop {
-    recording_id: ID,
-    genre_id: ID,
-}
-
-/// Emitted when a primary artist is added to a recording.
-public struct RecordingPrimaryArtistAddedEvent has copy, drop {
-    recording_id: ID,
-    party_id: ID,
-}
-
-/// Emitted when a featured artist is added to a recording.
-public struct RecordingFeaturedArtistAddedEvent has copy, drop {
-    recording_id: ID,
-    party_id: ID,
 }
 
 // === Constants ===
@@ -216,14 +123,8 @@ public struct RecordingFeaturedArtistAddedEvent has copy, drop {
 const MIN_ROLES_PER_CREDIT: u64 = 1;
 /// Maximum number of roles a party can have.
 const MAX_ROLES_PER_CREDIT: u64 = 10;
-/// Minimum number of contributors a stem must have.
-const MIN_CONTRIBUTORS_PER_STEM: u64 = 1;
-/// Maximum number of stems allowed on a recording.
-const MAX_STEMS: u64 = 100;
 /// Maximum number of credits allowed on a recording.
 const MAX_CREDITS: u64 = 150;
-/// Maximum number of secondary genres allowed on a recording.
-const MAX_SECONDARY_GENRES: u64 = 3;
 /// Maximum number of primary artists allowed on a recording.
 const MAX_PRIMARY_ARTISTS: u64 = 20;
 /// Maximum number of featured artists allowed on a recording.
@@ -246,12 +147,8 @@ const EMinRolesNotMet: u64 = 20;
 // Constraint errors (30-39)
 /// Party has too many roles.
 const EExceedsMaxRoles: u64 = 30;
-/// Recording has too many stems.
-const EMaxStemsExceeded: u64 = 31;
 /// Recording has too many credits.
 const EMaxCreditsExceeded: u64 = 32;
-/// Recording has too many secondary genres.
-const EMaxSecondaryGenresExceeded: u64 = 33;
 /// Recording has too many primary artists.
 const EMaxPrimaryArtistsExceeded: u64 = 34;
 /// Recording has too many featured artists.
@@ -270,12 +167,6 @@ const EPartyAlreadyCredited: u64 = 40;
 const EAlreadyPrimaryArtist: u64 = 41;
 /// Party is already a featured artist.
 const EAlreadyFeaturedArtist: u64 = 42;
-/// Genre is already assigned as the primary genre.
-const EAlreadyAssignedAsPrimaryGenre: u64 = 43;
-/// Genre is already assigned as a secondary genre.
-const EAlreadyAssignedAsSecondaryGenre: u64 = 44;
-/// Lyrics/instrumental state conflict.
-const ELyricsInstrumentalConflict: u64 = 45;
 
 // Reference errors (50-59)
 /// Recording must have at least one party to publish.
@@ -284,8 +175,6 @@ const ENoParties: u64 = 50;
 const ENoPrimaryArtistAssigned: u64 = 51;
 /// Party is not credited on the recording.
 const EPartyNotCredited: u64 = 52;
-/// Stem must have at least one contributor.
-const EMinStemContributorsNotMet: u64 = 53;
 
 // === Public Functions ===
 
@@ -299,7 +188,6 @@ const EMinStemContributorsNotMet: u64 = 53;
 /// - Promise that must be consumed by calling `share()`
 public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
-    genre: &Genre,
     is_explicit: bool,
     is_instrumental: bool,
     master: Audio,
@@ -308,7 +196,6 @@ public fun new<RecordingShare, CompositionShare>(
     share_treasury_cap: TreasuryCap<RecordingShare>,
 ): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>, Balance<RecordingShare>) {
     let composition_id = composition.id();
-    let primary_genre_id = genre.id();
 
     let mut recording = Recording<RecordingShare> {
         id: claim(
@@ -321,17 +208,13 @@ public fun new<RecordingShare, CompositionShare>(
         subtitle: option::none(),
         composition_id,
         composition_royalty_rate: composition.royalty_rate(),
-        primary_genre_id,
-        secondary_genre_ids: vec_set::empty(),
         primary_artist_ids: vec_set::empty(),
         featured_artist_ids: vec_set::empty(),
         credits: vec_map::empty(),
         language: option::none(),
         is_explicit,
         is_instrumental,
-        lyrics: option::none(),
         master,
-        stems: vector[],
         cover_art,
     };
 
@@ -354,7 +237,6 @@ public fun publish<RecordingShare>(
     mut self: Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
     clock: &Clock,
-    ctx: &TxContext,
 ) {
     match (self.state) {
         RecordingState::Initialized => {
@@ -362,49 +244,14 @@ public fun publish<RecordingShare>(
             assert!(!self.credits.is_empty(), ENoParties);
             // Assert the recording has at least one primary artist.
             assert!(!self.primary_artist_ids.is_empty(), ENoPrimaryArtistAssigned);
-            // Assert instrumental => no lyrics
-            assert!(!self.is_instrumental || self.lyrics.is_none(), ELyricsInstrumentalConflict);
 
             // Set the recording's publish timestamp.
             let published_at_ms = clock.timestamp_ms();
             self.state = RecordingState::Published(published_at_ms);
 
-            // Flatten language code
-            let language_code = if (self.language.is_some()) {
-                option::some(self.language.borrow().code())
-            } else {
-                option::none()
-            };
-
-            let cover_art_animated_blob_id = if (self.cover_art.animated().is_some()) {
-                option::some(self.cover_art.animated().borrow().blob_id())
-            } else {
-                option::none()
-            };
-
             emit(RecordingPublishedEvent<RecordingShare> {
                 recording_id: self.id(),
                 composition_id: self.composition_id,
-                title: *self.title(),
-                title_version: self.title_version,
-                subtitle: self.subtitle,
-                composition_royalty_rate_bps: self.composition_royalty_rate.value(),
-                primary_genre_id: self.primary_genre_id,
-                language_code,
-                duration_ms: self.master.duration_ms(),
-                master_blob_id: self.master.data().blob_id(),
-                master_channels: self.master.channels(),
-                master_bit_depth: self.master.bit_depth(),
-                master_sample_rate_hz: self.master.sample_rate_hz(),
-                master_samples: self.master.samples(),
-                master_ingester_type: string::from_ascii(*self.master.ingester_type().as_string()),
-                cover_art_static_blob_id: self.cover_art.static().blob_id(),
-                cover_art_animated_blob_id,
-                has_lyrics: self.lyrics.is_some(),
-                is_explicit: self.is_explicit,
-                is_instrumental: self.is_instrumental,
-                published_at_ms,
-                published_by: ctx.sender(),
             });
 
             transfer::share_object(self);
@@ -467,34 +314,10 @@ public fun set_language<RecordingShare>(
     }
 }
 
-/// Sets the lyrics file (WebVTT format on Walrus) for the recording.
-/// Required State: Initialized
-public fun set_lyrics<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    lyrics: WalrusData,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            // Abort early if recording is instrumental - lyrics not allowed.
-            assert!(!self.is_instrumental, ELyricsInstrumentalConflict);
-            lyrics.assert_is_blob();
-            let blob_id = lyrics.blob_id();
-            self.lyrics.swap_or_fill(lyrics);
-
-            emit(RecordingLyricsSetEvent {
-                recording_id: self.id(),
-                blob_id,
-            });
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
 // === People ===
 
 /// Adds a party to the recording with specified roles.
-/// Each party must have 1-20 roles.
+/// Each party must have 1-10 roles.
 /// Required State: Initialized
 public fun add_credit<RecordingShare>(
     self: &mut Recording<RecordingShare>,
@@ -512,24 +335,6 @@ public fun add_credit<RecordingShare>(
             // Abort early if party already has a credit on this recording.
             assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
             self.credits.insert(party_id, credit);
-
-            let recording_id = self.id();
-            emit(RecordingPartyAddedEvent {
-                recording_id,
-                party_id,
-                credit_display_name: *credit.display_name(),
-            });
-
-            let roles = credit.roles();
-            let mut i = 0;
-            while (i < roles.length()) {
-                emit(RecordingCreditRoleAssignedEvent {
-                    recording_id,
-                    party_id,
-                    role_name: roles[i].name(),
-                });
-                i = i + 1;
-            };
         },
         _ => abort ENotInitializedState,
     }
@@ -559,11 +364,6 @@ public fun add_primary_artist<RecordingShare>(
             assert!(!self.primary_artist_ids.contains(&party_id), EAlreadyPrimaryArtist);
 
             self.primary_artist_ids.insert(party_id);
-
-            emit(RecordingPrimaryArtistAddedEvent {
-                recording_id: self.id(),
-                party_id,
-            });
         },
         _ => abort ENotInitializedState,
     }
@@ -593,154 +393,6 @@ public fun add_featured_artist<RecordingShare>(
             assert!(!self.featured_artist_ids.contains(&party_id), EAlreadyFeaturedArtist);
 
             self.featured_artist_ids.insert(party_id);
-
-            emit(RecordingFeaturedArtistAddedEvent {
-                recording_id: self.id(),
-                party_id,
-            });
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-// === Classification ===
-
-/// Sets the primary genre of the recording.
-/// Required State: Initialized
-public fun set_primary_genre<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    genre: &Genre,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            assert!(
-                !self.secondary_genre_ids.contains(&genre.id()),
-                EAlreadyAssignedAsSecondaryGenre,
-            );
-            self.primary_genre_id = genre.id();
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Adds a secondary genre to the recording.
-/// Required State: Initialized
-public fun add_secondary_genre<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    genre: &Genre,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            assert!(
-                self.secondary_genre_ids.length() < MAX_SECONDARY_GENRES,
-                EMaxSecondaryGenresExceeded,
-            );
-
-            let genre_id = genre.id();
-            assert!(self.primary_genre_id != genre_id, EAlreadyAssignedAsPrimaryGenre);
-            // Assert the genre is not already a secondary genre.
-            assert!(
-                !self.secondary_genre_ids.contains(&genre_id),
-                EAlreadyAssignedAsSecondaryGenre,
-            );
-            self.secondary_genre_ids.insert(genre_id);
-
-            emit(RecordingSecondaryGenreAddedEvent {
-                recording_id: self.id(),
-                genre_id,
-            });
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Removes a secondary genre from the recording.
-/// Required State: Initialized
-public fun remove_secondary_genre<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    genre_id: ID,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.secondary_genre_ids.remove(&genre_id);
-
-            emit(RecordingSecondaryGenreRemovedEvent {
-                recording_id: self.id(),
-                genre_id,
-            });
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-// === Stems ===
-
-/// Adds an audio stem to the recording.
-/// Each stem must have at least one contributor, and all contributors must be
-/// credited on the recording.
-/// Required State: Initialized
-public fun add_stem<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    stem: Stem,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            assert!(self.stems.length() < MAX_STEMS, EMaxStemsExceeded);
-            // Assert the stem has at least one contributor.
-            assert!(
-                stem.contributors().length() >= MIN_CONTRIBUTORS_PER_STEM,
-                EMinStemContributorsNotMet,
-            );
-            // If the stem has assigned contributors, assert that each contributor
-            // is credited in the recording's credits.
-            stem.contributors().do_ref!(|contributor_id| {
-                assert!(self.credits.contains(contributor_id), EPartyNotCredited);
-            });
-
-            // Extract stem data before push_back consumes it.
-            let stem_name = *stem.name();
-            let stem_description = *stem.description();
-            let stem_audio = stem.audio();
-            let stem_blob_id = stem_audio.data().blob_id();
-            let stem_channels = stem_audio.channels();
-            let stem_bit_depth = stem_audio.bit_depth();
-            let stem_sample_rate_hz = stem_audio.sample_rate_hz();
-            let stem_samples = stem_audio.samples();
-            let stem_duration_ms = stem_audio.duration_ms();
-            let stem_ingester_type = string::from_ascii(*stem_audio.ingester_type().as_string());
-            let contributors = *stem.contributors();
-
-            // Add the stem to the recording.
-            self.stems.push_back(stem);
-
-            let recording_id = self.id();
-            let stem_idx = self.stems.length() - 1;
-
-            emit(RecordingStemAddedEvent {
-                recording_id,
-                stem_idx,
-                stem_name,
-                stem_description,
-                stem_blob_id,
-                stem_channels,
-                stem_bit_depth,
-                stem_sample_rate_hz,
-                stem_samples,
-                stem_duration_ms,
-                stem_ingester_type,
-            });
-
-            contributors.do!(|contributor_id| {
-                emit(RecordingStemContributorAddedEvent {
-                    recording_id,
-                    stem_idx,
-                    contributor_id,
-                });
-            });
         },
         _ => abort ENotInitializedState,
     }
@@ -793,16 +445,6 @@ public fun composition_royalty_rate<RecordingShare>(self: &Recording<RecordingSh
     self.composition_royalty_rate
 }
 
-/// Returns the primary genre ID.
-public fun primary_genre_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
-    self.primary_genre_id
-}
-
-/// Returns the set of secondary genre IDs.
-public fun secondary_genre_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
-    &self.secondary_genre_ids
-}
-
 /// Returns a reference to the primary artist IDs.
 public fun primary_artist_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
     &self.primary_artist_ids
@@ -835,11 +477,6 @@ public fun is_instrumental<RecordingShare>(self: &Recording<RecordingShare>): bo
     self.is_instrumental
 }
 
-/// Returns the optional lyrics file reference.
-public fun lyrics<RecordingShare>(self: &Recording<RecordingShare>): &Option<WalrusData> {
-    &self.lyrics
-}
-
 /// Returns a reference to the master audio file.
 public fun master<RecordingShare>(self: &Recording<RecordingShare>): &Audio {
     &self.master
@@ -853,21 +490,6 @@ public fun master_ingester_type<RecordingShare>(self: &Recording<RecordingShare>
 /// Returns a reference to the cover art.
 public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverArt {
     &self.cover_art
-}
-
-/// Returns a reference to the stems.
-public fun stems<RecordingShare>(self: &Recording<RecordingShare>): &vector<Stem> {
-    &self.stems
-}
-
-/// Returns the unique ingester types of the recording's stem audio files.
-public fun stem_ingester_types<RecordingShare>(self: &Recording<RecordingShare>): vector<TypeName> {
-    let mut types = vector[];
-    self.stems.do_ref!(|s| {
-        let t = *s.audio().ingester_type();
-        if (!types.contains(&t)) types.push_back(t);
-    });
-    types
 }
 
 /// Returns whether the provided ID is a primary artist on the recording.
@@ -912,7 +534,6 @@ public fun new_for_testing<RecordingShare>(
     title: String,
     composition_id: ID,
     composition_royalty_rate_bps: u16,
-    primary_genre_id: ID,
     is_explicit: bool,
     is_instrumental: bool,
     master: Audio,
@@ -927,17 +548,13 @@ public fun new_for_testing<RecordingShare>(
         subtitle: option::none(),
         composition_id,
         composition_royalty_rate: bps::new(composition_royalty_rate_bps),
-        primary_genre_id,
-        secondary_genre_ids: vec_set::empty(),
         primary_artist_ids: vec_set::empty(),
         featured_artist_ids: vec_set::empty(),
         credits: vec_map::empty(),
         language: option::none(),
         is_explicit,
         is_instrumental,
-        lyrics: option::none(),
         master,
-        stems: vector[],
         cover_art,
     };
 
@@ -1015,35 +632,6 @@ public fun prefill_featured_artists_for_testing<RecordingShare>(
         self.credits.insert(id, credit);
         self.featured_artist_ids.insert(id);
     });
-}
-
-/// Pre-fills a recording with `n` fake stems (bypasses public API validation).
-#[test_only]
-public fun prefill_stems_for_testing<RecordingShare>(self: &mut Recording<RecordingShare>, n: u64) {
-    use musicos::audio;
-    use musicos::stem;
-    use ori::walrus_data;
-
-    n.do!(|_| {
-        let test_audio = audio::new(
-            2,
-            16,
-            44100,
-            441000,
-            walrus_data::new_blob(1),
-            TestWitness(),
-        );
-        self.stems.push_back(stem::new_for_testing(test_audio));
-    });
-}
-
-/// Adds a custom stem to the recording for testing (bypasses public API validation).
-#[test_only]
-public fun add_stem_for_testing<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    stem: Stem,
-) {
-    self.stems.push_back(stem);
 }
 
 /// Creates a test Audio object.

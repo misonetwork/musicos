@@ -75,33 +75,14 @@ public enum CompositionState has copy, drop, store {
 
 // === Events ===
 
-/// Emitted when a composition is published.
+/// Emitted once when a composition is published. A pure pointer: it carries the
+/// composition's identity. A composition's membership is immutable after
+/// publishing, so an indexer treats this as a signal to fetch the full object by
+/// `composition_id`; all indexed data — including the publish timestamp — lives
+/// in the object itself (the royalty rate may change later and is tracked
+/// separately via `CompositionRoyaltySetEvent`).
 public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop {
     composition_id: ID,
-    title: String,
-    royalty_rate_bps: u16,
-    published_at_ms: u64,
-    published_by: address,
-}
-
-/// Emitted when a party is added to a composition.
-public struct CompositionPartyAddedEvent has copy, drop {
-    composition_id: ID,
-    party_id: ID,
-    credit_display_name: String,
-}
-
-/// Emitted for each role assigned to a credited party on a composition.
-public struct CompositionCreditRoleAssignedEvent has copy, drop {
-    composition_id: ID,
-    party_id: ID,
-    role_name: String,
-}
-
-/// Emitted when an alternate title is added to a composition.
-public struct CompositionAlternateTitleAddedEvent has copy, drop {
-    composition_id: ID,
-    alternate_title: String,
 }
 
 /// Emitted when the composition's royalty rate is set or changed.
@@ -218,7 +199,6 @@ public fun publish<CompositionShare>(
     mut self: Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
     clock: &Clock,
-    ctx: &TxContext,
 ) {
     match (self.state) {
         CompositionState::Initialized => {
@@ -229,10 +209,6 @@ public fun publish<CompositionShare>(
 
             emit(CompositionPublishedEvent<CompositionShare> {
                 composition_id: self.id(),
-                title: *self.title(),
-                royalty_rate_bps: self.royalty_rate.value(),
-                published_at_ms,
-                published_by: ctx.sender(),
             });
 
             transfer::share_object(self);
@@ -262,11 +238,6 @@ public fun add_alternate_title<CompositionShare>(
                 EMaxAlternateTitlesExceeded,
             );
             self.alternate_titles.push_back(alternate_title);
-
-            emit(CompositionAlternateTitleAddedEvent {
-                composition_id: self.id(),
-                alternate_title,
-            });
         },
         _ => abort ENotInitializedState,
     }
@@ -275,7 +246,7 @@ public fun add_alternate_title<CompositionShare>(
 // === People ===
 
 /// Adds a party to the composition with specified roles.
-/// Each party must have 1-20 roles.
+/// Each party must have 1-5 roles.
 /// Required State: Initialized
 public fun add_credit<CompositionShare>(
     self: &mut Composition<CompositionShare>,
@@ -293,24 +264,6 @@ public fun add_credit<CompositionShare>(
             // Abort early if party already has a credit on this composition.
             assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
             self.credits.insert(party_id, credit);
-
-            let composition_id = self.id();
-            emit(CompositionPartyAddedEvent {
-                composition_id,
-                party_id,
-                credit_display_name: *credit.display_name(),
-            });
-
-            let roles = credit.roles();
-            let mut i = 0;
-            while (i < roles.length()) {
-                emit(CompositionCreditRoleAssignedEvent {
-                    composition_id,
-                    party_id,
-                    role_name: roles[i].name(),
-                });
-                i = i + 1;
-            };
         },
         _ => abort ENotInitializedState,
     }
