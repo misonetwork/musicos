@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents cover artwork for releases and tracks in MusicOS.
-/// Supports both static images and optional animated artwork (GIFs, videos).
+/// Supports both a still image and optional animated artwork (GIFs, videos).
 ///
 /// ### Key Features:
 ///
-/// - Required static image for all cover art
+/// - Required still image for all cover art
 /// - Optional animated version for enhanced presentation
 /// - References external storage via Data type
 module musicos::cover_art;
@@ -15,33 +15,33 @@ use ori::walrus_data::WalrusData;
 
 // === Structs ===
 
-/// Cover artwork with required static image and optional animation.
+/// Cover artwork with a required still image and optional animation.
 public struct CoverArt has copy, drop, store {
-    static: WalrusData,
+    still: WalrusData,
     animated: Option<WalrusData>,
 }
 
 // === Public Functions ===
 
-/// Creates new cover art with a static image and optional animated version.
-/// `static` - Required static image data reference.
+/// Creates new cover art with a still image and optional animated version.
+/// `still` - Required still image data reference.
 /// `animated` - Optional animated image/video data reference.
-public fun new(static: WalrusData, animated: Option<WalrusData>): CoverArt {
-    static.assert_is_blob();
+public fun new(still: WalrusData, animated: Option<WalrusData>): CoverArt {
+    still.assert_is_blob();
     if (animated.is_some()) {
         animated.borrow().assert_is_blob();
     };
     CoverArt {
-        static,
+        still,
         animated,
     }
 }
 
 // === Public View Functions ===
 
-/// Returns a reference to the static image data.
-public fun static(self: &CoverArt): &WalrusData {
-    &self.static
+/// Returns a reference to the still image data.
+public fun still(self: &CoverArt): &WalrusData {
+    &self.still
 }
 
 /// Returns a reference to the optional animated artwork data.
@@ -54,7 +54,7 @@ public fun animated(self: &CoverArt): &Option<WalrusData> {
 public fun new_for_testing(): CoverArt {
     use ori::walrus_data;
     CoverArt {
-        static: walrus_data::new_blob(0),
+        still: walrus_data::new_blob(0),
         animated: option::none(),
     }
 }

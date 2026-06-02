@@ -4,12 +4,12 @@
 
 
 /**
- * Represents cover artwork for releases and tracks in MusicOS. Supports both
- * static images and optional animated artwork (GIFs, videos).
+ * Represents cover artwork for releases and tracks in MusicOS. Supports both a
+ * still image and optional animated artwork (GIFs, videos).
  * 
  * ### Key Features:
  * 
- * - Required static image for all cover art
+ * - Required still image for all cover art
  * - Optional animated version for enhanced presentation
  * - References external storage via Data type
  */
@@ -20,23 +20,23 @@ import { type Transaction, type TransactionArgument } from '@mysten/sui/transact
 import * as walrus_data from './deps/ori/walrus_data.js';
 const $moduleName = '@local-pkg/musicos::cover_art';
 export const CoverArt = new MoveStruct({ name: `${$moduleName}::CoverArt`, fields: {
-        static: walrus_data.WalrusData,
+        still: walrus_data.WalrusData,
         animated: bcs.option(walrus_data.WalrusData)
     } });
 export interface NewArguments {
-    static: TransactionArgument;
+    still: TransactionArgument;
     animated: TransactionArgument;
 }
 export interface NewOptions {
     package?: string;
     arguments: NewArguments | [
-        static_: TransactionArgument,
+        still: TransactionArgument,
         animated: TransactionArgument
     ];
 }
 /**
- * Creates new cover art with a static image and optional animated version.
- * `static` - Required static image data reference. `animated` - Optional animated
+ * Creates new cover art with a still image and optional animated version.
+ * `still` - Required still image data reference. `animated` - Optional animated
  * image/video data reference.
  */
 export function _new(options: NewOptions) {
@@ -45,7 +45,7 @@ export function _new(options: NewOptions) {
         null,
         null
     ] satisfies (string | null)[];
-    const parameterNames = ["static", "animated"];
+    const parameterNames = ["still", "animated"];
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'cover_art',
@@ -53,17 +53,17 @@ export function _new(options: NewOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
-export interface StaticArguments {
+export interface StillArguments {
     self: TransactionArgument;
 }
-export interface StaticOptions {
+export interface StillOptions {
     package?: string;
-    arguments: StaticArguments | [
+    arguments: StillArguments | [
         self: TransactionArgument
     ];
 }
-/** Returns a reference to the static image data. */
-export function static_(options: StaticOptions) {
+/** Returns a reference to the still image data. */
+export function still(options: StillOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
     const argumentsTypes = [
         null
@@ -72,7 +72,7 @@ export function static_(options: StaticOptions) {
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'cover_art',
-        function: 'static',
+        function: 'still',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

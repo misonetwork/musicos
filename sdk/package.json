@@ -9,7 +9,7 @@
   "sideEffects": false,
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "codegen": "sui-ts-codegen generate && bun scripts/sanitize-generated.ts",
+    "codegen": "sui-ts-codegen generate",
     "docs": "typedoc"
   },
   "exports": {

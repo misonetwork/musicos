@@ -639,7 +639,7 @@ public fun prefill_featured_artists_for_testing<RecordingShare>(
 public fun new_test_audio(): Audio {
     use audio::audio;
     use ori::walrus_data;
-    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, walrus_data::new_blob(1), TestWitness())
+    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, x"0000000000000000000000000000000000000000000000000000000000000000", walrus_data::new_blob(1), TestWitness())
 }
 
 /// Witness for creating test Audio objects.
@@ -656,7 +656,7 @@ public struct TestWitnessB() has drop;
 public fun test_audio_with_blob(blob: u256): Audio {
     use audio::audio;
     use ori::walrus_data;
-    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, walrus_data::new_blob(blob), TestWitness())
+    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, x"0000000000000000000000000000000000000000000000000000000000000000", walrus_data::new_blob(blob), TestWitness())
 }
 
 /// Creates a test Audio with the given blob id, ingested by `TestWitnessB`.
@@ -664,7 +664,7 @@ public fun test_audio_with_blob(blob: u256): Audio {
 public fun test_audio_with_blob_b(blob: u256): Audio {
     use audio::audio;
     use ori::walrus_data;
-    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, walrus_data::new_blob(blob), TestWitnessB())
+    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, x"0000000000000000000000000000000000000000000000000000000000000000", walrus_data::new_blob(blob), TestWitnessB())
 }
 
 /// Claims a recording id off a composition via the real RecordingKey derivation.

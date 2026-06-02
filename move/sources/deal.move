@@ -138,7 +138,7 @@ public fun new<CompositionShare, RecordingShare>(
         composition_id: recording.composition_id(),
         track_title: deal.track_title,
         track_split_bps_value: deal.track_split_bps.value(),
-        track_cover_art_static_blob_id: deal.track_cover_art.static().blob_id(),
+        track_cover_art_static_blob_id: deal.track_cover_art.still().blob_id(),
         track_cover_art_animated_blob_id,
     });
 
