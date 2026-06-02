@@ -9,6 +9,7 @@
   "sideEffects": false,
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "codegen": "sui-ts-codegen generate && bun scripts/sanitize-generated.ts",
     "docs": "typedoc"
   },
   "exports": {
@@ -26,6 +27,7 @@
     "package.json"
   ],
   "devDependencies": {
+    "@mysten/codegen": "^0.10.6",
     "@mysten/sui": "^2.17.0",
     "@types/bun": "^1.3.14",
     "typedoc": "^0.28.19",
