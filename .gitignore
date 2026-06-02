@@ -10,3 +10,8 @@ packages/*/build/*
 build/
 output/
 sui-prover.log*
+
+# sdk/ (TypeScript)
+node_modules/
+sdk/dist/
+*.tsbuildinfo

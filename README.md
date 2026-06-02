@@ -7,6 +7,17 @@
 
 MusicOS models the core objects of recorded music — **compositions**, **recordings**, and **releases** — as on-chain objects whose ownership is expressed through per-object share tokens. Anyone can register a work; no gatekeeper, allowlist, or central registry of artists.
 
+## Repository layout
+
+This repository is a monorepo containing the protocol and its first-party TypeScript SDK:
+
+| Path | Package | Description |
+|------|---------|-------------|
+| [`move/`](./move) | `musicos` (Move 2024) | The on-chain protocol package. Build/test with `sui move` from this directory. |
+| [`sdk/`](./sdk) | [`@unconfirmed/musicos`](./sdk) (TypeScript) | Typed queries, transaction builders, and BCS event parsers that mirror the Move ABI. |
+
+Keeping the SDK alongside the Move package lets ABI changes (struct fields, event layouts, entry-function arguments) and their TypeScript counterparts move in a single change set.
+
 ## Data model
 
 The protocol separates the *work* layer from the *distribution* layer:
@@ -59,9 +70,20 @@ cover_art
 
 ## Build & test
 
+The Move package lives in [`move/`](./move):
+
 ```sh
+cd move
 sui move build
 sui move test
+```
+
+The TypeScript SDK lives in [`sdk/`](./sdk):
+
+```sh
+cd sdk
+bun install
+bun run typecheck
 ```
 
 ## Deployment
@@ -70,7 +92,7 @@ sui move test
 |---------|------------|
 | testnet | `0x440c9032781ead7ba93402f615aed165dd3f6f5c159d16b22c0c1b6b83a1a87c` |
 
-See [`Published.toml`](./Published.toml) for the current published metadata.
+See [`move/Published.toml`](./move/Published.toml) for the current published metadata.
 
 ## Contributing
 
