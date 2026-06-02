@@ -1,6 +1,9 @@
 # MusicOS
 
-A permissionless music protocol on [Sui](https://sui.io), written in Move.
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Move](https://img.shields.io/badge/Move-2024-black.svg)](https://docs.sui.io/concepts/sui-move-concepts)
+
+> A permissionless music protocol on [Sui](https://sui.io), written in Move.
 
 MusicOS models the core objects of recorded music — **compositions**, **recordings**, and **releases** — as on-chain objects whose ownership is expressed through per-object share tokens. Anyone can register a work; no gatekeeper, allowlist, or central registry of artists.
 
@@ -69,6 +72,10 @@ sui move test
 
 See [`Published.toml`](./Published.toml) for the current published metadata.
 
+## Contributing
+
+Issues and pull requests are welcome. By contributing you agree that your contributions are licensed under the project's Apache 2.0 license.
+
 ## License
 
-Apache 2.0 © Miso Labs, Inc.
+[Apache 2.0](LICENSE) © Miso Labs, Inc.
