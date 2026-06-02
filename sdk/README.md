@@ -1,4 +1,4 @@
-# @unconfirmed/musicos
+# @misonetwork/musicos
 
 TypeScript SDK for the [MusicOS](https://github.com/misonetwork/musicos) protocol on [Sui](https://sui.io).
 
@@ -9,14 +9,14 @@ MusicOS is a permissionless on-chain music protocol that models compositions, re
 ## Installation
 
 ```bash
-bun add @unconfirmed/musicos @mysten/sui
+bun add @misonetwork/musicos @mysten/sui
 ```
 
 ## Quick Start
 
 ```ts
 import { SuiGrpcClient } from "@mysten/sui/grpc";
-import { musicos } from "@unconfirmed/musicos";
+import { musicos } from "@misonetwork/musicos";
 
 const client = new SuiGrpcClient({ network: "testnet" })
   .$extend(musicos({ musicOsPackageId: "0x..." }));
@@ -36,7 +36,7 @@ The SDK provides a `musicos()` client extension that works with any Sui client i
 ```ts
 import { SuiGrpcClient } from "@mysten/sui/grpc";
 import { SuiGraphQLClient } from "@mysten/sui/graphql";
-import { musicos } from "@unconfirmed/musicos";
+import { musicos } from "@misonetwork/musicos";
 
 const graphqlClient = new SuiGraphQLClient({
   url: "https://sui-testnet.mystenlabs.com/graphql",
@@ -232,7 +232,7 @@ import {
   getRecordingById,
   deriveCompositionAdminCapId,
   getReleaseById,
-} from "@unconfirmed/musicos";
+} from "@misonetwork/musicos";
 
 const recording = await getRecordingById(suiClient, "0x...");
 const capId = deriveCompositionAdminCapId("0x...", musicOsPackageId);
@@ -250,7 +250,7 @@ import {
   AudioSchema,
   CompositionCreditSchema,
   RecordingCreditSchema,
-} from "@unconfirmed/musicos/schemas";
+} from "@misonetwork/musicos/schemas";
 
 const result = RecordingSchema.safeParse(data);
 ```
@@ -276,7 +276,7 @@ import type {
   CompositionPublishedEvent, CompositionRoyaltySetEvent,
   RecordingPublishedEvent, ReleasePublishedEvent,
   AudioIngestedEvent, DealCreatedEvent, DealDestroyedEvent,
-} from "@unconfirmed/musicos";
+} from "@misonetwork/musicos";
 ```
 
 ## Derived Objects

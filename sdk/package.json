@@ -1,5 +1,5 @@
 {
-  "name": "@unconfirmed/musicos",
+  "name": "@misonetwork/musicos",
   "version": "0.1.0",
   "description": "Typed query helpers and transaction builders for MusicOS on Sui.",
   "license": "Apache-2.0",

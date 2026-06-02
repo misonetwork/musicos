@@ -14,7 +14,7 @@ This repository is a monorepo containing the protocol and its first-party TypeSc
 | Path | Package | Description |
 |------|---------|-------------|
 | [`move/`](./move) | `musicos` (Move 2024) | The on-chain protocol package. Build/test with `sui move` from this directory. |
-| [`sdk/`](./sdk) | [`@unconfirmed/musicos`](./sdk) (TypeScript) | Typed queries, transaction builders, and BCS event parsers that mirror the Move ABI. |
+| [`sdk/`](./sdk) | [`@misonetwork/musicos`](./sdk) (TypeScript) | Typed queries, transaction builders, and BCS event parsers that mirror the Move ABI. |
 
 Keeping the SDK alongside the Move package lets ABI changes (struct fields, event layouts, entry-function arguments) and their TypeScript counterparts move in a single change set.
 
@@ -38,7 +38,7 @@ Compositions, recordings, and releases are **build-then-freeze**: they are creat
 
 ### Ownership
 
-Ownership is expressed through **share tokens** (via the [`share`](https://github.com/unconfirmedlabs/share) package): each composition and recording initializes a fixed-supply share currency, and the set of share holders *is* the set of rightsholders. There are no separate label / publisher / rightsholder fields — ownership is the revenue claim.
+Ownership is expressed through **share tokens** (via the [`share`](https://github.com/misonetwork/share) package): each composition and recording initializes a fixed-supply share currency, and the set of share holders *is* the set of rightsholders. There are no separate label / publisher / rightsholder fields — ownership is the revenue claim.
 
 ## Design principles
 
