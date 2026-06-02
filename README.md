@@ -48,7 +48,7 @@ cover_art
 | Dependency | Source | Purpose |
 |------------|--------|---------|
 | `audio`    | `misonetwork/audio` | Attested audio primitive (recording master) |
-| `share`    | `unconfirmedlabs/share` | Fixed-supply share/ownership currency |
+| `share`    | `misonetwork/share` | Fixed-supply share/ownership currency |
 | `partyos`  | `misonetwork/partyos` | Party identity & credits |
 | `ori`      | `unconfirmedlabs/ori` | Walrus data references |
 | `gengo`    | `unconfirmedlabs/gengo` | Language codes |
