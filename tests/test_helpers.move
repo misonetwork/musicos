@@ -1,7 +1,7 @@
 #[test_only]
 module musicos::test_helpers;
 
-use musicos::audio;
+use audio::audio;
 use musicos::cover_art;
 use partyos::party::{Self, Party, PartyAdminCap};
 use std::string::String;

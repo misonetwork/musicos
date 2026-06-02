@@ -17,7 +17,7 @@ use gengo::language_code::{Self, LanguageCode};
 use bps::bps::BPS;
 #[test_only]
 use bps::bps;
-use musicos::audio::Audio;
+use audio::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
 use musicos::recording_party_role::RecordingPartyRole;
@@ -637,7 +637,7 @@ public fun prefill_featured_artists_for_testing<RecordingShare>(
 /// Creates a test Audio object.
 #[test_only]
 public fun new_test_audio(): Audio {
-    use musicos::audio;
+    use audio::audio;
     use ori::walrus_data;
     audio::new(2, 16, 44100, 441000, walrus_data::new_blob(1), TestWitness())
 }
@@ -654,7 +654,7 @@ public struct TestWitnessB() has drop;
 /// Creates a test Audio with the given blob id, ingested by `TestWitness`.
 #[test_only]
 public fun test_audio_with_blob(blob: u256): Audio {
-    use musicos::audio;
+    use audio::audio;
     use ori::walrus_data;
     audio::new(2, 16, 44100, 441000, walrus_data::new_blob(blob), TestWitness())
 }
@@ -662,7 +662,7 @@ public fun test_audio_with_blob(blob: u256): Audio {
 /// Creates a test Audio with the given blob id, ingested by `TestWitnessB`.
 #[test_only]
 public fun test_audio_with_blob_b(blob: u256): Audio {
-    use musicos::audio;
+    use audio::audio;
     use ori::walrus_data;
     audio::new(2, 16, 44100, 441000, walrus_data::new_blob(blob), TestWitnessB())
 }
