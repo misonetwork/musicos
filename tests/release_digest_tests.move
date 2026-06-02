@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, Inc.
+// Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// Tests for release digest calculation and derive_release_id to verify TypeScript SDK parity.

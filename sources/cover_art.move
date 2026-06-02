@@ -1,4 +1,4 @@
-// Copyright (c) Unconfirmed Labs, Inc.
+// Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents cover artwork for releases and tracks in MusicOS.
