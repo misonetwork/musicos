@@ -9,6 +9,7 @@
   "sideEffects": false,
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "bun test",
     "codegen": "sui-ts-codegen generate",
     "docs": "typedoc"
   },
