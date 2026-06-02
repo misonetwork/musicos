@@ -1,0 +1,13 @@
+[package]
+name = "musicos"
+edition = "2024"
+license = "Apache 2.0"
+authors = ["Miso Labs, Inc. (os@miso.network)"]
+
+[dependencies]
+audio = { git = "https://github.com/misonetwork/audio.git", rev = "main" }
+bps = { git = "https://github.com/unconfirmedlabs/bps.git", rev = "main" }
+gengo = { git = "https://github.com/unconfirmedlabs/gengo.git", rev = "main" }
+ori = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "main" }
+partyos = { git = "https://github.com/unconfirmedlabs/partyos.git", rev = "main" }
+share = { git = "https://github.com/unconfirmedlabs/share.git", rev = "main" }

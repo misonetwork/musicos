@@ -1,0 +1,12 @@
+test-data
+packages/*/build/*
+.trace
+.coverage*
+.DS_Store
+
+.claude
+.cursor
+
+build/
+output/
+sui-prover.log*
