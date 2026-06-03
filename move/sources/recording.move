@@ -641,7 +641,7 @@ public fun prefill_featured_artists_for_testing<RecordingShare>(
 #[test_only]
 public fun new_test_audio(): Audio {
     use audio::audio;
-    use ori::walrus_data;
+    use walrus_data::walrus_data;
     audio::new(b"flac".to_string(), 2, 16, 44100, 441000, x"0000000000000000000000000000000000000000000000000000000000000000", walrus_data::new_blob(1), TestWitness())
 }
 
@@ -660,7 +660,7 @@ public struct TestWitnessB() has drop;
 #[test_only]
 public fun test_audio_with_blob(blob: u256): Audio {
     use audio::audio;
-    use ori::walrus_data;
+    use walrus_data::walrus_data;
     audio::new(b"flac".to_string(), 2, 16, 44100, 441000, std::bcs::to_bytes(&blob), walrus_data::new_blob(blob), TestWitness())
 }
 
@@ -669,7 +669,7 @@ public fun test_audio_with_blob(blob: u256): Audio {
 #[test_only]
 public fun test_audio_with_blob_b(blob: u256): Audio {
     use audio::audio;
-    use ori::walrus_data;
+    use walrus_data::walrus_data;
     audio::new(b"flac".to_string(), 2, 16, 44100, 441000, std::bcs::to_bytes(&blob), walrus_data::new_blob(blob), TestWitnessB())
 }
 

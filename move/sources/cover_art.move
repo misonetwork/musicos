@@ -11,7 +11,7 @@
 /// - References external storage via Data type
 module musicos::cover_art;
 
-use ori::walrus_data::WalrusData;
+use walrus_data::walrus_data::WalrusData;
 
 // === Structs ===
 
@@ -52,7 +52,7 @@ public fun animated(self: &CoverArt): &Option<WalrusData> {
 /// Creates cover art for testing with a dummy blob.
 #[test_only]
 public fun new_for_testing(): CoverArt {
-    use ori::walrus_data;
+    use walrus_data::walrus_data;
     CoverArt {
         still: walrus_data::new_blob(0),
         animated: option::none(),
