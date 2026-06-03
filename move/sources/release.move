@@ -373,6 +373,11 @@ public fun total_tracks(self: &Release): u64 {
     count
 }
 
+/// Returns whether the release contains a track for the given recording.
+public fun contains_recording(self: &Release, recording_id: ID): bool {
+    self.discs.any!(|disc| disc.tracks().any!(|track| track.recording_id() == recording_id))
+}
+
 /// Returns the total duration of all tracks in milliseconds.
 public fun duration_ms(self: &Release): u64 {
     let mut duration = 0;
