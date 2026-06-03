@@ -86,11 +86,14 @@ public struct RecordingAdminCap<phantom RecordingShare> has key, store {
 public struct RecordingAdminCapKey() has copy, drop, store;
 
 /// Key for deriving the recording's address from the composition.
-/// Derived from the master audio's content (Walrus blob id) and its verifier
-/// (ingester type). Content gives one recording per distinct master; the
-/// verifier namespaces it so an untrusted ingester cannot squat the address a
-/// trusted ingester would derive for the same bytes.
-public struct RecordingKey(u256, TypeName) has copy, drop, store;
+/// Derived from the master audio's plaintext content (PCM digest) and its
+/// verifier (ingester type). The PCM digest — not the Walrus blob id — keys the
+/// recording so the address is stable even when the master is encrypted (the
+/// blob id is the ciphertext hash, randomized by the AES key). Content gives
+/// one recording per distinct master; the verifier namespaces it so an
+/// untrusted ingester cannot squat the address a trusted ingester would derive
+/// for the same bytes.
+public struct RecordingKey(vector<u8>, TypeName) has copy, drop, store;
 
 // === Enums ===
 
@@ -200,7 +203,7 @@ public fun new<RecordingShare, CompositionShare>(
     let mut recording = Recording<RecordingShare> {
         id: claim(
             composition.uid_mut_internal(),
-            RecordingKey(master.data().blob_id(), *master.ingester_type()),
+            RecordingKey(*master.pcm_digest(), *master.ingester_type()),
         ),
         state: RecordingState::Initialized,
         title: *composition.title(),
@@ -652,19 +655,22 @@ public struct TestWitness() has drop;
 public struct TestWitnessB() has drop;
 
 /// Creates a test Audio with the given blob id, ingested by `TestWitness`.
+/// The PCM digest is derived from `blob` so distinct `blob` values model
+/// distinct master *content* (recording id now keys on the digest).
 #[test_only]
 public fun test_audio_with_blob(blob: u256): Audio {
     use audio::audio;
     use ori::walrus_data;
-    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, x"0000000000000000000000000000000000000000000000000000000000000000", walrus_data::new_blob(blob), TestWitness())
+    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, std::bcs::to_bytes(&blob), walrus_data::new_blob(blob), TestWitness())
 }
 
 /// Creates a test Audio with the given blob id, ingested by `TestWitnessB`.
+/// Same digest-from-`blob` convention as `test_audio_with_blob`.
 #[test_only]
 public fun test_audio_with_blob_b(blob: u256): Audio {
     use audio::audio;
     use ori::walrus_data;
-    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, x"0000000000000000000000000000000000000000000000000000000000000000", walrus_data::new_blob(blob), TestWitnessB())
+    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, std::bcs::to_bytes(&blob), walrus_data::new_blob(blob), TestWitnessB())
 }
 
 /// Claims a recording id off a composition via the real RecordingKey derivation.
@@ -676,6 +682,6 @@ public fun derive_recording_id_for_testing<CompositionShare>(
 ): UID {
     claim(
         composition.uid_mut_internal(),
-        RecordingKey(master.data().blob_id(), *master.ingester_type()),
+        RecordingKey(*master.pcm_digest(), *master.ingester_type()),
     )
 }
