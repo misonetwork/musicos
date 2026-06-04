@@ -514,6 +514,32 @@ export function totalTracks(options: TotalTracksOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
+export interface ContainsRecordingArguments {
+    self: RawTransactionArgument<string>;
+    recordingId: RawTransactionArgument<string>;
+}
+export interface ContainsRecordingOptions {
+    package?: string;
+    arguments: ContainsRecordingArguments | [
+        self: RawTransactionArgument<string>,
+        recordingId: RawTransactionArgument<string>
+    ];
+}
+/** Returns whether the release contains a track for the given recording. */
+export function containsRecording(options: ContainsRecordingOptions) {
+    const packageAddress = options.package ?? '@local-pkg/musicos';
+    const argumentsTypes = [
+        null,
+        '0x2::object::ID'
+    ] satisfies (string | null)[];
+    const parameterNames = ["self", "recordingId"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'release',
+        function: 'contains_recording',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
 export interface DurationMsArguments {
     self: RawTransactionArgument<string>;
 }

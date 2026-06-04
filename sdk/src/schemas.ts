@@ -179,7 +179,7 @@ export const RecordingSchema = z.object({
   language: z.string().length(2).regex(/^[a-z]{2}$/, "Language code must be 2 lowercase letters (ISO 639-1)").optional(),
   isExplicit: z.boolean(),
   isInstrumental: z.boolean(),
-  master: AudioSchema,
+  masters: z.array(AudioSchema).min(1),
   coverArt: CoverArtSchema,
 });
 

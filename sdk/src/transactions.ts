@@ -9,6 +9,8 @@
 
 import { Transaction, type TransactionObjectArgument } from "@mysten/sui/transactions";
 import type { ClientWithCoreApi } from "@mysten/sui/client";
+import { bcs } from "@mysten/sui/bcs";
+import { deriveObjectID } from "@mysten/sui/utils";
 import { getShareCurrencyType, getShareCurrencyTreasuryCap } from "./queries.ts";
 import type {
   CompositionPartyRoleType,
@@ -368,9 +370,47 @@ export interface RecordingCreditInput {
   isFeaturedArtist?: boolean;
 }
 
+/**
+ * Derives a recording's object id: the `idx`-th recording under a composition.
+ * Mirrors `recording::RecordingKey(idx)` claimed off the composition's UID.
+ */
+export function deriveRecordingId(compositionId: string, idx: number | bigint, musicOsPackageId: string): string {
+  const keyType = `${musicOsPackageId}::recording::RecordingKey`;
+  const keyBytes = bcs.u64().serialize(BigInt(idx)).toBytes();
+  return deriveObjectID(compositionId, keyType, keyBytes);
+}
+
+/** Whether an object currently exists on-chain. */
+async function objectExists(client: ClientWithCoreApi, objectId: string): Promise<boolean> {
+  try {
+    const { object } = await client.core.getObject({ objectId });
+    return object != null;
+  } catch {
+    return false; // not-found (or unreadable) → treat as absent
+  }
+}
+
+/**
+ * Finds the next free recording index for a composition by probing derived ids
+ * `0,1,2,…` until one doesn't exist. Recording indices are contiguous, so this
+ * is the count of existing recordings. Best-effort under concurrency: if another
+ * publish claims the same index first, the tx aborts and the caller re-probes.
+ */
+export async function nextRecordingIndex(
+  client: ClientWithCoreApi,
+  compositionId: string,
+  musicOsPackageId: string,
+): Promise<number> {
+  let idx = 0;
+  while (await objectExists(client, deriveRecordingId(compositionId, idx, musicOsPackageId))) idx++;
+  return idx;
+}
+
 export interface PublishRecordingParams {
   client: ClientWithCoreApi;
   compositionId: string;
+  /** Recording index under the composition. Omit to auto-probe the next free one. */
+  recordingIndex?: number;
   compositionShareType: string;
   shareCurrencyId: string;
   treasuryCapOwner: string;
@@ -399,6 +439,8 @@ export function publishRecording(params: PublishRecordingParams): TxThunk {
     const treasuryCapId = await getShareCurrencyTreasuryCap(client, params.shareCurrencyId, params.treasuryCapOwner);
     const roleType = `${musicOsPackageId}::recording_party_role::RecordingPartyRole`;
 
+    const idx = params.recordingIndex ?? (await nextRecordingIndex(client, params.compositionId, musicOsPackageId));
+
     const master = createAttestedAudio(tx, params.audioIngesterPackageId, params.enclaveId, params.master);
     const cover = buildCoverArt(tx, walrusDataPackageId, musicOsPackageId, params.coverArt);
 
@@ -406,7 +448,7 @@ export function publishRecording(params: PublishRecordingParams): TxThunk {
       recording._new({
         package: musicOsPackageId,
         typeArguments: [shareType, params.compositionShareType],
-        arguments: [tx.object(params.compositionId), tx.pure.bool(params.isExplicit), tx.pure.bool(params.isInstrumental), master, cover, tx.object(params.shareCurrencyId), tx.object(treasuryCapId)],
+        arguments: [tx.object(params.compositionId), tx.pure.u64(idx), tx.pure.bool(params.isExplicit), tx.pure.bool(params.isInstrumental), master, cover, tx.object(params.shareCurrencyId), tx.object(treasuryCapId)],
       }),
     );
     const rec = result[0]!;

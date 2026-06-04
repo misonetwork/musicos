@@ -24,7 +24,7 @@ test("mapAudio: format + pcm_digest hex + blob + ingester", () => {
     sample_rate_hz: 44100,
     samples: "441000",
     pcm_digest: digest,
-    data: { Blob: "777" },
+    data: { Blob: ["777", { Unencrypted: true }] },
   }).toBytes();
 
   const audio = mapAudio(Audio.parse(bytes));
@@ -76,6 +76,10 @@ test("mapState maps Published with timestamp", () => {
 
 test("mapBps + mapWalrusData unit behavior", () => {
   expect(mapBps([2500])).toEqual({ value: 2500 });
-  expect(mapWalrusData({ $kind: "Blob", Blob: "42" })).toEqual({ type: "Blob", blobId: "42" });
+  // Blob is a (blob_id, confidentiality) tuple.
+  expect(mapWalrusData({ $kind: "Blob", Blob: ["42", { $kind: "Unencrypted" }] })).toEqual({
+    type: "Blob",
+    blobId: "42",
+  });
   expect(() => mapWalrusData({ $kind: "QuiltPatch", QuiltPatch: [] })).toThrow();
 });

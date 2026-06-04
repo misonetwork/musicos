@@ -27,7 +27,6 @@ import * as recording_party_role from './recording_party_role.js';
 import * as language_code from './deps/gengo/language_code.js';
 import * as audio from './deps/audio/audio.js';
 import * as cover_art from './cover_art.js';
-import * as type_name from './deps/std/type_name.js';
 const $moduleName = '@local-pkg/musicos::recording';
 /** Lifecycle state of a recording. */
 export const RecordingState = new MoveEnum({ name: `${$moduleName}::RecordingState`, fields: {
@@ -64,8 +63,11 @@ export const Recording = new MoveStruct({ name: `${$moduleName}::Recording<phant
         is_explicit: bcs.bool(),
         /** Whether the recording is instrumental (no vocals). */
         is_instrumental: bcs.bool(),
-        /** The final mixed/mastered audio file. */
-        master: audio.Audio,
+        /**
+         * The mastered audio file(s) — always at least one. `masters[0]` is the primary;
+         * additional formats (e.g. DSD, Atmos) are appended via `add_master`.
+         */
+        masters: bcs.vector(audio.Audio),
         /** Cover art for the recording. */
         cover_art: cover_art.CoverArt
     } });
@@ -74,13 +76,14 @@ export const RecordingAdminCap = new MoveStruct({ name: `${$moduleName}::Recordi
         id: bcs.Address
     } });
 export const RecordingAdminCapKey = new MoveTuple({ name: `${$moduleName}::RecordingAdminCapKey`, fields: [bcs.bool()] });
-export const RecordingKey = new MoveTuple({ name: `${$moduleName}::RecordingKey`, fields: [bcs.u256(), type_name.TypeName] });
+export const RecordingKey = new MoveTuple({ name: `${$moduleName}::RecordingKey`, fields: [bcs.u64()] });
 export const RecordingPublishedEvent = new MoveStruct({ name: `${$moduleName}::RecordingPublishedEvent<phantom RecordingShare>`, fields: {
         recording_id: bcs.Address,
         composition_id: bcs.Address
     } });
 export interface NewArguments {
     composition: RawTransactionArgument<string>;
+    idx: RawTransactionArgument<number | bigint>;
     isExplicit: RawTransactionArgument<boolean>;
     isInstrumental: RawTransactionArgument<boolean>;
     master: TransactionArgument;
@@ -92,6 +95,7 @@ export interface NewOptions {
     package?: string;
     arguments: NewArguments | [
         composition: RawTransactionArgument<string>,
+        idx: RawTransactionArgument<number | bigint>,
         isExplicit: RawTransactionArgument<boolean>,
         isInstrumental: RawTransactionArgument<boolean>,
         master: TransactionArgument,
@@ -117,6 +121,7 @@ export function _new(options: NewOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
     const argumentsTypes = [
         null,
+        'u64',
         'bool',
         'bool',
         null,
@@ -124,7 +129,7 @@ export function _new(options: NewOptions) {
         null,
         null
     ] satisfies (string | null)[];
-    const parameterNames = ["composition", "isExplicit", "isInstrumental", "master", "coverArt", "shareCurrency", "shareTreasuryCap"];
+    const parameterNames = ["composition", "idx", "isExplicit", "isInstrumental", "master", "coverArt", "shareCurrency", "shareTreasuryCap"];
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'recording',
@@ -814,6 +819,33 @@ export function master(options: MasterOptions) {
         typeArguments: options.typeArguments
     });
 }
+export interface MastersArguments {
+    self: RawTransactionArgument<string>;
+}
+export interface MastersOptions {
+    package?: string;
+    arguments: MastersArguments | [
+        self: RawTransactionArgument<string>
+    ];
+    typeArguments: [
+        string
+    ];
+}
+/** Returns all master formats (PCM, DSD, Atmos, …). `masters[0]` is the primary. */
+export function masters(options: MastersOptions) {
+    const packageAddress = options.package ?? '@local-pkg/musicos';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["self"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recording',
+        function: 'masters',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+        typeArguments: options.typeArguments
+    });
+}
 export interface MasterIngesterTypeArguments {
     self: RawTransactionArgument<string>;
 }
@@ -826,7 +858,7 @@ export interface MasterIngesterTypeOptions {
         string
     ];
 }
-/** Returns the ingester type of the recording's master audio file. */
+/** Returns the ingester type of the recording's primary master audio file. */
 export function masterIngesterType(options: MasterIngesterTypeOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
     const argumentsTypes = [
@@ -837,6 +869,42 @@ export function masterIngesterType(options: MasterIngesterTypeOptions) {
         package: packageAddress,
         module: 'recording',
         function: 'master_ingester_type',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+        typeArguments: options.typeArguments
+    });
+}
+export interface AddMasterArguments {
+    self: RawTransactionArgument<string>;
+    _: RawTransactionArgument<string>;
+    master: TransactionArgument;
+}
+export interface AddMasterOptions {
+    package?: string;
+    arguments: AddMasterArguments | [
+        self: RawTransactionArgument<string>,
+        _: RawTransactionArgument<string>,
+        master: TransactionArgument
+    ];
+    typeArguments: [
+        string
+    ];
+}
+/**
+ * Appends an additional master format (e.g. DSD, Atmos). Admin-gated and
+ * appendable after publish; the primary (`masters[0]`) is fixed at creation.
+ */
+export function addMaster(options: AddMasterOptions) {
+    const packageAddress = options.package ?? '@local-pkg/musicos';
+    const argumentsTypes = [
+        null,
+        null,
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["self", "_", "master"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recording',
+        function: 'add_master',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
         typeArguments: options.typeArguments
     });

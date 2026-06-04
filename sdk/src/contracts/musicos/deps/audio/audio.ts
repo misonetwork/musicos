@@ -20,7 +20,7 @@
 import { MoveStruct } from '../../../utils/index.js';
 import { bcs } from '@mysten/sui/bcs';
 import * as type_name from '../std/type_name.js';
-import * as walrus_data from '../ori/walrus_data.js';
+import * as walrus_data from '../walrus_data/walrus_data.js';
 const $moduleName = 'audio::audio';
 export const Audio = new MoveStruct({ name: `${$moduleName}::Audio`, fields: {
         /** The ingester that attested this audio. */

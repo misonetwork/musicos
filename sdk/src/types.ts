@@ -37,7 +37,15 @@ export interface Party {
 // ============================================================================
 
 /** Reference to data stored as a Walrus blob. MusicOS enforces blob-only storage for all creative assets. */
-export type WalrusData = { type: "Blob"; blobId: string };
+export type WalrusData = {
+  type: "Blob";
+  blobId: string;
+  /**
+   * Present when the blob is AES-encrypted. `dek` is the Seal-sealed
+   * data-encryption key (hex); `policy` is the decryption-policy witness type.
+   */
+  encryption?: { dek: string; policy: string };
+};
 
 // ============================================================================
 // Audio
@@ -318,8 +326,8 @@ export interface Recording {
   isExplicit: boolean;
   /** Whether the recording is instrumental (no vocals). */
   isInstrumental: boolean;
-  /** The final mixed/mastered audio file. */
-  master: Audio;
+  /** The mastered audio file(s) — at least one; `masters[0]` is the primary. */
+  masters: Audio[];
   /** Cover art for the recording. */
   coverArt: CoverArt;
 }

@@ -41,10 +41,19 @@ export function mapBps(d: Parsed): BPS {
   return { value: Number(Array.isArray(d) ? d[0] : d) };
 }
 
-/** `WalrusData` enum — MusicOS enforces blob-only storage. */
+/** `WalrusData` enum — MusicOS enforces blob-only storage. Blob is a tuple
+ * `(blob_id, confidentiality)`. */
 export function mapWalrusData(d: Parsed): WalrusData {
-  if (d?.$kind === "Blob") return { type: "Blob", blobId: String(d.Blob) };
-  throw new Error(`Expected a Walrus Blob, got: ${JSON.stringify(d)?.slice(0, 120)}`);
+  if (d?.$kind !== "Blob") throw new Error(`Expected a Walrus Blob, got: ${JSON.stringify(d)?.slice(0, 120)}`);
+  const [blobId, conf] = d.Blob as [unknown, Parsed];
+  const out: WalrusData = { type: "Blob", blobId: String(blobId) };
+  if (conf?.$kind === "Encrypted") {
+    out.encryption = {
+      dek: (conf.Encrypted.dek ?? []).map((b: number) => b.toString(16).padStart(2, "0")).join(""),
+      policy: mapTypeName(conf.Encrypted.policy),
+    };
+  }
+  return out;
 }
 
 /** `std::type_name::TypeName` is a struct `{ name }`. */
@@ -152,7 +161,7 @@ export function mapRecording(id: string, d: Parsed): Recording {
     language: d.language != null ? (Array.isArray(d.language) ? d.language[0] : d.language) : undefined,
     isExplicit: Boolean(d.is_explicit),
     isInstrumental: Boolean(d.is_instrumental),
-    master: mapAudio(d.master),
+    masters: (d.masters as Parsed[]).map(mapAudio),
     coverArt: mapCoverArt(d.cover_art),
   };
 }
