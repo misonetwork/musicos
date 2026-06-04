@@ -507,63 +507,67 @@ fun test_add_featured_artist_exceeds_max() {
     destroy(cap);
 }
 
-// === Address derivation (RecordingKey) ===
+// === Address derivation (RecordingKey: per-composition index) ===
 
-// Two masters with different content yield two distinct recordings of one composition.
+// Each idx yields a distinct recording id under one composition.
 #[test]
-fun test_two_recordings_different_masters() {
+fun test_distinct_id_per_index() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, comp_cap) =
         composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
 
-    let master_a = recording::test_audio_with_blob(1);
-    let master_b = recording::test_audio_with_blob(2);
+    let id0 = recording::derive_recording_id_for_testing(&mut comp, 0);
+    let id1 = recording::derive_recording_id_for_testing(&mut comp, 1);
+    assert!(id0.to_inner() != id1.to_inner());
 
-    let id_a = recording::derive_recording_id_for_testing(&mut comp, &master_a);
-    let id_b = recording::derive_recording_id_for_testing(&mut comp, &master_b);
-    assert!(id_a.to_inner() != id_b.to_inner());
-
-    id_a.delete();
-    id_b.delete();
+    id0.delete();
+    id1.delete();
     destroy(comp);
     destroy(comp_cap);
 }
 
-// Same blob, different ingester => distinct recordings (verifier namespacing).
-#[test]
-fun test_same_blob_different_ingester() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, comp_cap) =
-        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
-
-    let master_a = recording::test_audio_with_blob(1); // TestWitness
-    let master_b = recording::test_audio_with_blob_b(1); // TestWitnessB, same blob
-
-    let id_a = recording::derive_recording_id_for_testing(&mut comp, &master_a);
-    let id_b = recording::derive_recording_id_for_testing(&mut comp, &master_b);
-    assert!(id_a.to_inner() != id_b.to_inner());
-
-    id_a.delete();
-    id_b.delete();
-    destroy(comp);
-    destroy(comp_cap);
-}
-
-// Same blob AND same ingester => second derivation aborts (correct dedup).
+// Claiming the same idx twice aborts (dedup via the derived-object claim).
 #[test, expected_failure]
-fun test_same_blob_same_ingester_aborts() {
+fun test_same_index_aborts() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, comp_cap) =
         composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
 
-    let master_a = recording::test_audio_with_blob(1);
-    let master_b = recording::test_audio_with_blob(1); // identical key
+    let id0a = recording::derive_recording_id_for_testing(&mut comp, 0);
+    let id0b = recording::derive_recording_id_for_testing(&mut comp, 0); // aborts
 
-    let id_a = recording::derive_recording_id_for_testing(&mut comp, &master_a);
-    let id_b = recording::derive_recording_id_for_testing(&mut comp, &master_b); // aborts
+    id0a.delete();
+    id0b.delete();
+    destroy(comp);
+    destroy(comp_cap);
+}
 
-    id_a.delete();
-    id_b.delete();
+// A gap aborts: idx 2 can't be created before idx 1 exists.
+#[test, expected_failure(abort_code = 53, location = musicos::recording)] // ERecordingGap
+fun test_gap_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (mut comp, comp_cap) =
+        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
+
+    let id0 = recording::derive_recording_id_for_testing(&mut comp, 0);
+    let id2 = recording::derive_recording_id_for_testing(&mut comp, 2); // aborts: idx 1 absent
+
+    id0.delete();
+    id2.delete();
+    destroy(comp);
+    destroy(comp_cap);
+}
+
+// The first recording must be idx 0: idx > 0 on an empty composition aborts.
+#[test, expected_failure(abort_code = 53, location = musicos::recording)] // ERecordingGap
+fun test_first_index_must_be_zero() {
+    let ctx = &mut tx_context::dummy();
+    let (mut comp, comp_cap) =
+        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
+
+    let id1 = recording::derive_recording_id_for_testing(&mut comp, 1); // aborts: idx 0 absent
+
+    id1.delete();
     destroy(comp);
     destroy(comp_cap);
 }

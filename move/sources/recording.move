@@ -30,7 +30,7 @@ use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
 use sui::coin_registry::Currency;
-use sui::derived_object::claim;
+use sui::derived_object::{Self, claim};
 use sui::event::emit;
 use sui::vec_map::{Self, VecMap};
 use sui::vec_set::{Self, VecSet};
@@ -66,8 +66,9 @@ public struct Recording<phantom RecordingShare> has key {
     is_explicit: bool,
     /// Whether the recording is instrumental (no vocals).
     is_instrumental: bool,
-    /// The final mixed/mastered audio file.
-    master: Audio,
+    /// The mastered audio file(s) — always at least one. `masters[0]` is the
+    /// primary; additional formats (e.g. DSD, Atmos) are appended via `add_master`.
+    masters: vector<Audio>,
     /// Cover art for the recording.
     cover_art: CoverArt,
 }
@@ -85,15 +86,14 @@ public struct RecordingAdminCap<phantom RecordingShare> has key, store {
 /// Key for deriving the admin capability's deterministic address from the recording.
 public struct RecordingAdminCapKey() has copy, drop, store;
 
-/// Key for deriving the recording's address from the composition.
-/// Derived from the master audio's plaintext content (PCM digest) and its
-/// verifier (ingester type). The PCM digest — not the Walrus blob id — keys the
-/// recording so the address is stable even when the master is encrypted (the
-/// blob id is the ciphertext hash, randomized by the AES key). Content gives
-/// one recording per distinct master; the verifier namespaces it so an
-/// untrusted ingester cannot squat the address a trusted ingester would derive
-/// for the same bytes.
-public struct RecordingKey(vector<u8>, TypeName) has copy, drop, store;
+/// Key for deriving the recording's address from the composition: a recording
+/// is the `idx`-th one registered under its composition. Indices are contiguous
+/// (no gaps, enforced at creation), so a composition's recordings can be
+/// enumerated by deriving idx 0, 1, 2, … until one doesn't exist. The master is
+/// deliberately NOT part of the id, so a recording can carry multiple master
+/// formats (e.g. PCM, DSD, Atmos) and re-key an encrypted master without
+/// changing its identity.
+public struct RecordingKey(u64) has copy, drop, store;
 
 // === Enums ===
 
@@ -178,6 +178,8 @@ const ENoParties: u64 = 50;
 const ENoPrimaryArtistAssigned: u64 = 51;
 /// Party is not credited on the recording.
 const EPartyNotCredited: u64 = 52;
+/// Recordings must be created with contiguous indices — idx N requires N-1 to exist.
+const ERecordingGap: u64 = 53;
 
 // === Public Functions ===
 
@@ -191,6 +193,7 @@ const EPartyNotCredited: u64 = 52;
 /// - Promise that must be consumed by calling `share()`
 public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
+    idx: u64,
     is_explicit: bool,
     is_instrumental: bool,
     master: Audio,
@@ -200,11 +203,19 @@ public fun new<RecordingShare, CompositionShare>(
 ): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>, Balance<RecordingShare>) {
     let composition_id = composition.id();
 
+    // Recordings are indexed per composition. Require contiguity (no gaps) so the
+    // set is enumerable by deriving idx 0,1,2,… until one is absent: idx 0 is the
+    // first; idx N requires idx N-1 to already exist. `claim` itself rejects a
+    // duplicate idx, so a stale hint just aborts and the caller retries idx+1.
+    if (idx > 0) {
+        assert!(
+            derived_object::exists(composition.uid_mut_internal(), RecordingKey(idx - 1)),
+            ERecordingGap,
+        );
+    };
+
     let mut recording = Recording<RecordingShare> {
-        id: claim(
-            composition.uid_mut_internal(),
-            RecordingKey(*master.pcm_digest(), *master.ingester_type()),
-        ),
+        id: claim(composition.uid_mut_internal(), RecordingKey(idx)),
         state: RecordingState::Initialized,
         title: *composition.title(),
         title_version: option::none(),
@@ -217,7 +228,7 @@ public fun new<RecordingShare, CompositionShare>(
         language: option::none(),
         is_explicit,
         is_instrumental,
-        master,
+        masters: vector[master],
         cover_art,
     };
 
@@ -482,12 +493,27 @@ public fun is_instrumental<RecordingShare>(self: &Recording<RecordingShare>): bo
 
 /// Returns a reference to the master audio file.
 public fun master<RecordingShare>(self: &Recording<RecordingShare>): &Audio {
-    &self.master
+    &self.masters[0]
 }
 
-/// Returns the ingester type of the recording's master audio file.
+/// Returns all master formats (PCM, DSD, Atmos, …). `masters[0]` is the primary.
+public fun masters<RecordingShare>(self: &Recording<RecordingShare>): &vector<Audio> {
+    &self.masters
+}
+
+/// Returns the ingester type of the recording's primary master audio file.
 public fun master_ingester_type<RecordingShare>(self: &Recording<RecordingShare>): &TypeName {
-    self.master.ingester_type()
+    self.masters[0].ingester_type()
+}
+
+/// Appends an additional master format (e.g. DSD, Atmos). Admin-gated and
+/// appendable after publish; the primary (`masters[0]`) is fixed at creation.
+public fun add_master<RecordingShare>(
+    self: &mut Recording<RecordingShare>,
+    _: &RecordingAdminCap<RecordingShare>,
+    master: Audio,
+) {
+    self.masters.push_back(master);
 }
 
 /// Returns a reference to the cover art.
@@ -557,7 +583,7 @@ public fun new_for_testing<RecordingShare>(
         language: option::none(),
         is_explicit,
         is_instrumental,
-        master,
+        masters: vector[master],
         cover_art,
     };
 
@@ -649,39 +675,18 @@ public fun new_test_audio(): Audio {
 #[test_only]
 public struct TestWitness() has drop;
 
-/// A second test ingester witness, for exercising verifier namespacing in the
-/// recording address derivation.
-#[test_only]
-public struct TestWitnessB() has drop;
-
-/// Creates a test Audio with the given blob id, ingested by `TestWitness`.
-/// The PCM digest is derived from `blob` so distinct `blob` values model
-/// distinct master *content* (recording id now keys on the digest).
-#[test_only]
-public fun test_audio_with_blob(blob: u256): Audio {
-    use audio::audio;
-    use walrus_data::walrus_data;
-    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, std::bcs::to_bytes(&blob), walrus_data::new_blob(blob), TestWitness())
-}
-
-/// Creates a test Audio with the given blob id, ingested by `TestWitnessB`.
-/// Same digest-from-`blob` convention as `test_audio_with_blob`.
-#[test_only]
-public fun test_audio_with_blob_b(blob: u256): Audio {
-    use audio::audio;
-    use walrus_data::walrus_data;
-    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, std::bcs::to_bytes(&blob), walrus_data::new_blob(blob), TestWitnessB())
-}
-
-/// Claims a recording id off a composition via the real RecordingKey derivation.
-/// (The production path; `new_for_testing` bypasses it with `object::new`.)
+/// Claims a recording id off a composition via the real RecordingKey derivation
+/// (the production path; `new_for_testing` bypasses it with `object::new`).
 #[test_only]
 public fun derive_recording_id_for_testing<CompositionShare>(
     composition: &mut Composition<CompositionShare>,
-    master: &Audio,
+    idx: u64,
 ): UID {
-    claim(
-        composition.uid_mut_internal(),
-        RecordingKey(*master.pcm_digest(), *master.ingester_type()),
-    )
+    if (idx > 0) {
+        assert!(
+            derived_object::exists(composition.uid_mut_internal(), RecordingKey(idx - 1)),
+            ERecordingGap,
+        );
+    };
+    claim(composition.uid_mut_internal(), RecordingKey(idx))
 }
