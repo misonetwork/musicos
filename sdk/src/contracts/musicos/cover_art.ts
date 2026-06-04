@@ -17,7 +17,7 @@
 import { MoveStruct, normalizeMoveArguments } from '../utils/index.js';
 import { bcs } from '@mysten/sui/bcs';
 import { type Transaction, type TransactionArgument } from '@mysten/sui/transactions';
-import * as walrus_data from './deps/walrus_data/walrus_data.js';
+import * as walrus_data from './deps/ori/walrus_data.js';
 const $moduleName = '@local-pkg/musicos::cover_art';
 export const CoverArt = new MoveStruct({ name: `${$moduleName}::CoverArt`, fields: {
         still: walrus_data.WalrusData,

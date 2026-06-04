@@ -667,7 +667,7 @@ public fun prefill_featured_artists_for_testing<RecordingShare>(
 #[test_only]
 public fun new_test_audio(): Audio {
     use audio::audio;
-    use walrus_data::walrus_data;
+    use ori::walrus_data;
     audio::new(b"flac".to_string(), 2, 16, 44100, 441000, x"0000000000000000000000000000000000000000000000000000000000000000", walrus_data::new_blob(1), TestWitness())
 }
 

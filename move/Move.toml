@@ -8,6 +8,6 @@ authors = ["Miso Labs, Inc. (os@miso.network)"]
 audio = { git = "https://github.com/misonetwork/audio.git", rev = "main" }
 bps = { git = "https://github.com/unconfirmedlabs/bps.git", rev = "main" }
 gengo = { git = "https://github.com/unconfirmedlabs/gengo.git", rev = "main" }
-walrus_data = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "main" }
+ori = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "main" }
 partyos = { git = "https://github.com/misonetwork/partyos.git", rev = "main" }
 share = { git = "https://github.com/misonetwork/share.git", rev = "main" }
