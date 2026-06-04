@@ -3,7 +3,6 @@
  **************************************************************/
 import { MoveEnum, MoveStruct, MoveTuple } from '../../../utils/index.js';
 import { bcs } from '@mysten/sui/bcs';
-import * as type_name from '../std/type_name.js';
 const $moduleName = 'walrus_data::walrus_data';
 /**
  * Confidentiality of a stored blob: cleartext, or encrypted with an access policy.
@@ -15,13 +14,12 @@ export const Confidentiality = new MoveEnum({ name: `${$moduleName}::Confidentia
         Unencrypted: null,
         /**
          * The blob is AES-encrypted. `dek` is the AES data-encryption key sealed via Seal
-         * (a small ciphertext stored on-chain — not the blob bytes). `policy` is the
-         * decryption-policy witness type; a Seal `seal_approve` compares it against the
-         * runtime witness's type. Decryption itself is gated by that policy package, not
-         * by this library.
+         * — a small ciphertext stored on-chain, not the blob bytes. The sealed DEK is
+         * itself a Seal `EncryptedObject`, which already carries the decryption-policy
+         * package id, so no separate policy field is stored here. Decryption is gated by
+         * that policy package's `seal_approve`, not by this library.
          */
         Encrypted: new MoveStruct({ name: `Confidentiality.Encrypted`, fields: {
-                policy: type_name.TypeName,
                 dek: bcs.vector(bcs.u8())
             } })
     } });

@@ -50,7 +50,6 @@ export function mapWalrusData(d: Parsed): WalrusData {
   if (conf?.$kind === "Encrypted") {
     out.encryption = {
       dek: (conf.Encrypted.dek ?? []).map((b: number) => b.toString(16).padStart(2, "0")).join(""),
-      policy: mapTypeName(conf.Encrypted.policy),
     };
   }
   return out;

@@ -42,9 +42,10 @@ export type WalrusData = {
   blobId: string;
   /**
    * Present when the blob is AES-encrypted. `dek` is the Seal-sealed
-   * data-encryption key (hex); `policy` is the decryption-policy witness type.
+   * data-encryption key (hex) — itself a Seal `EncryptedObject` that encodes
+   * the decryption-policy package.
    */
-  encryption?: { dek: string; policy: string };
+  encryption?: { dek: string };
 };
 
 // ============================================================================
