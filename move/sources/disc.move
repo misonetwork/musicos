@@ -18,7 +18,6 @@ use std::string::String;
 // === Structs ===
 
 /// A disc containing an ordered list of tracks.
-/// Duration is automatically calculated from the sum of track durations.
 public struct Disc has drop, store {
     /// Ordered list of tracks on this disc.
     tracks: vector<Track>,
@@ -26,8 +25,6 @@ public struct Disc has drop, store {
     artwork: Option<CoverArt>,
     /// Title of the disc.
     title: Option<String>,
-    /// Total duration of all tracks in milliseconds.
-    duration_ms: u64,
 }
 
 // === Constants ===
@@ -44,21 +41,14 @@ const EMaxTracksExceeded: u64 = 30;
 // === Public Functions ===
 
 /// Creates a new disc from a vector of tracks.
-/// Automatically calculates the total duration.
 /// Aborts if more than 50 tracks are provided.
 public fun new(tracks: vector<Track>, title: Option<String>): Disc {
     assert!(tracks.length() <= MAX_TRACKS_PER_DISC, EMaxTracksExceeded);
-
-    let mut duration_ms = 0;
-    tracks.do_ref!(|track| {
-        duration_ms = duration_ms + track.duration_ms();
-    });
 
     Disc {
         tracks,
         artwork: option::none(),
         title,
-        duration_ms,
     }
 }
 
@@ -77,11 +67,6 @@ public fun tracks(self: &Disc): &vector<Track> {
 /// Returns the optional disc-specific artwork.
 public fun artwork(self: &Disc): &Option<CoverArt> {
     &self.artwork
-}
-
-/// Returns the total duration of this disc in milliseconds.
-public fun duration_ms(self: &Disc): u64 {
-    self.duration_ms
 }
 
 /// Returns the optional title of this disc.

@@ -1,7 +1,6 @@
 #[test_only]
 module musicos::test_helpers;
 
-use audio::audio;
 use musicos::cover_art;
 use partyos::party::{Self, Party, PartyAdminCap};
 use std::string::String;
@@ -17,11 +16,6 @@ public struct V() has drop;
 /// Creates a WalrusData reference for testing.
 public fun walrus(): walrus_data::WalrusData {
     walrus_data::new_blob(1)
-}
-
-/// Creates a verified Audio object for testing (stereo, 16-bit, 44100 Hz, 10 seconds).
-public fun audio(): audio::Audio {
-    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, x"0000000000000000000000000000000000000000000000000000000000000000", walrus_data::new_blob(1), V())
 }
 
 /// Creates a valid CoverArt object for testing.

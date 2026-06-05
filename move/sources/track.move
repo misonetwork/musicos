@@ -37,12 +37,8 @@ public struct Track has drop, store {
     recording_id: ID,
     /// Type of the recording's share token.
     recording_share_type: TypeName,
-    /// Ingester of the recording's master audio file.
-    recording_master_ingester_type: TypeName,
     /// Description of the track.
     title: String,
-    /// Duration of the track in milliseconds.
-    duration_ms: u64,
     /// Covert art for the track. Inherited from the recording by default.
     cover_art: CoverArt,
     /// Split of revenue allocated to composition vs recording (in basis points).
@@ -79,9 +75,7 @@ public fun new(deal: Deal): Track {
         composition_royalty_rate: deal.composition_royalty_rate(),
         recording_id: deal.recording_id(),
         recording_share_type: *deal.recording_share_type(),
-        recording_master_ingester_type: *deal.recording_master_ingester_type(),
         title: *deal.track_title(),
-        duration_ms: deal.recording_duration_ms(),
         cover_art: *deal.track_cover_art(),
         split_bps: deal.track_split_bps(),
     };
@@ -131,19 +125,9 @@ public fun recording_share_type(self: &Track): &TypeName {
     &self.recording_share_type
 }
 
-/// Returns the ingester of the recording's master audio file.
-public fun recording_master_ingester_type(self: &Track): &TypeName {
-    &self.recording_master_ingester_type
-}
-
 /// Returns the title of the track.
 public fun title(self: &Track): &String {
     &self.title
-}
-
-/// Returns the duration of the track in milliseconds.
-public fun duration_ms(self: &Track): u64 {
-    self.duration_ms
 }
 
 /// Returns the cover art for the track.
@@ -169,12 +153,11 @@ public fun is_unassigned_state(self: &Track): bool {
 // === Test Only ===
 
 #[test_only]
-public fun new_for_testing<CompositionShare, RecordingShare, V: drop>(
+public fun new_for_testing<CompositionShare, RecordingShare>(
     composition_id: ID,
     recording_id: ID,
     release_id: ID,
     title: String,
-    duration_ms: u64,
     cover_art: CoverArt,
     split_bps_value: u16,
     composition_royalty_rate_bps: u16,
@@ -186,9 +169,7 @@ public fun new_for_testing<CompositionShare, RecordingShare, V: drop>(
         composition_royalty_rate: bps::new(composition_royalty_rate_bps),
         recording_id,
         recording_share_type: std::type_name::with_defining_ids<RecordingShare>(),
-        recording_master_ingester_type: std::type_name::with_defining_ids<V>(),
         title,
-        duration_ms,
         cover_art,
         split_bps: bps::new(split_bps_value),
     }

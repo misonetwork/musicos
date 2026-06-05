@@ -6,7 +6,7 @@ use musicos::disc;
 use musicos::release;
 use musicos::release_kind;
 use musicos::release_party_role;
-use musicos::test_helpers::{Self, CompositionShare, RecordingShare, V};
+use musicos::test_helpers::{Self, CompositionShare, RecordingShare};
 use musicos::track;
 use std::unit_test::destroy;
 
@@ -26,12 +26,11 @@ const MAX_TITLE_LENGTH: u64 = 300;
 
 /// Helper to create a single test track.
 fun test_track(ctx: &mut TxContext): track::Track {
-    track::new_for_testing<CompositionShare, RecordingShare, V>(
+    track::new_for_testing<CompositionShare, RecordingShare>(
         test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),
         b"Track".to_string(),
-        180000,
         test_helpers::cover_art(),
         10000, // 100% split (single track)
         5000,
@@ -42,12 +41,11 @@ fun test_track(ctx: &mut TxContext): track::Track {
 fun test_disc_with_n_tracks(n: u64, split_bps: u16, ctx: &mut TxContext): disc::Disc {
     let mut tracks = vector[];
     n.do!(|_| {
-        tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare, V>(
+        tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare>(
             test_helpers::fake_id(ctx),
             test_helpers::fake_id(ctx),
             test_helpers::fake_id(ctx),
             b"Track".to_string(),
-            180000,
             test_helpers::cover_art(),
             split_bps,
             5000,
@@ -150,12 +148,11 @@ fun test_new_exceeds_max_tracks() {
         let mut t = 0u64;
         while (t < n_tracks) {
             let split = if (global_idx < 16) 40 else 39;
-            tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare, V>(
+            tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare>(
                 test_helpers::fake_id(ctx),
                 test_helpers::fake_id(ctx),
                 test_helpers::fake_id(ctx),
                 b"Track".to_string(),
-                180000,
                 test_helpers::cover_art(),
                 split,
                 5000,

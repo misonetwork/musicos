@@ -17,7 +17,6 @@ use gengo::language_code::{Self, LanguageCode};
 use bps::bps::BPS;
 #[test_only]
 use bps::bps;
-use audio::audio::Audio;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
 use musicos::recording_party_role::RecordingPartyRole;
@@ -25,7 +24,6 @@ use partyos::credit::Credit;
 use partyos::party::Party;
 use share::share;
 use std::string::String;
-use std::type_name::TypeName;
 use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
@@ -66,9 +64,6 @@ public struct Recording<phantom RecordingShare> has key {
     is_explicit: bool,
     /// Whether the recording is instrumental (no vocals).
     is_instrumental: bool,
-    /// The mastered audio file(s) — always at least one. `masters[0]` is the
-    /// primary; additional formats (e.g. DSD, Atmos) are appended via `add_master`.
-    masters: vector<Audio>,
     /// Cover art for the recording.
     cover_art: CoverArt,
 }
@@ -89,10 +84,10 @@ public struct RecordingAdminCapKey() has copy, drop, store;
 /// Key for deriving the recording's address from the composition: a recording
 /// is the `idx`-th one registered under its composition. Indices are contiguous
 /// (no gaps, enforced at creation), so a composition's recordings can be
-/// enumerated by deriving idx 0, 1, 2, … until one doesn't exist. The master is
-/// deliberately NOT part of the id, so a recording can carry multiple master
-/// formats (e.g. PCM, DSD, Atmos) and re-key an encrypted master without
-/// changing its identity.
+/// enumerated by deriving idx 0, 1, 2, … until one doesn't exist. Identity is the
+/// `(composition, idx)` pair alone — independent of any attached master — so a
+/// recording can carry multiple master formats and re-key an encrypted master
+/// (both attached as dynamic fields by ingesters) without changing its identity.
 public struct RecordingKey(u64) has copy, drop, store;
 
 // === Enums ===
@@ -196,7 +191,6 @@ public fun new<RecordingShare, CompositionShare>(
     idx: u64,
     is_explicit: bool,
     is_instrumental: bool,
-    master: Audio,
     cover_art: CoverArt,
     share_currency: &mut Currency<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
@@ -228,7 +222,6 @@ public fun new<RecordingShare, CompositionShare>(
         language: option::none(),
         is_explicit,
         is_instrumental,
-        masters: vector[master],
         cover_art,
     };
 
@@ -491,31 +484,6 @@ public fun is_instrumental<RecordingShare>(self: &Recording<RecordingShare>): bo
     self.is_instrumental
 }
 
-/// Returns a reference to the master audio file.
-public fun master<RecordingShare>(self: &Recording<RecordingShare>): &Audio {
-    &self.masters[0]
-}
-
-/// Returns all master formats (PCM, DSD, Atmos, …). `masters[0]` is the primary.
-public fun masters<RecordingShare>(self: &Recording<RecordingShare>): &vector<Audio> {
-    &self.masters
-}
-
-/// Returns the ingester type of the recording's primary master audio file.
-public fun master_ingester_type<RecordingShare>(self: &Recording<RecordingShare>): &TypeName {
-    self.masters[0].ingester_type()
-}
-
-/// Appends an additional master format (e.g. DSD, Atmos). Admin-gated and
-/// appendable after publish; the primary (`masters[0]`) is fixed at creation.
-public fun add_master<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    master: Audio,
-) {
-    self.masters.push_back(master);
-}
-
 /// Returns a reference to the cover art.
 public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverArt {
     &self.cover_art
@@ -565,7 +533,6 @@ public fun new_for_testing<RecordingShare>(
     composition_royalty_rate_bps: u16,
     is_explicit: bool,
     is_instrumental: bool,
-    master: Audio,
     cover_art: CoverArt,
     ctx: &mut TxContext,
 ): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>) {
@@ -583,7 +550,6 @@ public fun new_for_testing<RecordingShare>(
         language: option::none(),
         is_explicit,
         is_instrumental,
-        masters: vector[master],
         cover_art,
     };
 
@@ -662,18 +628,6 @@ public fun prefill_featured_artists_for_testing<RecordingShare>(
         self.featured_artist_ids.insert(id);
     });
 }
-
-/// Creates a test Audio object.
-#[test_only]
-public fun new_test_audio(): Audio {
-    use audio::audio;
-    use ori::walrus_data;
-    audio::new(b"flac".to_string(), 2, 16, 44100, 441000, x"0000000000000000000000000000000000000000000000000000000000000000", walrus_data::new_blob(1), TestWitness())
-}
-
-/// Witness for creating test Audio objects.
-#[test_only]
-public struct TestWitness() has drop;
 
 /// Claims a recording id off a composition via the real RecordingKey derivation
 /// (the production path; `new_for_testing` bypasses it with `object::new`).

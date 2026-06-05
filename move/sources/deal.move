@@ -41,10 +41,6 @@ public struct Deal has key, store {
     recording_id: ID,
     /// Type of the recording's share token.
     recording_share_type: TypeName,
-    /// Duration of the recording in milliseconds.
-    recording_duration_ms: u64,
-    /// Ingester of the recording's master audio file.
-    recording_master_ingester_type: TypeName,
     /// Title for the track (defaults to recording title).
     track_title: String,
     /// Revenue split allocated to this track in basis points.
@@ -118,8 +114,6 @@ public fun new<CompositionShare, RecordingShare>(
         composition_royalty_rate: recording.composition_royalty_rate(),
         recording_id,
         recording_share_type: with_defining_ids<RecordingShare>(),
-        recording_duration_ms: recording.master().duration_ms(),
-        recording_master_ingester_type: *recording.master().ingester_type(),
         track_title: track_title.destroy_or!(*recording.title()),
         track_split_bps: bps::new(track_split_bps_value),
         track_cover_art: track_cover_art.destroy_with_default(*recording.cover_art()),
@@ -195,16 +189,6 @@ public fun recording_id(self: &Deal): ID {
 /// Returns the type of the recording's share token.
 public fun recording_share_type(self: &Deal): &TypeName {
     &self.recording_share_type
-}
-
-/// Returns the duration of the recording in milliseconds.
-public fun recording_duration_ms(self: &Deal): u64 {
-    self.recording_duration_ms
-}
-
-/// Returns the ingester of the recording's master audio file.
-public fun recording_master_ingester_type(self: &Deal): &TypeName {
-    &self.recording_master_ingester_type
 }
 
 /// Returns the track title.

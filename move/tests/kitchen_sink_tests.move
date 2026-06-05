@@ -8,7 +8,7 @@ use musicos::recording_party_role;
 use musicos::release;
 use musicos::release_kind;
 use musicos::release_party_role;
-use musicos::test_helpers::{Self, CompositionShare, RecordingShare, V};
+use musicos::test_helpers::{Self, CompositionShare, RecordingShare};
 use musicos::track;
 use std::unit_test::destroy;
 
@@ -52,7 +52,6 @@ fun test_recording_kitchen_sink() {
         5000,
         true,  // is_explicit
         false, // is_instrumental
-        test_helpers::audio(),
         test_helpers::cover_art(),
         ctx,
     );
@@ -125,12 +124,11 @@ fun test_release_kitchen_sink() {
         let mut t: u64 = 0;
         while (t < 13) {
             let split_bps = if (global_idx < 55) 40 else 39;
-            disc_tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare, V>(
+            disc_tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare>(
                 test_helpers::fake_id(ctx),
                 test_helpers::fake_id(ctx),
                 dummy_release_id,
                 b"Track".to_string(),
-                180000,
                 test_helpers::cover_art(),
                 split_bps,
                 5000,
@@ -149,12 +147,11 @@ fun test_release_kitchen_sink() {
         let mut t: u64 = 0;
         while (t < 12) {
             let split_bps = if (global_idx < 55) 40 else 39;
-            disc_tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare, V>(
+            disc_tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare>(
                 test_helpers::fake_id(ctx),
                 test_helpers::fake_id(ctx),
                 dummy_release_id,
                 b"Track".to_string(),
-                180000,
                 test_helpers::cover_art(),
                 split_bps,
                 5000,

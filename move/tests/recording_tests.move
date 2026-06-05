@@ -43,7 +43,6 @@ fun new_test_recording(ctx: &mut TxContext): (
         5000,
         false,
         false,
-        test_helpers::audio(),
         test_helpers::cover_art(),
         ctx,
     )

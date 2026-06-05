@@ -378,29 +378,6 @@ public fun contains_recording(self: &Release, recording_id: ID): bool {
     self.discs.any!(|disc| disc.tracks().any!(|track| track.recording_id() == recording_id))
 }
 
-/// Returns the total duration of all tracks in milliseconds.
-public fun duration_ms(self: &Release): u64 {
-    let mut duration = 0;
-    self.discs.do_ref!(|disc| {
-        duration = duration + disc.duration_ms();
-    });
-    duration
-}
-
-public fun audio_ingester_types(self: &Release): vector<TypeName> {
-    let mut unique = vector<TypeName>[];
-
-    self.discs.do_ref!(|disc| {
-        disc.tracks().do_ref!(|track| {
-            // Add the recording's master audio ingester type.
-            let master = track.recording_master_ingester_type();
-            if (!unique.contains(master)) unique.push_back(*master);
-        });
-    });
-
-    unique
-}
-
 /// Returns the release ID associated with the admin capability.
 public fun release_admin_cap_release_id(cap: &ReleaseAdminCap): ID {
     cap.release_id
