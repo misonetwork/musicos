@@ -98,15 +98,39 @@ export interface AudioInput {
   signature: number[];
   /** Attestation timestamp (ms). */
   timestampMs: number;
+  /**
+   * Seal-sealed DEK bytes (a BCS `EncryptedObject`). Present only for encrypted
+   * audio (from the enclave's `/process_data_encrypted`): when set, `blobId` is
+   * the ciphertext blob and the master is ingested as an encrypted `WalrusData`,
+   * with `signature` covering the intent-1 (encrypted) payload.
+   */
+  dek?: number[];
 }
 
-/** Builds an attested `Audio` via the audio ingester enclave (external package). */
+/**
+ * Builds an attested `Audio` via the audio ingester enclave (external package).
+ * Constructs the `WalrusData` the enclave attested — `new_encrypted_blob` when a
+ * sealed `dek` is present, else `new_blob` — and passes it to `ingest`, which
+ * verifies the signature against the registered enclave and branches on the
+ * blob's confidentiality (intent 0 plaintext / intent 1 encrypted).
+ */
 function createAttestedAudio(
   tx: Transaction,
   audioIngesterPackageId: string,
+  walrusDataPackageId: string,
   enclaveId: string,
   input: AudioInput,
 ): TransactionObjectArgument {
+  const blobId = tx.pure.u256(BigInt(input.blobId));
+  const data = input.dek
+    ? tx.moveCall({
+        target: `${walrusDataPackageId}::walrus_data::new_encrypted_blob`,
+        arguments: [blobId, tx.pure.vector("u8", input.dek)],
+      })
+    : tx.moveCall({
+        target: `${walrusDataPackageId}::walrus_data::new_blob`,
+        arguments: [blobId],
+      });
   return tx.moveCall({
     target: `${audioIngesterPackageId}::audio_ingester::ingest`,
     arguments: [
@@ -114,7 +138,7 @@ function createAttestedAudio(
       tx.pure.u8(input.bitDepth),
       tx.pure.u32(input.sampleRateHz),
       tx.pure.u64(input.samples),
-      tx.pure.u256(BigInt(input.blobId)),
+      data,
       tx.pure.string(input.format),
       tx.pure.vector("u8", input.pcmDigest),
       tx.pure.u64(input.timestampMs),
@@ -441,7 +465,7 @@ export function publishRecording(params: PublishRecordingParams): TxThunk {
 
     const idx = params.recordingIndex ?? (await nextRecordingIndex(client, params.compositionId, musicOsPackageId));
 
-    const master = createAttestedAudio(tx, params.audioIngesterPackageId, params.enclaveId, params.master);
+    const master = createAttestedAudio(tx, params.audioIngesterPackageId, walrusDataPackageId, params.enclaveId, params.master);
     const cover = buildCoverArt(tx, walrusDataPackageId, musicOsPackageId, params.coverArt);
 
     const result = tx.add(
