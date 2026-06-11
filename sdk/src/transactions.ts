@@ -28,7 +28,6 @@ import * as coverArtMod from "./contracts/musicos/cover_art.ts";
 import * as compRole from "./contracts/musicos/composition_party_role.ts";
 import * as recRole from "./contracts/musicos/recording_party_role.ts";
 import * as relRole from "./contracts/musicos/release_party_role.ts";
-import * as releaseKind from "./contracts/musicos/release_kind.ts";
 
 /** A thunk that adds commands to a transaction. May be async (resolves at build time). */
 export type TxThunk = (tx: Transaction) => void | Promise<void>;
@@ -72,80 +71,6 @@ function buildCoverArt(
       })
     : tx.moveCall({ target: OPTION_NONE, typeArguments: [walrusType], arguments: [] });
   return tx.add(coverArtMod._new({ package: musicOsPackageId, arguments: [still, animated] }));
-}
-
-// ============================================================================
-// Audio ingestion (external ingester package)
-// ============================================================================
-
-/**
- * Audio data with enclave attestation. `format`, `pcmDigest`, `signature`, and
- * `timestampMs` come from the ingester response and must be passed verbatim, in
- * the order the enclave signed, or `ingest` signature verification will fail.
- */
-export interface AudioInput {
-  channels: number;
-  bitDepth: number;
-  sampleRateHz: number;
-  samples: number;
-  /** Walrus blob ID (u256 decimal string). */
-  blobId: string;
-  /** Attested codec/container short name (e.g. `flac`). */
-  format: string;
-  /** Attested BLAKE2b-256 of the canonical decoded PCM, as raw bytes. */
-  pcmDigest: number[];
-  /** Enclave Ed25519 signature bytes. */
-  signature: number[];
-  /** Attestation timestamp (ms). */
-  timestampMs: number;
-  /**
-   * Seal-sealed DEK bytes (a BCS `EncryptedObject`). Present only for encrypted
-   * audio (from the enclave's `/process_data_encrypted`): when set, `blobId` is
-   * the ciphertext blob and the master is ingested as an encrypted `WalrusData`,
-   * with `signature` covering the intent-1 (encrypted) payload.
-   */
-  dek?: number[];
-}
-
-/**
- * Builds an attested `Audio` via the audio ingester enclave (external package).
- * Constructs the `WalrusData` the enclave attested — `new_encrypted_blob` when a
- * sealed `dek` is present, else `new_blob` — and passes it to `ingest`, which
- * verifies the signature against the registered enclave and branches on the
- * blob's confidentiality (intent 0 plaintext / intent 1 encrypted).
- */
-function createAttestedAudio(
-  tx: Transaction,
-  audioIngesterPackageId: string,
-  walrusDataPackageId: string,
-  enclaveId: string,
-  input: AudioInput,
-): TransactionObjectArgument {
-  const blobId = tx.pure.u256(BigInt(input.blobId));
-  const data = input.dek
-    ? tx.moveCall({
-        target: `${walrusDataPackageId}::walrus_data::new_encrypted_blob`,
-        arguments: [blobId, tx.pure.vector("u8", input.dek)],
-      })
-    : tx.moveCall({
-        target: `${walrusDataPackageId}::walrus_data::new_blob`,
-        arguments: [blobId],
-      });
-  return tx.moveCall({
-    target: `${audioIngesterPackageId}::audio_ingester::ingest`,
-    arguments: [
-      tx.pure.u8(input.channels),
-      tx.pure.u8(input.bitDepth),
-      tx.pure.u32(input.sampleRateHz),
-      tx.pure.u64(input.samples),
-      data,
-      tx.pure.string(input.format),
-      tx.pure.vector("u8", input.pcmDigest),
-      tx.pure.u64(input.timestampMs),
-      tx.pure.vector("u8", input.signature),
-      tx.object(enclaveId),
-    ],
-  });
 }
 
 // ============================================================================
@@ -341,7 +266,6 @@ export interface PublishCompositionParams {
   royaltyRateBps: number;
   shareRecipients: ShareRecipient[];
   adminAddress: string;
-  alternateTitles?: string[];
   credits: CompositionCreditInput[];
   musicOsPackageId: string;
   partyOsPackageId: string;
@@ -365,10 +289,6 @@ export function publishComposition(params: PublishCompositionParams): TxThunk {
     const comp = result[0]!;
     const adminCap = result[1]!;
     const balance = result[2]!;
-
-    for (const title of params.alternateTitles ?? []) {
-      tx.add(composition.addAlternateTitle({ package: musicOsPackageId, typeArguments: [shareType], arguments: [comp, adminCap, tx.pure.string(title)] }));
-    }
 
     for (const credit of params.credits) {
       const roles = credit.roles.map((r) => buildCompositionRole(tx, musicOsPackageId, r));
@@ -438,21 +358,15 @@ export interface PublishRecordingParams {
   compositionShareType: string;
   shareCurrencyId: string;
   treasuryCapOwner: string;
-  isExplicit: boolean;
-  isInstrumental: boolean;
-  master: AudioInput;
   coverArt: CoverArtInput;
   shareRecipients: ShareRecipient[];
   adminAddress: string;
   credits: RecordingCreditInput[];
   titleVersion?: string;
   subtitle?: string;
-  language?: string;
   musicOsPackageId: string;
   partyOsPackageId: string;
   walrusDataPackageId: string;
-  audioIngesterPackageId: string;
-  enclaveId: string;
   minatoPackageId: string;
 }
 
@@ -465,14 +379,13 @@ export function publishRecording(params: PublishRecordingParams): TxThunk {
 
     const idx = params.recordingIndex ?? (await nextRecordingIndex(client, params.compositionId, musicOsPackageId));
 
-    const master = createAttestedAudio(tx, params.audioIngesterPackageId, walrusDataPackageId, params.enclaveId, params.master);
     const cover = buildCoverArt(tx, walrusDataPackageId, musicOsPackageId, params.coverArt);
 
     const result = tx.add(
       recording._new({
         package: musicOsPackageId,
         typeArguments: [shareType, params.compositionShareType],
-        arguments: [tx.object(params.compositionId), tx.pure.u64(idx), tx.pure.bool(params.isExplicit), tx.pure.bool(params.isInstrumental), master, cover, tx.object(params.shareCurrencyId), tx.object(treasuryCapId)],
+        arguments: [tx.object(params.compositionId), tx.pure.u64(idx), cover, tx.object(params.shareCurrencyId), tx.object(treasuryCapId)],
       }),
     );
     const rec = result[0]!;
@@ -483,8 +396,6 @@ export function publishRecording(params: PublishRecordingParams): TxThunk {
       tx.add(recording.setTitleVersion({ package: musicOsPackageId, typeArguments: [shareType], arguments: [rec, adminCap, tx.pure.string(params.titleVersion)] }));
     if (params.subtitle !== undefined)
       tx.add(recording.setSubtitle({ package: musicOsPackageId, typeArguments: [shareType], arguments: [rec, adminCap, tx.pure.string(params.subtitle)] }));
-    if (params.language !== undefined)
-      tx.add(recording.setLanguage({ package: musicOsPackageId, typeArguments: [shareType], arguments: [rec, adminCap, tx.pure.string(params.language)] }));
 
     const primaryArtistIds: string[] = [];
     const featuredArtistIds: string[] = [];
@@ -563,11 +474,22 @@ export function createDeal(params: CreateDealParams): TxThunk {
   };
 }
 
+export interface RejectDealParams {
+  dealId: string;
+  musicOsPackageId: string;
+}
+
+/** Rejects (destroys) a deal without including it in a release. Emits `DealRejectedEvent`. */
+export function rejectDeal(params: RejectDealParams): TxThunk {
+  return (tx) => {
+    tx.add(deal.reject({ package: params.musicOsPackageId, arguments: [tx.object(params.dealId)] }));
+  };
+}
+
 // ============================================================================
 // Release
 // ============================================================================
 
-export type ReleaseKindInput = "Album" | "ExtendedPlay" | "Single";
 export type ReleasePartyRoleInput = "Primary" | "Featured";
 
 export interface ReleaseCreditInput {
@@ -593,9 +515,9 @@ export interface DiscInput {
 
 export interface PublishReleaseParams {
   walrusDataPackageId: string;
-  kind: ReleaseKindInput;
   title: string;
-  description: string;
+  /** Optional subtitle (e.g., "Deluxe Edition") — part of the release's identity. */
+  subtitle?: string;
   credits: ReleaseCreditInput[];
   coverArt: CoverArtInput;
   discs: DiscInput[];
@@ -605,11 +527,6 @@ export interface PublishReleaseParams {
   musicOsPackageId: string;
   partyOsPackageId: string;
   adminAddress: string;
-}
-
-function buildReleaseKind(tx: Transaction, musicOsPackageId: string, kind: ReleaseKindInput) {
-  const fn = kind === "Album" ? releaseKind.newAlbumKind : kind === "ExtendedPlay" ? releaseKind.newExtendedPlayKind : releaseKind.newSingleKind;
-  return tx.add(fn({ package: musicOsPackageId, arguments: [] }));
 }
 
 function buildReleaseCredits(
@@ -659,15 +576,16 @@ export function publishRelease(params: PublishReleaseParams): TxThunk {
     }));
     const discVec = buildDiscVec(tx, musicOsPackageId, byDisc);
     const cover = buildCoverArt(tx, params.walrusDataPackageId, musicOsPackageId, params.coverArt);
-    const kindArg = buildReleaseKind(tx, musicOsPackageId, params.kind);
     const result = tx.add(
       release._new({
         package: musicOsPackageId,
-        arguments: [kindArg, tx.pure.string(params.title), tx.pure.string(params.description), cover, discVec, tx.pure.u256(BigInt(params.releaseNonce)), tx.object(params.releaseRegistryId)],
+        arguments: [tx.pure.string(params.title), cover, discVec, tx.pure.u256(BigInt(params.releaseNonce)), tx.object(params.releaseRegistryId)],
       }),
     );
     const releaseArg = result[0]!;
     const adminCap = result[1]!;
+    if (params.subtitle !== undefined)
+      tx.add(release.setSubtitle({ package: musicOsPackageId, arguments: [releaseArg, adminCap, tx.pure.string(params.subtitle)] }));
     buildReleaseCredits(tx, musicOsPackageId, params.partyOsPackageId, releaseArg, adminCap, params.credits);
     tx.add(release.publish({ package: musicOsPackageId, arguments: [releaseArg, adminCap] }));
     tx.transferObjects([adminCap], tx.pure.address(params.adminAddress));
@@ -685,9 +603,9 @@ export interface DiscFromDealsInput {
 
 export interface PublishReleaseFromDealsParams {
   walrusDataPackageId: string;
-  kind: ReleaseKindInput;
   title: string;
-  description: string;
+  /** Optional subtitle (e.g., "Deluxe Edition") — part of the release's identity. */
+  subtitle?: string;
   credits: ReleaseCreditInput[];
   coverArt: CoverArtInput;
   discs: DiscFromDealsInput[];
@@ -707,15 +625,16 @@ export function publishReleaseFromDeals(params: PublishReleaseFromDealsParams): 
     }));
     const discVec = buildDiscVec(tx, musicOsPackageId, byDisc);
     const cover = buildCoverArt(tx, params.walrusDataPackageId, musicOsPackageId, params.coverArt);
-    const kindArg = buildReleaseKind(tx, musicOsPackageId, params.kind);
     const result = tx.add(
       release._new({
         package: musicOsPackageId,
-        arguments: [kindArg, tx.pure.string(params.title), tx.pure.string(params.description), cover, discVec, tx.pure.u256(BigInt(params.releaseNonce)), tx.object(params.releaseRegistryId)],
+        arguments: [tx.pure.string(params.title), cover, discVec, tx.pure.u256(BigInt(params.releaseNonce)), tx.object(params.releaseRegistryId)],
       }),
     );
     const releaseArg = result[0]!;
     const adminCap = result[1]!;
+    if (params.subtitle !== undefined)
+      tx.add(release.setSubtitle({ package: musicOsPackageId, arguments: [releaseArg, adminCap, tx.pure.string(params.subtitle)] }));
     buildReleaseCredits(tx, musicOsPackageId, params.partyOsPackageId, releaseArg, adminCap, params.credits);
     tx.add(release.publish({ package: musicOsPackageId, arguments: [releaseArg, adminCap] }));
     tx.transferObjects([adminCap], tx.pure.address(params.adminAddress));

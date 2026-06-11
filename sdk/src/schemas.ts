@@ -32,22 +32,8 @@ export const PartySchema = z.object({
 });
 
 // ============================================================================
-// Audio
+// Cover Art
 // ============================================================================
-
-export const AudioSchema = z.object({
-  ingester: z.string().min(1, "Ingester type cannot be empty"),
-  format: z.string()
-    .min(1, "Format cannot be empty")
-    .max(16, "Format cannot exceed 16 bytes")
-    .regex(/^[a-z0-9]+$/, "Format must be lowercase a-z and 0-9 only"),
-  channels: z.number().int().min(1, "Audio must have at least 1 channel").max(255),
-  bitDepth: z.union([z.literal(8), z.literal(16), z.literal(24), z.literal(32)]),
-  sampleRateHz: z.number().int().min(1, "Sample rate must be greater than 0").max(4294967295),
-  samples: z.number().int().min(1, "Samples must be at least 1"),
-  pcmDigest: z.string().regex(/^[0-9a-f]{64}$/, "PCM digest must be 64 lowercase hex chars (BLAKE2b-256)"),
-  data: WalrusDataSchema,
-});
 
 export const CoverArtSchema = z.object({
   still: WalrusDataSchema,
@@ -134,12 +120,12 @@ export const CompositionSchema = z.object({
   id: z.string().refine(isValidSuiObjectId, "Invalid Sui object ID"),
   state: CompositionStateSchema,
   title: z.string().min(1, "Composition title cannot be empty"),
-  alternateTitles: z.array(z.string()),
   credits: z.record(
     z.string().refine(isValidSuiObjectId, "Invalid Sui object ID"),
     CompositionCreditSchema
   ),
-  royaltyRate: z.object({ value: z.number().int().min(1000).max(10000) }),
+  royaltyRate: z.object({ value: z.number().int().min(1000).max(2000) }),
+  royaltyRateLastChangedEpoch: z.number().int().min(0),
 });
 
 export const CompositionPublishedEventSchema = z.object({
@@ -148,7 +134,7 @@ export const CompositionPublishedEventSchema = z.object({
 
 export const CompositionRoyaltySetEventSchema = z.object({
   compositionId: z.string().refine(isValidSuiObjectId, "Invalid Sui object ID"),
-  royaltyRateBps: z.number().int().min(1000).max(10000),
+  royaltyRateBps: z.number().int().min(1000).max(2000),
 });
 
 // ============================================================================
@@ -176,10 +162,6 @@ export const RecordingSchema = z.object({
     z.string().refine(isValidSuiObjectId, "Invalid Sui object ID"),
     RecordingCreditSchema
   ),
-  language: z.string().length(2).regex(/^[a-z]{2}$/, "Language code must be 2 lowercase letters (ISO 639-1)").optional(),
-  isExplicit: z.boolean(),
-  isInstrumental: z.boolean(),
-  masters: z.array(AudioSchema).min(1),
   coverArt: CoverArtSchema,
 });
 
@@ -199,9 +181,7 @@ export const TrackSchema = z.object({
   compositionRoyaltyRate: z.object({ value: z.number().int().min(0).max(10000) }),
   recordingId: z.string().refine(isValidSuiObjectId, "Invalid Sui object ID"),
   recordingShareType: z.string().regex(typeNameRegex, "Invalid Move type name"),
-  recordingMasterIngesterType: z.string().regex(typeNameRegex, "Invalid Move type name"),
-  title: z.string(),
-  durationMs: z.number().int().min(0),
+  title: z.string().min(1).max(300),
   coverArt: CoverArtSchema,
   splitBps: z.object({ value: z.number().int().min(0).max(10000) }),
 });
@@ -213,15 +193,12 @@ export const TrackSchema = z.object({
 export const DiscSchema = z.object({
   tracks: z.array(TrackSchema).max(50, "Disc cannot have more than 50 tracks"),
   artwork: CoverArtSchema.optional(),
-  title: z.string().optional(),
-  durationMs: z.number().int().min(0),
+  title: z.string().min(1).max(300).optional(),
 });
 
 // ============================================================================
 // Release
 // ============================================================================
-
-export const ReleaseKindSchema = z.enum(["Album", "ExtendedPlay", "Single"]);
 
 export const ReleaseStateSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("Initialized") }),
@@ -231,9 +208,7 @@ export const ReleaseStateSchema = z.discriminatedUnion("type", [
 export const ReleaseSchema = z.object({
   id: z.string().refine(isValidSuiObjectId, "Invalid Sui object ID"),
   state: ReleaseStateSchema,
-  kind: ReleaseKindSchema,
   title: z.string().min(1, "Release title cannot be empty"),
-  description: z.string().max(500, "Description cannot exceed 500 characters"),
   subtitle: z.string().optional(),
   credits: z.record(
     z.string().refine(isValidSuiObjectId, "Invalid Sui object ID"),
@@ -254,21 +229,6 @@ export const ReleasePublishedEventSchema = z.object({
 });
 
 // ============================================================================
-// Audio Events
-// ============================================================================
-
-export const AudioIngestedEventSchema = z.object({
-  blobId: z.string(),
-  format: z.string().min(1).max(16).regex(/^[a-z0-9]+$/),
-  channels: z.number().int().min(1).max(255),
-  bitDepth: z.number().int(),
-  sampleRateHz: z.number().int().min(1),
-  samples: z.number().int().min(0),
-  durationMs: z.number().int().min(0),
-  pcmDigest: z.string().regex(/^[0-9a-f]{64}$/),
-});
-
-// ============================================================================
 // Deal Events
 // ============================================================================
 
@@ -283,9 +243,13 @@ export const DealCreatedEventSchema = z.object({
   trackCoverArtAnimatedBlobId: z.string().optional(),
 });
 
-export const DealDestroyedEventSchema = z.object({
+const dealLifecycleEventShape = {
   dealId: z.string().refine(isValidSuiObjectId, "Invalid Sui object ID"),
   releaseId: z.string().refine(isValidSuiObjectId, "Invalid Sui object ID"),
   recordingId: z.string().refine(isValidSuiObjectId, "Invalid Sui object ID"),
   compositionId: z.string().refine(isValidSuiObjectId, "Invalid Sui object ID"),
-});
+};
+
+export const DealAcceptedEventSchema = z.object(dealLifecycleEventShape);
+
+export const DealRejectedEventSchema = z.object(dealLifecycleEventShape);

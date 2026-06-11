@@ -10,20 +10,20 @@
  * 
  * ### Key Features:
  * 
- * - Share token initialization with fixed supply (100M tokens, 6 decimals)
+ * - Share token initialization with fixed supply (10M tokens, 6 decimals)
  * - Party management with role assignments (Composer, Lyricist, Songwriter)
- * - State machine: Initialized -> Published (immutable after publish)
- * - Revenue and reward pool creation for reward distribution
+ * - State machine: Initialized -> Published (embedded fields immutable after
+ *   publish; dynamic fields remain extensible via `uid_mut`)
  * - Deterministic addresses via derived object pattern
  */
 
-import { MoveEnum, MoveStruct, MoveTuple, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
+import { MoveEnum, MoveTuple, MoveStruct, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
 import { bcs } from '@mysten/sui/bcs';
 import { type Transaction, type TransactionArgument } from '@mysten/sui/transactions';
+import * as bps from './deps/bps/bps.js';
 import * as vec_map from './deps/sui/vec_map.js';
 import * as credit from './deps/partyos/credit.js';
 import * as composition_party_role from './composition_party_role.js';
-import * as bps from './deps/bps/bps.js';
 const $moduleName = '@local-pkg/musicos::composition';
 /** Lifecycle state of a composition. */
 export const CompositionState = new MoveEnum({ name: `${$moduleName}::CompositionState`, fields: {
@@ -32,6 +32,7 @@ export const CompositionState = new MoveEnum({ name: `${$moduleName}::Compositio
         /** Composition is published and immutable. Includes publication timestamp. */
         Published: bcs.u64()
     } });
+export const CompositionRoyaltyRate = new MoveTuple({ name: `${$moduleName}::CompositionRoyaltyRate`, fields: [bps.BPS, bcs.u64()] });
 export const Composition = new MoveStruct({ name: `${$moduleName}::Composition<phantom CompositionShare>`, fields: {
         /** Unique identifier for this composition. */
         id: bcs.Address,
@@ -39,12 +40,14 @@ export const Composition = new MoveStruct({ name: `${$moduleName}::Composition<p
         state: CompositionState,
         /** Primary title of the composition. */
         title: bcs.string(),
-        /** Additional titles (translations, alternate names). */
-        alternate_titles: bcs.vector(bcs.string()),
         /** Map of party IDs to their roles on this composition. */
         credits: vec_map.VecMap(bcs.Address, credit.Credit(composition_party_role.CompositionPartyRole)),
-        /** Royalty rate this composition earns from each recording's revenue. */
-        royalty_rate: bps.BPS
+        /**
+         * Royalty rate this composition earns from each recording's revenue, paired with
+         * the epoch it was last changed in. Each rate stays in effect for at least one
+         * full epoch.
+         */
+        royalty_rate: CompositionRoyaltyRate
     } });
 export const CompositionAdminCap = new MoveStruct({ name: `${$moduleName}::CompositionAdminCap<phantom CompositionShare>`, fields: {
         /** Unique identifier for this capability. */
@@ -78,13 +81,12 @@ export interface NewOptions {
 }
 /**
  * Creates a new composition with the given title and royalty rate. The royalty
- * rate must be at least `MIN_ROYALTY_RATE_BPS`. Initializes share tokens (100M
- * supply, 6 decimals) and returns:
+ * rate must be within `[MIN_ROYALTY_RATE_BPS, MAX_ROYALTY_RATE_BPS]`. Initializes
+ * share tokens (10M supply, 6 decimals) and returns:
  *
  * - The composition object
  * - Admin capability for the owner
  * - Initial share token balance
- * - Promise that must be consumed by calling `share()`
  */
 export function _new(options: NewOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
@@ -133,39 +135,6 @@ export function publish(options: PublishOptions) {
         package: packageAddress,
         module: 'composition',
         function: 'publish',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface AddAlternateTitleArguments {
-    self: RawTransactionArgument<string>;
-    _: RawTransactionArgument<string>;
-    alternateTitle: RawTransactionArgument<string>;
-}
-export interface AddAlternateTitleOptions {
-    package?: string;
-    arguments: AddAlternateTitleArguments | [
-        self: RawTransactionArgument<string>,
-        _: RawTransactionArgument<string>,
-        alternateTitle: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Adds an alternate title to the composition. Required State: Initialized */
-export function addAlternateTitle(options: AddAlternateTitleOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null,
-        null,
-        '0x1::string::String'
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "_", "alternateTitle"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'composition',
-        function: 'add_alternate_title',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
         typeArguments: options.typeArguments
     });
@@ -226,9 +195,11 @@ export interface SetRoyaltyRateOptions {
     ];
 }
 /**
- * Sets the royalty rate this composition earns from each recording. Must be at
- * least the protocol minimum (`MIN_ROYALTY_RATE_BPS`); there is no maximum. The
- * rate can be changed at any time, including after publishing — because each
+ * Sets the royalty rate this composition earns from each recording. Must be within
+ * `[MIN_ROYALTY_RATE_BPS, MAX_ROYALTY_RATE_BPS]`, and only after a full epoch has
+ * elapsed since the last change — a rate set in epoch N is changeable from epoch
+ * N+2 onward, so every rate is in effect for at least one complete epoch. The rate
+ * can be changed in any lifecycle state, including after publishing — because each
  * recording snapshots the rate when it is created, a change only affects
  * recordings created afterward (existing recordings keep the rate they captured).
  */
@@ -383,33 +354,6 @@ export function title(options: TitleOptions) {
         typeArguments: options.typeArguments
     });
 }
-export interface AlternateTitlesArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface AlternateTitlesOptions {
-    package?: string;
-    arguments: AlternateTitlesArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns the list of alternate titles. */
-export function alternateTitles(options: AlternateTitlesOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'composition',
-        function: 'alternate_titles',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
 export interface CreditsArguments {
     self: RawTransactionArgument<string>;
 }
@@ -464,6 +408,33 @@ export function royaltyRate(options: RoyaltyRateOptions) {
         typeArguments: options.typeArguments
     });
 }
+export interface RoyaltyRateLastChangedEpochArguments {
+    self: RawTransactionArgument<string>;
+}
+export interface RoyaltyRateLastChangedEpochOptions {
+    package?: string;
+    arguments: RoyaltyRateLastChangedEpochArguments | [
+        self: RawTransactionArgument<string>
+    ];
+    typeArguments: [
+        string
+    ];
+}
+/** Returns the epoch in which the royalty rate was last changed. */
+export function royaltyRateLastChangedEpoch(options: RoyaltyRateLastChangedEpochOptions) {
+    const packageAddress = options.package ?? '@local-pkg/musicos';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["self"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'composition',
+        function: 'royalty_rate_last_changed_epoch',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+        typeArguments: options.typeArguments
+    });
+}
 export interface UidArguments {
     self: RawTransactionArgument<string>;
 }
@@ -507,7 +478,9 @@ export interface UidMutOptions {
 }
 /**
  * Returns a mutable reference to the composition's UID. Requires the admin
- * capability.
+ * capability. Works in any lifecycle state — dynamic fields are the extension
+ * surface and stay admin-mutable after publish; only the embedded fields are
+ * frozen.
  */
 export function uidMut(options: UidMutOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';

@@ -19,8 +19,6 @@ import * as coverArt from "./contracts/musicos/cover_art.ts";
 import * as compositionRole from "./contracts/musicos/composition_party_role.ts";
 import * as recordingRole from "./contracts/musicos/recording_party_role.ts";
 import * as releaseRole from "./contracts/musicos/release_party_role.ts";
-import * as releaseKind from "./contracts/musicos/release_kind.ts";
-import { Audio } from "./contracts/musicos/deps/audio/audio.ts";
 
 export interface MusicOSOptions<Name extends string = "musicos"> {
   /** Name for the client extension. Defaults to "musicos". */
@@ -159,6 +157,7 @@ export class MusicOSClient {
       publishRecording: (p: Omit<transactions.PublishRecordingParams, "client">) =>
         transactions.publishRecording({ ...p, client }),
       createDeal: transactions.createDeal,
+      rejectDeal: transactions.rejectDeal,
       publishRelease: transactions.publishRelease,
       publishReleaseFromDeals: transactions.publishReleaseFromDeals,
     };
@@ -167,7 +166,7 @@ export class MusicOSClient {
   // === Generated type-safe Move calls (for tx.add) ===
 
   get call() {
-    return { composition, recording, release, deal, track, disc, coverArt, compositionRole, recordingRole, releaseRole, releaseKind };
+    return { composition, recording, release, deal, track, disc, coverArt, compositionRole, recordingRole, releaseRole };
   }
 
   // === Generated BCS structs (for parsing object/event content) ===
@@ -181,13 +180,13 @@ export class MusicOSClient {
       Track: track.Track,
       Disc: disc.Disc,
       CoverArt: coverArt.CoverArt,
-      Audio,
       CompositionPublishedEvent: composition.CompositionPublishedEvent,
       CompositionRoyaltySetEvent: composition.CompositionRoyaltySetEvent,
       RecordingPublishedEvent: recording.RecordingPublishedEvent,
       ReleasePublishedEvent: release.ReleasePublishedEvent,
       DealCreatedEvent: deal.DealCreatedEvent,
-      DealDestroyedEvent: deal.DealDestroyedEvent,
+      DealAcceptedEvent: deal.DealAcceptedEvent,
+      DealRejectedEvent: deal.DealRejectedEvent,
     };
   }
 
@@ -199,9 +198,9 @@ export class MusicOSClient {
       compositionRoyaltySetEvent: parsers.parseCompositionRoyaltySetEvent,
       recordingPublishedEvent: parsers.parseRecordingPublishedEvent,
       releasePublishedEvent: parsers.parseReleasePublishedEvent,
-      audioIngestedEvent: parsers.parseAudioIngestedEvent,
       dealCreatedEvent: parsers.parseDealCreatedEvent,
-      dealDestroyedEvent: parsers.parseDealDestroyedEvent,
+      dealAcceptedEvent: parsers.parseDealAcceptedEvent,
+      dealRejectedEvent: parsers.parseDealRejectedEvent,
     };
   }
 

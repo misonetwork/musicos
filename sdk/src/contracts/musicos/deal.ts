@@ -39,10 +39,6 @@ export const Deal = new MoveStruct({ name: `${$moduleName}::Deal`, fields: {
         recording_id: bcs.Address,
         /** Type of the recording's share token. */
         recording_share_type: type_name.TypeName,
-        /** Duration of the recording in milliseconds. */
-        recording_duration_ms: bcs.u64(),
-        /** Ingester of the recording's master audio file. */
-        recording_master_ingester_type: type_name.TypeName,
         /** Title for the track (defaults to recording title). */
         track_title: bcs.string(),
         /** Revenue split allocated to this track in basis points. */
@@ -68,7 +64,17 @@ export const DealCreatedEvent = new MoveStruct({ name: `${$moduleName}::DealCrea
         /** Animated cover art blob ID for the track, if present. */
         track_cover_art_animated_blob_id: bcs.option(bcs.u256())
     } });
-export const DealDestroyedEvent = new MoveStruct({ name: `${$moduleName}::DealDestroyedEvent`, fields: {
+export const DealAcceptedEvent = new MoveStruct({ name: `${$moduleName}::DealAcceptedEvent`, fields: {
+        /** ID of the deal. */
+        deal_id: bcs.Address,
+        /** ID of the target release. */
+        release_id: bcs.Address,
+        /** ID of the recording. */
+        recording_id: bcs.Address,
+        /** ID of the composition. */
+        composition_id: bcs.Address
+    } });
+export const DealRejectedEvent = new MoveStruct({ name: `${$moduleName}::DealRejectedEvent`, fields: {
         /** ID of the deal. */
         deal_id: bcs.Address,
         /** ID of the target release. */
@@ -128,20 +134,20 @@ export function _new(options: NewOptions) {
         typeArguments: options.typeArguments
     });
 }
-export interface DestroyArguments {
+export interface RejectArguments {
     self: RawTransactionArgument<string>;
 }
-export interface DestroyOptions {
+export interface RejectOptions {
     package?: string;
-    arguments: DestroyArguments | [
+    arguments: RejectArguments | [
         self: RawTransactionArgument<string>
     ];
 }
 /**
- * Destroys a deal, emitting a `DealDestroyedEvent`. Used when a deal is no longer
- * needed or the negotiation falls through.
+ * Rejects the deal, destroying it without inclusion in a release. Used when the
+ * holder declines or the negotiation falls through. Emits a `DealRejectedEvent`.
  */
-export function destroy(options: DestroyOptions) {
+export function reject(options: RejectOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
     const argumentsTypes = [
         null
@@ -150,7 +156,7 @@ export function destroy(options: DestroyOptions) {
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'deal',
-        function: 'destroy',
+        function: 'reject',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
@@ -312,52 +318,6 @@ export function recordingShareType(options: RecordingShareTypeOptions) {
         package: packageAddress,
         module: 'deal',
         function: 'recording_share_type',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface RecordingDurationMsArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface RecordingDurationMsOptions {
-    package?: string;
-    arguments: RecordingDurationMsArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-/** Returns the duration of the recording in milliseconds. */
-export function recordingDurationMs(options: RecordingDurationMsOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'deal',
-        function: 'recording_duration_ms',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface RecordingMasterIngesterTypeArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface RecordingMasterIngesterTypeOptions {
-    package?: string;
-    arguments: RecordingMasterIngesterTypeArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-/** Returns the ingester of the recording's master audio file. */
-export function recordingMasterIngesterType(options: RecordingMasterIngesterTypeOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'deal',
-        function: 'recording_master_ingester_type',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

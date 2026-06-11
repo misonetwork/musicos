@@ -49,35 +49,8 @@ export type WalrusData = {
 };
 
 // ============================================================================
-// Audio
+// Cover Art
 // ============================================================================
-
-/**
- * A verified audio file with technical metadata.
- *
- * Audio is a standalone, witness-gated primitive (`audio::audio::Audio`) that
- * MusicOS embeds (e.g. as a recording's master). It can only be created via an
- * ingester that attests the audio; the attested `format` and `pcmDigest` are
- * signed by the ingester enclave, not asserted by the caller.
- */
-export interface Audio {
-  /** The ingester type that attested this audio (a Move TypeName). */
-  ingester: string;
-  /** Codec/container short name of the stored blob (e.g. `flac`). Lowercase `a-z`/`0-9`. */
-  format: string;
-  /** Number of audio channels (1 = mono, 2 = stereo). */
-  channels: number;
-  /** Bit depth of the audio (8, 16, 24, or 32 bits). */
-  bitDepth: number;
-  /** Sample rate in Hz. */
-  sampleRateHz: number;
-  /** Total number of samples. */
-  samples: number;
-  /** BLAKE2b-256 of the canonical decoded PCM, as a 64-char lowercase hex string. */
-  pcmDigest: string;
-  /** Reference to the audio file on Walrus. */
-  data: WalrusData;
-}
 
 /** Cover artwork with a required still image and optional animation. */
 export interface CoverArt {
@@ -247,12 +220,12 @@ export interface Composition {
   state: CompositionState;
   /** Primary title of the composition. */
   title: string;
-  /** Additional titles (translations, alternate names). */
-  alternateTitles: string[];
   /** Map of party IDs to their credits on this composition. */
   credits: Record<string, CompositionCredit>;
-  /** Royalty rate this composition earns from each recording's revenue (basis points). */
+  /** Royalty rate this composition earns from each recording's revenue (basis points, 1000-2000). */
   royaltyRate: BPS;
+  /** Epoch in which the royalty rate was last changed (changeable after one full elapsed epoch). */
+  royaltyRateLastChangedEpoch: number;
 }
 
 /**
@@ -321,14 +294,6 @@ export interface Recording {
   featuredArtistIds: string[];
   /** Map of party IDs to their credits on this recording. */
   credits: Record<string, RecordingCredit>;
-  /** Language of the vocals (if any). ISO 639-1 code. */
-  language?: string;
-  /** Whether the recording contains explicit content. */
-  isExplicit: boolean;
-  /** Whether the recording is instrumental (no vocals). */
-  isInstrumental: boolean;
-  /** The mastered audio file(s) — at least one; `masters[0]` is the primary. */
-  masters: Audio[];
   /** Cover art for the recording. */
   coverArt: CoverArt;
 }
@@ -380,12 +345,8 @@ export interface Track {
   recordingId: string;
   /** Type of the recording's share token. */
   recordingShareType: string;
-  /** Ingester type of the recording's master audio file. */
-  recordingMasterIngesterType: string;
   /** Title of the track. */
   title: string;
-  /** Duration of the track in milliseconds. */
-  durationMs: number;
   /** Cover art for the track (inherited from recording by default). */
   coverArt: CoverArt;
   /** Revenue split for this track within the release (in basis points). */
@@ -407,16 +368,11 @@ export interface Disc {
   artwork?: CoverArt;
   /** Optional disc title (e.g., for multi-disc sets). */
   title?: string;
-  /** Total duration of all tracks in milliseconds. */
-  durationMs: number;
 }
 
 // ============================================================================
 // Release
 // ============================================================================
-
-/** Type of release (Album, Extended Play, or Single). */
-export type ReleaseKind = "Album" | "ExtendedPlay" | "Single";
 
 /** Lifecycle state of a release. */
 export type ReleaseState =
@@ -436,12 +392,8 @@ export interface Release {
   id: string;
   /** Current lifecycle state. */
   state: ReleaseState;
-  /** Type of release. */
-  kind: ReleaseKind;
   /** Title of the release. */
   title: string;
-  /** Description of the release (max 500 characters). */
-  description: string;
   /** Optional subtitle (e.g., "Deluxe Edition"). */
   subtitle?: string;
   /** Map of party IDs to their credits on this release. */
@@ -475,23 +427,6 @@ export interface ReleaseAdminCap {
 }
 
 // ============================================================================
-// Audio Events
-// ============================================================================
-
-/** Emitted when an audio file is ingested (from `audio::audio`). */
-export interface AudioIngestedEvent {
-  blobId: string;
-  format: string;
-  channels: number;
-  bitDepth: number;
-  sampleRateHz: number;
-  samples: number;
-  durationMs: number;
-  /** BLAKE2b-256 of the canonical decoded PCM, as a 64-char lowercase hex string. */
-  pcmDigest: string;
-}
-
-// ============================================================================
 // Deal Events
 // ============================================================================
 
@@ -506,7 +441,20 @@ export interface DealCreatedEvent {
   trackCoverArtAnimatedBlobId?: string;
 }
 
-export interface DealDestroyedEvent {
+/**
+ * Emitted when a deal is accepted: consumed by `track::new` into a track for
+ * its target release. Treat as provisional until the release publishes (in the
+ * honest path both land in the same transaction).
+ */
+export interface DealAcceptedEvent {
+  dealId: string;
+  releaseId: string;
+  recordingId: string;
+  compositionId: string;
+}
+
+/** Emitted when a deal is rejected: destroyed without inclusion in a release. Terminal. */
+export interface DealRejectedEvent {
   dealId: string;
   releaseId: string;
   recordingId: string;

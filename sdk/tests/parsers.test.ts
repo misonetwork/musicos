@@ -7,7 +7,6 @@
 // round-trips fail loudly here.
 
 import { test, expect } from "bun:test";
-import { bcs } from "@mysten/sui/bcs";
 
 import {
   CompositionPublishedEvent,
@@ -15,7 +14,7 @@ import {
 } from "../src/contracts/musicos/composition.ts";
 import { RecordingPublishedEvent } from "../src/contracts/musicos/recording.ts";
 import { ReleasePublishedEvent } from "../src/contracts/musicos/release.ts";
-import { DealCreatedEvent, DealDestroyedEvent } from "../src/contracts/musicos/deal.ts";
+import { DealCreatedEvent, DealAcceptedEvent, DealRejectedEvent } from "../src/contracts/musicos/deal.ts";
 import * as parse from "../src/parsers.ts";
 
 const A1 = "0x" + "11".repeat(32);
@@ -66,38 +65,12 @@ test("dealCreatedEvent round-trips (split + cover-art blob ids)", () => {
   });
 });
 
-test("dealDestroyedEvent round-trips", () => {
-  const bytes = DealDestroyedEvent.serialize({ deal_id: A1, release_id: A2, recording_id: A3, composition_id: A4 }).toBytes();
-  expect(parse.parseDealDestroyedEvent(bytes)).toEqual({ dealId: A1, releaseId: A2, recordingId: A3, compositionId: A4 });
+test("dealAcceptedEvent round-trips", () => {
+  const bytes = DealAcceptedEvent.serialize({ deal_id: A1, release_id: A2, recording_id: A3, composition_id: A4 }).toBytes();
+  expect(parse.parseDealAcceptedEvent(bytes)).toEqual({ dealId: A1, releaseId: A2, recordingId: A3, compositionId: A4 });
 });
 
-test("audioIngestedEvent round-trips (format + pcm_digest hex)", () => {
-  // Mirrors audio::audio::AudioIngestedEvent field order.
-  const AudioIngestedEvent = bcs.struct("AudioIngestedEvent", {
-    blob_id: bcs.u256(),
-    format: bcs.string(),
-    channels: bcs.u8(),
-    bit_depth: bcs.u8(),
-    sample_rate_hz: bcs.u32(),
-    samples: bcs.u64(),
-    duration_ms: bcs.u64(),
-    pcm_digest: bcs.vector(bcs.u8()),
-  });
-  const digest = Array.from({ length: 32 }, (_, i) => i + 1);
-  const bytes = AudioIngestedEvent.serialize({
-    blob_id: "999",
-    format: "flac",
-    channels: 2,
-    bit_depth: 16,
-    sample_rate_hz: 44100,
-    samples: "441000",
-    duration_ms: "10000",
-    pcm_digest: digest,
-  }).toBytes();
-  const out = parse.parseAudioIngestedEvent(bytes);
-  expect(out.blobId).toBe("999");
-  expect(out.format).toBe("flac");
-  expect(out.channels).toBe(2);
-  expect(out.samples).toBe(441000);
-  expect(out.pcmDigest).toBe(digest.map((b) => b.toString(16).padStart(2, "0")).join(""));
+test("dealRejectedEvent round-trips", () => {
+  const bytes = DealRejectedEvent.serialize({ deal_id: A1, release_id: A2, recording_id: A3, composition_id: A4 }).toBytes();
+  expect(parse.parseDealRejectedEvent(bytes)).toEqual({ dealId: A1, releaseId: A2, recordingId: A3, compositionId: A4 });
 });

@@ -18,7 +18,6 @@
 import { MoveTuple, MoveEnum, MoveStruct, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
 import { bcs } from '@mysten/sui/bcs';
 import { type Transaction, type TransactionArgument } from '@mysten/sui/transactions';
-import * as release_kind from './release_kind.js';
 import * as vec_map from './deps/sui/vec_map.js';
 import * as credit from './deps/partyos/credit.js';
 import * as release_party_role from './release_party_role.js';
@@ -36,16 +35,12 @@ export const ReleaseState = new MoveEnum({ name: `${$moduleName}::ReleaseState`,
 export const Release = new MoveStruct({ name: `${$moduleName}::Release`, fields: {
         /** Unique identifier for this release. */
         id: bcs.Address,
-        /** The type of release. */
-        kind: release_kind.ReleaseKind,
         /** Current lifecycle state. */
         state: ReleaseState,
         /** Title of the release. */
         title: bcs.string(),
         /** Optional subtitle (e.g., "Deluxe Edition"). */
         subtitle: bcs.option(bcs.string()),
-        /** Description of the release. */
-        description: bcs.string(),
         /** Attribution information for the release. */
         credits: vec_map.VecMap(bcs.Address, credit.Credit(release_party_role.ReleasePartyRole)),
         /** Collection of discs containing tracks. */
@@ -68,9 +63,7 @@ export const ReleasePublishedEvent = new MoveStruct({ name: `${$moduleName}::Rel
         release_id: bcs.Address
     } });
 export interface NewArguments {
-    kind: TransactionArgument;
     title: RawTransactionArgument<string>;
-    description: RawTransactionArgument<string>;
     coverArt: TransactionArgument;
     discs: TransactionArgument;
     nonce: RawTransactionArgument<number | bigint>;
@@ -79,9 +72,7 @@ export interface NewArguments {
 export interface NewOptions {
     package?: string;
     arguments: NewArguments | [
-        kind: TransactionArgument,
         title: RawTransactionArgument<string>,
-        description: RawTransactionArgument<string>,
         coverArt: TransactionArgument,
         discs: TransactionArgument,
         nonce: RawTransactionArgument<number | bigint>,
@@ -95,19 +86,50 @@ export interface NewOptions {
 export function _new(options: NewOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
     const argumentsTypes = [
-        null,
-        '0x1::string::String',
         '0x1::string::String',
         null,
         'vector<null>',
         'u256',
         null
     ] satisfies (string | null)[];
-    const parameterNames = ["kind", "title", "description", "coverArt", "discs", "nonce", "registry"];
+    const parameterNames = ["title", "coverArt", "discs", "nonce", "registry"];
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'release',
         function: 'new',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+    });
+}
+export interface SetSubtitleArguments {
+    self: RawTransactionArgument<string>;
+    cap: RawTransactionArgument<string>;
+    subtitle: RawTransactionArgument<string>;
+}
+export interface SetSubtitleOptions {
+    package?: string;
+    arguments: SetSubtitleArguments | [
+        self: RawTransactionArgument<string>,
+        cap: RawTransactionArgument<string>,
+        subtitle: RawTransactionArgument<string>
+    ];
+}
+/**
+ * Sets the subtitle of the release (e.g., "Deluxe Edition"). A subtitle is part of
+ * the release's identity — it distinguishes which edition this release is — so it
+ * lives in the frozen embedded fields. Required State: Initialized
+ */
+export function setSubtitle(options: SetSubtitleOptions) {
+    const packageAddress = options.package ?? '@local-pkg/musicos';
+    const argumentsTypes = [
+        null,
+        null,
+        '0x1::string::String'
+    ] satisfies (string | null)[];
+    const parameterNames = ["self", "cap", "subtitle"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'release',
+        function: 'set_subtitle',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
@@ -261,29 +283,6 @@ export function id(options: IdOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
-export interface KindArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface KindOptions {
-    package?: string;
-    arguments: KindArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-/** Returns the release kind. */
-export function kind(options: KindOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'kind',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
 export interface StateArguments {
     self: RawTransactionArgument<string>;
 }
@@ -396,29 +395,6 @@ export function subtitle(options: SubtitleOptions) {
         package: packageAddress,
         module: 'release',
         function: 'subtitle',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface DescriptionArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface DescriptionOptions {
-    package?: string;
-    arguments: DescriptionArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-/** Returns the release description. */
-export function description(options: DescriptionOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'description',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
@@ -540,51 +516,6 @@ export function containsRecording(options: ContainsRecordingOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
-export interface DurationMsArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface DurationMsOptions {
-    package?: string;
-    arguments: DurationMsArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-/** Returns the total duration of all tracks in milliseconds. */
-export function durationMs(options: DurationMsOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'duration_ms',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface AudioIngesterTypesArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface AudioIngesterTypesOptions {
-    package?: string;
-    arguments: AudioIngesterTypesArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-export function audioIngesterTypes(options: AudioIngesterTypesOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'audio_ingester_types',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
 export interface ReleaseAdminCapReleaseIdArguments {
     cap: RawTransactionArgument<string>;
 }
@@ -642,7 +573,11 @@ export interface UidMutOptions {
         cap: RawTransactionArgument<string>
     ];
 }
-/** Returns a mutable reference to the release's UID. Requires the admin capability. */
+/**
+ * Returns a mutable reference to the release's UID. Requires the admin capability.
+ * Works in any lifecycle state — dynamic fields are the extension surface and stay
+ * admin-mutable after publish; only the embedded fields are frozen.
+ */
 export function uidMut(options: UidMutOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
     const argumentsTypes = [

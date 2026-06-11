@@ -10,7 +10,6 @@
 // when the generated shapes change, type errors surface here.
 
 import type {
-  Audio,
   BPS,
   Composition,
   CompositionCredit,
@@ -24,7 +23,6 @@ import type {
   RecordingPartyRoleLevel,
   Release,
   ReleaseCredit,
-  ReleaseKind,
   ReleasePartyRole,
   Track,
   TrackState,
@@ -73,20 +71,7 @@ export function mapVecSet(d: Parsed): string[] {
   return (d?.contents ?? []) as string[];
 }
 
-// === Audio / CoverArt ===
-
-export function mapAudio(d: Parsed): Audio {
-  return {
-    ingester: mapTypeName(d.ingester),
-    format: d.format,
-    channels: Number(d.channels),
-    bitDepth: Number(d.bit_depth),
-    sampleRateHz: Number(d.sample_rate_hz),
-    samples: Number(d.samples),
-    pcmDigest: (d.pcm_digest ?? []).map((b: number) => b.toString(16).padStart(2, "0")).join(""),
-    data: mapWalrusData(d.data),
-  };
-}
+// === CoverArt ===
 
 export function mapCoverArt(d: Parsed): CoverArt {
   return {
@@ -138,9 +123,10 @@ export function mapComposition(id: string, d: Parsed): Composition {
     id,
     state: mapState(d.state),
     title: d.title,
-    alternateTitles: d.alternate_titles ?? [],
     credits: mapCredits<CompositionPartyRole>(d.credits, mapCompositionRole) as Record<string, CompositionCredit>,
-    royaltyRate: mapBps(d.royalty_rate),
+    // CompositionRoyaltyRate is a Move tuple struct `(BPS, u64)` -> [bps, epoch].
+    royaltyRate: mapBps(d.royalty_rate[0]),
+    royaltyRateLastChangedEpoch: Number(d.royalty_rate[1]),
   };
 }
 
@@ -156,11 +142,6 @@ export function mapRecording(id: string, d: Parsed): Recording {
     primaryArtistIds: mapVecSet(d.primary_artist_ids),
     featuredArtistIds: mapVecSet(d.featured_artist_ids),
     credits: mapCredits<RecordingPartyRole>(d.credits, mapRecordingRole) as Record<string, RecordingCredit>,
-    // LanguageCode is a tuple struct `(String)` -> [code].
-    language: d.language != null ? (Array.isArray(d.language) ? d.language[0] : d.language) : undefined,
-    isExplicit: Boolean(d.is_explicit),
-    isInstrumental: Boolean(d.is_instrumental),
-    masters: (d.masters as Parsed[]).map(mapAudio),
     coverArt: mapCoverArt(d.cover_art),
   };
 }
@@ -173,9 +154,7 @@ export function mapTrack(d: Parsed): Track {
     compositionRoyaltyRate: mapBps(d.composition_royalty_rate),
     recordingId: d.recording_id,
     recordingShareType: mapTypeName(d.recording_share_type),
-    recordingMasterIngesterType: mapTypeName(d.recording_master_ingester_type),
     title: d.title,
-    durationMs: Number(d.duration_ms),
     coverArt: mapCoverArt(d.cover_art),
     splitBps: mapBps(d.split_bps),
   };
@@ -186,7 +165,6 @@ export function mapDisc(d: Parsed): Disc {
     tracks: (d.tracks ?? []).map(mapTrack),
     artwork: d.artwork != null ? mapCoverArt(d.artwork) : undefined,
     title: d.title ?? undefined,
-    durationMs: Number(d.duration_ms),
   };
 }
 
@@ -194,9 +172,7 @@ export function mapRelease(id: string, d: Parsed): Release {
   return {
     id,
     state: mapState(d.state),
-    kind: d.kind.$kind as ReleaseKind,
     title: d.title,
-    description: d.description ?? "",
     subtitle: d.subtitle ?? undefined,
     credits: mapCredits<ReleasePartyRole>(d.credits, mapReleaseRole) as Record<string, ReleaseCredit>,
     discs: (d.discs ?? []).map(mapDisc),

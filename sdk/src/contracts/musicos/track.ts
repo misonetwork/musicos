@@ -12,7 +12,7 @@
  * 
  * - Caches recording metadata for quick access
  * - Supports optional track-specific cover art
- * - Stores composition split for royalty calculations
+ * - Stores the track's split of release revenue and the composition royalty rate
  */
 
 import { MoveEnum, MoveStruct, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
@@ -44,15 +44,15 @@ export const Track = new MoveStruct({ name: `${$moduleName}::Track`, fields: {
         recording_id: bcs.Address,
         /** Type of the recording's share token. */
         recording_share_type: type_name.TypeName,
-        /** Ingester of the recording's master audio file. */
-        recording_master_ingester_type: type_name.TypeName,
         /** Description of the track. */
         title: bcs.string(),
-        /** Duration of the track in milliseconds. */
-        duration_ms: bcs.u64(),
-        /** Covert art for the track. Inherited from the recording by default. */
+        /** Cover art for the track. Inherited from the recording by default. */
         cover_art: cover_art.CoverArt,
-        /** Split of revenue allocated to composition vs recording (in basis points). */
+        /**
+         * This track's share of the release's revenue, in basis points. All tracks in a
+         * release sum to 100%. (The composition-vs-recording split within this share is
+         * governed by `composition_royalty_rate`.)
+         */
         split_bps: bps.BPS
     } });
 export interface NewArguments {
@@ -65,8 +65,9 @@ export interface NewOptions {
     ];
 }
 /**
- * Creates a new track from a recording. Requires the recording admin capability.
- * Captures the recording's metadata at creation time.
+ * Creates a new track by accepting a deal. The deal itself is the authorization —
+ * it was created by the recording's admin and carries the recording's metadata and
+ * the agreed split. Emits a `DealAcceptedEvent`.
  */
 export function _new(options: NewOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
@@ -196,29 +197,6 @@ export function recordingShareType(options: RecordingShareTypeOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
-export interface RecordingMasterIngesterTypeArguments {
-    self: TransactionArgument;
-}
-export interface RecordingMasterIngesterTypeOptions {
-    package?: string;
-    arguments: RecordingMasterIngesterTypeArguments | [
-        self: TransactionArgument
-    ];
-}
-/** Returns the ingester of the recording's master audio file. */
-export function recordingMasterIngesterType(options: RecordingMasterIngesterTypeOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'track',
-        function: 'recording_master_ingester_type',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
 export interface TitleArguments {
     self: TransactionArgument;
 }
@@ -239,29 +217,6 @@ export function title(options: TitleOptions) {
         package: packageAddress,
         module: 'track',
         function: 'title',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface DurationMsArguments {
-    self: TransactionArgument;
-}
-export interface DurationMsOptions {
-    package?: string;
-    arguments: DurationMsArguments | [
-        self: TransactionArgument
-    ];
-}
-/** Returns the duration of the track in milliseconds. */
-export function durationMs(options: DurationMsOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'track',
-        function: 'duration_ms',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
@@ -297,10 +252,7 @@ export interface SplitBpsOptions {
         self: TransactionArgument
     ];
 }
-/**
- * Returns the split of revenue allocated to composition vs recording (in basis
- * points).
- */
+/** Returns this track's share of the release's revenue (in basis points). */
 export function splitBps(options: SplitBpsOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
     const argumentsTypes = [

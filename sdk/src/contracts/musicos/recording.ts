@@ -10,9 +10,10 @@
  * 
  * ### Key Features:
  * 
- * - Share token initialization with fixed supply (100M tokens, 6 decimals)
+ * - Share token initialization with fixed supply (10M tokens, 6 decimals)
  * - Party management with role assignments (Producer, Vocalist, etc.)
- * - State machine: Initialized -> Published (immutable after publish)
+ * - State machine: Initialized -> Published (embedded fields immutable after
+ *   publish; dynamic fields remain extensible via `uid_mut`, e.g. masters)
  * - Deterministic addresses via derived object pattern
  */
 
@@ -24,8 +25,6 @@ import * as vec_set from './deps/sui/vec_set.js';
 import * as vec_map from './deps/sui/vec_map.js';
 import * as credit from './deps/partyos/credit.js';
 import * as recording_party_role from './recording_party_role.js';
-import * as language_code from './deps/gengo/language_code.js';
-import * as audio from './deps/audio/audio.js';
 import * as cover_art from './cover_art.js';
 const $moduleName = '@local-pkg/musicos::recording';
 /** Lifecycle state of a recording. */
@@ -57,17 +56,6 @@ export const Recording = new MoveStruct({ name: `${$moduleName}::Recording<phant
         featured_artist_ids: vec_set.VecSet(bcs.Address),
         /** Map of party IDs to their roles on this recording. */
         credits: vec_map.VecMap(bcs.Address, credit.Credit(recording_party_role.RecordingPartyRole)),
-        /** Language of the vocals (if any). */
-        language: bcs.option(language_code.LanguageCode),
-        /** Whether the recording contains explicit content. */
-        is_explicit: bcs.bool(),
-        /** Whether the recording is instrumental (no vocals). */
-        is_instrumental: bcs.bool(),
-        /**
-         * The mastered audio file(s) — always at least one. `masters[0]` is the primary;
-         * additional formats (e.g. DSD, Atmos) are appended via `add_master`.
-         */
-        masters: bcs.vector(audio.Audio),
         /** Cover art for the recording. */
         cover_art: cover_art.CoverArt
     } });
@@ -84,9 +72,6 @@ export const RecordingPublishedEvent = new MoveStruct({ name: `${$moduleName}::R
 export interface NewArguments {
     composition: RawTransactionArgument<string>;
     idx: RawTransactionArgument<number | bigint>;
-    isExplicit: RawTransactionArgument<boolean>;
-    isInstrumental: RawTransactionArgument<boolean>;
-    master: TransactionArgument;
     coverArt: TransactionArgument;
     shareCurrency: RawTransactionArgument<string>;
     shareTreasuryCap: RawTransactionArgument<string>;
@@ -96,9 +81,6 @@ export interface NewOptions {
     arguments: NewArguments | [
         composition: RawTransactionArgument<string>,
         idx: RawTransactionArgument<number | bigint>,
-        isExplicit: RawTransactionArgument<boolean>,
-        isInstrumental: RawTransactionArgument<boolean>,
-        master: TransactionArgument,
         coverArt: TransactionArgument,
         shareCurrency: RawTransactionArgument<string>,
         shareTreasuryCap: RawTransactionArgument<string>
@@ -109,27 +91,23 @@ export interface NewOptions {
     ];
 }
 /**
- * Creates a new recording for a composition. Initializes share tokens (100M
- * supply, 6 decimals) and returns:
+ * Creates a new recording for a composition. Initializes share tokens (10M supply,
+ * 6 decimals) and returns:
  *
  * - The recording object
  * - Admin capability for the owner
  * - Initial share token balance
- * - Promise that must be consumed by calling `share()`
  */
 export function _new(options: NewOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
     const argumentsTypes = [
         null,
         'u64',
-        'bool',
-        'bool',
-        null,
         null,
         null,
         null
     ] satisfies (string | null)[];
-    const parameterNames = ["composition", "idx", "isExplicit", "isInstrumental", "master", "coverArt", "shareCurrency", "shareTreasuryCap"];
+    const parameterNames = ["composition", "idx", "coverArt", "shareCurrency", "shareTreasuryCap"];
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'recording',
@@ -237,39 +215,6 @@ export function setSubtitle(options: SetSubtitleOptions) {
         package: packageAddress,
         module: 'recording',
         function: 'set_subtitle',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface SetLanguageArguments {
-    self: RawTransactionArgument<string>;
-    _: RawTransactionArgument<string>;
-    languageCode: RawTransactionArgument<string>;
-}
-export interface SetLanguageOptions {
-    package?: string;
-    arguments: SetLanguageArguments | [
-        self: RawTransactionArgument<string>,
-        _: RawTransactionArgument<string>,
-        languageCode: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Sets the language of the recording. Required State: Initialized */
-export function setLanguage(options: SetLanguageOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null,
-        null,
-        '0x1::string::String'
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "_", "languageCode"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'set_language',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
         typeArguments: options.typeArguments
     });
@@ -711,204 +656,6 @@ export function credits(options: CreditsOptions) {
         typeArguments: options.typeArguments
     });
 }
-export interface LanguageArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface LanguageOptions {
-    package?: string;
-    arguments: LanguageArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns the optional language code. */
-export function language(options: LanguageOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'language',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface IsExplicitArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface IsExplicitOptions {
-    package?: string;
-    arguments: IsExplicitArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns whether the recording contains explicit content. */
-export function isExplicit(options: IsExplicitOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'is_explicit',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface IsInstrumentalArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface IsInstrumentalOptions {
-    package?: string;
-    arguments: IsInstrumentalArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns whether the recording is instrumental. */
-export function isInstrumental(options: IsInstrumentalOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'is_instrumental',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface MasterArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface MasterOptions {
-    package?: string;
-    arguments: MasterArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns a reference to the master audio file. */
-export function master(options: MasterOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'master',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface MastersArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface MastersOptions {
-    package?: string;
-    arguments: MastersArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns all master formats (PCM, DSD, Atmos, …). `masters[0]` is the primary. */
-export function masters(options: MastersOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'masters',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface MasterIngesterTypeArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface MasterIngesterTypeOptions {
-    package?: string;
-    arguments: MasterIngesterTypeArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns the ingester type of the recording's primary master audio file. */
-export function masterIngesterType(options: MasterIngesterTypeOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'master_ingester_type',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface AddMasterArguments {
-    self: RawTransactionArgument<string>;
-    _: RawTransactionArgument<string>;
-    master: TransactionArgument;
-}
-export interface AddMasterOptions {
-    package?: string;
-    arguments: AddMasterArguments | [
-        self: RawTransactionArgument<string>,
-        _: RawTransactionArgument<string>,
-        master: TransactionArgument
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/**
- * Appends an additional master format (e.g. DSD, Atmos). Admin-gated and
- * appendable after publish; the primary (`masters[0]`) is fixed at creation.
- */
-export function addMaster(options: AddMasterOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null,
-        null,
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "_", "master"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'add_master',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
 export interface CoverArtArguments {
     self: RawTransactionArgument<string>;
 }
@@ -1039,7 +786,9 @@ export interface UidMutOptions {
 }
 /**
  * Returns a mutable reference to the recording's UID. Requires the admin
- * capability.
+ * capability. Works in any lifecycle state — dynamic fields are the extension
+ * surface (e.g. masters) and stay admin-mutable after publish; only the embedded
+ * fields are frozen.
  */
 export function uidMut(options: UidMutOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';

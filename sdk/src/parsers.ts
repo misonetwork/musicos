@@ -5,7 +5,6 @@
 // they track the on-chain ABI automatically); these functions parse raw event
 // bytes and map them to the public camelCase event types.
 
-import { bcs } from "@mysten/sui/bcs";
 import {
   CompositionPublishedEvent as CompositionPublishedEventBcs,
   CompositionRoyaltySetEvent as CompositionRoyaltySetEventBcs,
@@ -14,31 +13,18 @@ import { RecordingPublishedEvent as RecordingPublishedEventBcs } from "./contrac
 import { ReleasePublishedEvent as ReleasePublishedEventBcs } from "./contracts/musicos/release.ts";
 import {
   DealCreatedEvent as DealCreatedEventBcs,
-  DealDestroyedEvent as DealDestroyedEventBcs,
+  DealAcceptedEvent as DealAcceptedEventBcs,
+  DealRejectedEvent as DealRejectedEventBcs,
 } from "./contracts/musicos/deal.ts";
 import type {
   CompositionPublishedEvent,
   CompositionRoyaltySetEvent,
   RecordingPublishedEvent,
   ReleasePublishedEvent,
-  AudioIngestedEvent,
   DealCreatedEvent,
-  DealDestroyedEvent,
+  DealAcceptedEvent,
+  DealRejectedEvent,
 } from "./types.ts";
-
-// `AudioIngestedEvent` is emitted by the `audio` package and is not referenced
-// by any MusicOS function signature, so codegen does not emit it. Its layout
-// mirrors `audio::audio::AudioIngestedEvent`.
-const AudioIngestedEventBcs = bcs.struct("AudioIngestedEvent", {
-  blob_id: bcs.u256(),
-  format: bcs.string(),
-  channels: bcs.u8(),
-  bit_depth: bcs.u8(),
-  sample_rate_hz: bcs.u32(),
-  samples: bcs.u64(),
-  duration_ms: bcs.u64(),
-  pcm_digest: bcs.vector(bcs.u8()),
-});
 
 // === Composition ===
 
@@ -66,22 +52,6 @@ export function parseReleasePublishedEvent(bytes: Uint8Array): ReleasePublishedE
   return { releaseId: e.release_id };
 }
 
-// === Audio ===
-
-export function parseAudioIngestedEvent(bytes: Uint8Array): AudioIngestedEvent {
-  const e = AudioIngestedEventBcs.parse(bytes);
-  return {
-    blobId: e.blob_id.toString(),
-    format: e.format,
-    channels: e.channels,
-    bitDepth: e.bit_depth,
-    sampleRateHz: e.sample_rate_hz,
-    samples: Number(e.samples),
-    durationMs: Number(e.duration_ms),
-    pcmDigest: e.pcm_digest.map((b) => b.toString(16).padStart(2, "0")).join(""),
-  };
-}
-
 // === Deal ===
 
 export function parseDealCreatedEvent(bytes: Uint8Array): DealCreatedEvent {
@@ -99,8 +69,18 @@ export function parseDealCreatedEvent(bytes: Uint8Array): DealCreatedEvent {
   };
 }
 
-export function parseDealDestroyedEvent(bytes: Uint8Array): DealDestroyedEvent {
-  const e = DealDestroyedEventBcs.parse(bytes);
+export function parseDealAcceptedEvent(bytes: Uint8Array): DealAcceptedEvent {
+  const e = DealAcceptedEventBcs.parse(bytes);
+  return {
+    dealId: e.deal_id,
+    releaseId: e.release_id,
+    recordingId: e.recording_id,
+    compositionId: e.composition_id,
+  };
+}
+
+export function parseDealRejectedEvent(bytes: Uint8Array): DealRejectedEvent {
+  const e = DealRejectedEventBcs.parse(bytes);
   return {
     dealId: e.deal_id,
     releaseId: e.release_id,

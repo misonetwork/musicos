@@ -148,35 +148,21 @@ const tx = await client.musicos.tx.publishComposition({
   minatoPackageId: "0x...",
 });
 
-// Publish a recording. `master` carries the enclave-attested audio: pass `format`,
-// `pcmDigest`, `signature`, and `timestampMs` through verbatim from the ingester response.
+// Publish a recording. The core object carries identity, attribution, economics,
+// and cover art; masters and descriptive metadata (language, explicitness, …)
+// attach afterwards as dynamic fields via extensions (e.g. the audio ingester).
 const tx2 = await client.musicos.tx.publishRecording({
   compositionId: "0x...",
   compositionShareType: "0x...::share::SHARE",
   shareCurrencyId: "0x...",
   treasuryCapOwner: ownerAddress,
-  isExplicit: false,
-  isInstrumental: false,
-  master: {
-    channels: 2,
-    bitDepth: 16,
-    sampleRateHz: 44_100,
-    samples: 9_876_543,
-    blobId: "123456789",        // Walrus blob ID as a u256 decimal string
-    format: "flac",             // attested by the enclave
-    pcmDigest: [/* 32 bytes */], // attested by the enclave
-    signature: [/* 64 bytes */], // enclave Ed25519 signature
-    timestampMs: 1_700_000_000_000,
-  },
-  coverArt: { staticData: { blobId: "987654321" } },
+  coverArt: { stillData: { blobId: "987654321" } },
   credits: [{ partyId: "0x...", displayName: "Artist", roles: [{ type: "Vocalist", level: "Lead" }], isPrimaryArtist: true }],
   shareRecipients: [{ address: ownerAddress, value: 10_000_000_000_000 }],
   adminAddress: ownerAddress,
   musicOsPackageId: "0x...",
   partyOsPackageId: "0x...",
   walrusDataPackageId: "0x...",
-  audioIngesterPackageId: "0x...",
-  enclaveId: "0x...",
   minatoPackageId: "0x...",
 });
 
@@ -194,15 +180,13 @@ const tx3 = client.musicos.tx.createDeal({
 });
 ```
 
-### Audio attestation
+### Masters and descriptive metadata
 
-`Audio` can only be created through an ingester that cryptographically attests the file.
-The ingester (a Nautilus enclave) decodes the audio, computes the Walrus blob ID and a
-BLAKE2b-256 `pcmDigest`, then Ed25519-signs an `AudioVerificationPayload`. The builders
-forward those attested values into `audio_ingester::ingest` in the exact order the enclave
-signed them (`…, blobId, format, pcmDigest, timestampMs, signature, enclave`). Because the
-signature covers `format` and `pcmDigest`, they are attested rather than caller-asserted —
-pass the ingester's response through unchanged or signature verification will fail.
+Masters are not part of the core `Recording` object: they attach post-publish as dynamic
+fields through the audio-ingester extension (which attests the audio in a Nautilus
+enclave). Descriptive metadata — language, instrumental status, explicitness, genre —
+likewise lives in extension metadata standards rather than in the frozen core. Use the
+ingester's own SDK for attaching masters.
 
 ## Event Parsers
 
@@ -266,7 +250,7 @@ import type {
   // Admin caps
   CompositionAdminCap, RecordingAdminCap, ReleaseAdminCap,
   // Supporting types
-  Audio, CoverArt, Disc, Track, BPS, ReleaseKind, WalrusData,
+  CoverArt, Disc, Track, BPS, WalrusData,
   // Credits & roles
   CompositionCredit, RecordingCredit, ReleaseCredit,
   CompositionPartyRole, RecordingPartyRole, ReleasePartyRole,
@@ -275,7 +259,7 @@ import type {
   // Events
   CompositionPublishedEvent, CompositionRoyaltySetEvent,
   RecordingPublishedEvent, ReleasePublishedEvent,
-  AudioIngestedEvent, DealCreatedEvent, DealDestroyedEvent,
+  DealCreatedEvent, DealAcceptedEvent, DealRejectedEvent,
 } from "@misonetwork/musicos";
 ```
 

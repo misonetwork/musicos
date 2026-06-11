@@ -62,9 +62,8 @@ test("publishRelease wires deal -> track -> disc -> release::new -> add_credit -
   const tx = new Transaction();
   publishRelease({
     walrusDataPackageId: PKG,
-    kind: "Album",
     title: "LP",
-    description: "desc",
+    subtitle: "Deluxe Edition",
     credits: [{ partyId: A, role: "Primary", displayName: "Artist" }],
     coverArt: { stillData: { blobId: "1" } },
     discs: [
@@ -88,8 +87,9 @@ test("publishRelease wires deal -> track -> disc -> release::new -> add_credit -
   expect(has("track", "new")).toBe(true);
   expect(has("disc", "new")).toBe(true);
   expect(has("release", "new")).toBe(true);
+  expect(has("release", "set_subtitle")).toBe(true);
   expect(has("release", "add_credit")).toBe(true);
   expect(has("release", "publish")).toBe(true);
-  // release::new takes (kind, title, description, cover_art, discs, nonce, registry)
-  expect(calls.find((c) => c.module === "release" && c.function === "new")!.argCount).toBe(7);
+  // release::new takes (title, cover_art, discs, nonce, registry)
+  expect(calls.find((c) => c.module === "release" && c.function === "new")!.argCount).toBe(5);
 });

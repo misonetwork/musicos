@@ -29,9 +29,7 @@ export const Disc = new MoveStruct({ name: `${$moduleName}::Disc`, fields: {
          */
         artwork: bcs.option(cover_art.CoverArt),
         /** Title of the disc. */
-        title: bcs.option(bcs.string()),
-        /** Total duration of all tracks in milliseconds. */
-        duration_ms: bcs.u64()
+        title: bcs.option(bcs.string())
     } });
 export interface NewArguments {
     tracks: TransactionArgument;
@@ -45,8 +43,10 @@ export interface NewOptions {
     ];
 }
 /**
- * Creates a new disc from a vector of tracks. Automatically calculates the total
- * duration. Aborts if more than 50 tracks are provided.
+ * Creates a new disc from a vector of tracks. Aborts if more than 50 tracks are
+ * provided, or if a title is provided that is empty or longer than 300 bytes.
+ * Discs are embedded in a release and frozen at publish, so the title must be
+ * valid at construction.
  */
 export function _new(options: NewOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
@@ -131,29 +131,6 @@ export function artwork(options: ArtworkOptions) {
         package: packageAddress,
         module: 'disc',
         function: 'artwork',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface DurationMsArguments {
-    self: TransactionArgument;
-}
-export interface DurationMsOptions {
-    package?: string;
-    arguments: DurationMsArguments | [
-        self: TransactionArgument
-    ];
-}
-/** Returns the total duration of this disc in milliseconds. */
-export function durationMs(options: DurationMsOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'disc',
-        function: 'duration_ms',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

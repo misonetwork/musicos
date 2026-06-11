@@ -14,5 +14,3 @@ export * as coverArt from "./contracts/musicos/cover_art.ts";
 export * as compositionPartyRole from "./contracts/musicos/composition_party_role.ts";
 export * as recordingPartyRole from "./contracts/musicos/recording_party_role.ts";
 export * as releasePartyRole from "./contracts/musicos/release_party_role.ts";
-export * as releaseKind from "./contracts/musicos/release_kind.ts";
-export * as audio from "./contracts/musicos/deps/audio/audio.ts";
