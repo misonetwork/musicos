@@ -92,7 +92,8 @@ fun test_add_credit_duplicate_party() {
     destroy(party_cap);
 }
 
-#[test, expected_failure(abort_code = EMinRolesNotMet, location = musicos::recording)]
+// partyos::credit::new now rejects roleless credits before recording::add_credit runs.
+#[test, expected_failure(abort_code = 32, location = partyos::credit)] // ENoRoles
 fun test_add_credit_no_roles() {
     let ctx = &mut tx_context::dummy();
     let (mut rec, cap) = new_test_recording(ctx);

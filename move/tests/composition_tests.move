@@ -324,7 +324,8 @@ fun test_add_credit_exceeds_max() {
     destroy(cap);
 }
 
-#[test, expected_failure(abort_code = EMinRolesNotMet, location = musicos::composition)]
+// partyos::credit::new now rejects roleless credits before composition::add_credit runs.
+#[test, expected_failure(abort_code = 32, location = partyos::credit)] // ENoRoles
 fun test_add_credit_no_roles() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 1500, ctx);
