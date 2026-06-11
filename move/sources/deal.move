@@ -69,8 +69,12 @@ public struct DealCreatedEvent has copy, drop {
     track_cover_art_animated_blob_id: Option<u256>,
 }
 
-/// Emitted when a deal is destroyed.
-public struct DealDestroyedEvent has copy, drop {
+/// Emitted when a deal is accepted: consumed by `track::new` into a track for
+/// its target release. In the honest path this lands in the same transaction
+/// as the release's `ReleasePublishedEvent` (a track cannot outlive its
+/// transaction unless wrapped), so indexers should treat acceptance as
+/// provisional until the release publishes.
+public struct DealAcceptedEvent has copy, drop {
     /// ID of the deal.
     deal_id: ID,
     /// ID of the target release.
@@ -81,10 +85,35 @@ public struct DealDestroyedEvent has copy, drop {
     composition_id: ID,
 }
 
+/// Emitted when a deal is rejected: destroyed without being included in a
+/// release, whether declined by the holder or withdrawn by its creator.
+/// Terminal — the deal no longer exists.
+public struct DealRejectedEvent has copy, drop {
+    /// ID of the deal.
+    deal_id: ID,
+    /// ID of the target release.
+    release_id: ID,
+    /// ID of the recording.
+    recording_id: ID,
+    /// ID of the composition.
+    composition_id: ID,
+}
+
+// === Constants ===
+
+/// Maximum length of a track title in bytes (matches recording/composition titles).
+const MAX_TRACK_TITLE_LENGTH: u64 = 300;
+
 // === Errors ===
 
 /// Composition ID mismatch between recording and composition.
 const ECompositionIdMismatch: u64 = 0;
+
+// Constraint errors (30-39)
+/// Track title exceeds maximum length.
+const EMaxTrackTitleLengthExceeded: u64 = 30;
+/// String must not be empty.
+const EEmptyString: u64 = 31;
 
 // === Public Functions ===
 
@@ -106,6 +135,12 @@ public fun new<CompositionShare, RecordingShare>(
 
     assert!(composition_id == recording.composition_id(), ECompositionIdMismatch);
 
+    // The track title becomes immutable release content; an override must meet
+    // the same rules as the recording title it replaces.
+    let track_title = track_title.destroy_or!(*recording.title());
+    assert!(!track_title.is_empty(), EEmptyString);
+    assert!(track_title.length() <= MAX_TRACK_TITLE_LENGTH, EMaxTrackTitleLengthExceeded);
+
     let deal = Deal {
         id: object::new(ctx),
         release_id,
@@ -114,7 +149,7 @@ public fun new<CompositionShare, RecordingShare>(
         composition_royalty_rate: recording.composition_royalty_rate(),
         recording_id,
         recording_share_type: with_defining_ids<RecordingShare>(),
-        track_title: track_title.destroy_or!(*recording.title()),
+        track_title,
         track_split_bps: bps::new(track_split_bps_value),
         track_cover_art: track_cover_art.destroy_with_default(*recording.cover_art()),
     };
@@ -139,18 +174,38 @@ public fun new<CompositionShare, RecordingShare>(
     deal
 }
 
-/// Destroys a deal, emitting a `DealDestroyedEvent`.
-/// Used when a deal is no longer needed or the negotiation falls through.
-public fun destroy(self: Deal) {
-    let Deal { id, release_id, recording_id, composition_id, .. } = self;
-
-    emit(DealDestroyedEvent {
-        deal_id: id.to_inner(),
-        release_id,
-        recording_id,
-        composition_id,
+/// Accepts the deal, consuming it into a track. Called only by `track::new`.
+/// Emits a `DealAcceptedEvent`.
+public(package) fun accept(self: Deal) {
+    emit(DealAcceptedEvent {
+        deal_id: self.id(),
+        release_id: self.release_id,
+        recording_id: self.recording_id,
+        composition_id: self.composition_id,
     });
 
+    self.destroy_internal();
+}
+
+/// Rejects the deal, destroying it without inclusion in a release.
+/// Used when the holder declines or the negotiation falls through.
+/// Emits a `DealRejectedEvent`.
+public fun reject(self: Deal) {
+    emit(DealRejectedEvent {
+        deal_id: self.id(),
+        release_id: self.release_id,
+        recording_id: self.recording_id,
+        composition_id: self.composition_id,
+    });
+
+    self.destroy_internal();
+}
+
+/// Unpacks and deletes the deal without emitting anything. Event emission is
+/// the caller's job — `accept` and `reject` are the only callers, so every
+/// deal death is announced exactly once, with its meaning.
+fun destroy_internal(self: Deal) {
+    let Deal { id, .. } = self;
     id.delete();
 }
 

@@ -10,9 +10,6 @@ use ori::walrus_data;
 public struct CompositionShare() has drop;
 /// Phantom type for recording share tokens in tests.
 public struct RecordingShare() has drop;
-/// Phantom type for audio ingester witness in tests.
-public struct V() has drop;
-
 /// Creates a WalrusData reference for testing.
 public fun walrus(): walrus_data::WalrusData {
     walrus_data::new_blob(1)

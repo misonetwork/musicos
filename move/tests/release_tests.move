@@ -4,25 +4,31 @@ module musicos::release_tests;
 use partyos::credit;
 use musicos::disc;
 use musicos::release;
-use musicos::release_kind;
 use musicos::release_party_role;
 use musicos::test_helpers::{Self, CompositionShare, RecordingShare};
 use musicos::track;
-use std::unit_test::destroy;
+use std::unit_test::{assert_eq, destroy};
 
 // Error codes from release.move
+const EUnauthorized: u64 = 0;
+const EInvalidTrackSplitsSum: u64 = 20;
 const EMaxDiscsExceeded: u64 = 30;
 const EMaxTracksExceeded: u64 = 31;
-const EMaxDescriptionLengthExceeded: u64 = 32;
 const EMaxCreditsExceeded: u64 = 33;
 const EMaxTitleLengthExceeded: u64 = 34;
+const EEmptyString: u64 = 35;
+const EMaxSubtitleLengthExceeded: u64 = 36;
+const ENoDiscs: u64 = 51;
+const ENoPrimaryCredit: u64 = 52;
+const EInvalidCreditRoleCount: u64 = 53;
+const EPartyAlreadyCredited: u64 = 54;
 
 // Must match release.move
-const MAX_DESCRIPTION_LENGTH: u64 = 500;
 const MAX_DISCS: u64 = 20;
 const MAX_TRACKS: u64 = 255;
 const MAX_CREDITS: u64 = 50;
 const MAX_TITLE_LENGTH: u64 = 300;
+const MAX_SUBTITLE_LENGTH: u64 = 300;
 
 /// Helper to create a single test track.
 fun test_track(ctx: &mut TxContext): track::Track {
@@ -62,30 +68,7 @@ fun test_new_title_too_long() {
     let mut registry = release::new_release_registry_for_testing(ctx);
     let discs = vector[disc::new(vector[test_track(ctx)], option::none())];
     let (rel, cap) = release::new(
-        release_kind::new_album_kind(),
         test_helpers::long_string(MAX_TITLE_LENGTH + 1),
-        b"Description".to_string(),
-        test_helpers::cover_art(),
-        discs,
-        0u256,
-        &mut registry,
-    );
-    destroy(rel);
-    destroy(cap);
-    destroy(registry);
-}
-
-// === Description Length ===
-
-#[test, expected_failure(abort_code = EMaxDescriptionLengthExceeded, location = musicos::release)]
-fun test_new_description_too_long() {
-    let ctx = &mut tx_context::dummy();
-    let mut registry = release::new_release_registry_for_testing(ctx);
-    let discs = vector[disc::new(vector[test_track(ctx)], option::none())];
-    let (rel, cap) = release::new(
-        release_kind::new_album_kind(),
-        b"Title".to_string(),
-        test_helpers::long_string(MAX_DESCRIPTION_LENGTH + 1),
         test_helpers::cover_art(),
         discs,
         0u256,
@@ -113,9 +96,7 @@ fun test_new_exceeds_max_discs() {
     });
 
     let (rel, cap) = release::new(
-        release_kind::new_album_kind(),
         b"Too Many Discs".to_string(),
-        b"Description".to_string(),
         test_helpers::cover_art(),
         discs,
         0u256,
@@ -165,9 +146,7 @@ fun test_new_exceeds_max_tracks() {
     };
 
     let (rel, cap) = release::new(
-        release_kind::new_album_kind(),
         b"Too Many Tracks".to_string(),
-        b"Description".to_string(),
         test_helpers::cover_art(),
         discs,
         0u256,
@@ -185,9 +164,7 @@ fun test_add_credit_exceeds_max() {
     let ctx = &mut tx_context::dummy();
     let discs = vector[disc::new(vector[test_track(ctx)], option::none())];
     let (mut rel, cap) = release::new_for_testing(
-        release_kind::new_album_kind(),
         b"Title".to_string(),
-        b"Description".to_string(),
         test_helpers::cover_art(),
         discs,
         ctx,
@@ -209,6 +186,307 @@ fun test_add_credit_exceeds_max() {
 
     destroy(party);
     destroy(party_cap);
+    destroy(rel);
+    destroy(cap);
+}
+
+// === Subtitle ===
+
+/// Helper to create a minimal release for subtitle tests.
+fun test_release(ctx: &mut TxContext): (release::Release, release::ReleaseAdminCap) {
+    release::new_for_testing(
+        b"Album".to_string(),
+        test_helpers::cover_art(),
+        vector[test_disc_with_n_tracks(1, 10000, ctx)],
+        ctx,
+    )
+}
+
+#[test]
+fun test_set_subtitle() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rel, cap) = test_release(ctx);
+
+    rel.set_subtitle(&cap, b"Deluxe Edition".to_string());
+    assert_eq!(*rel.subtitle(), option::some(b"Deluxe Edition".to_string()));
+
+    destroy(rel);
+    destroy(cap);
+}
+
+#[test]
+fun test_set_subtitle_twice() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rel, cap) = test_release(ctx);
+
+    rel.set_subtitle(&cap, b"Deluxe Edition".to_string());
+    rel.set_subtitle(&cap, b"Remastered".to_string());
+    assert_eq!(*rel.subtitle(), option::some(b"Remastered".to_string()));
+
+    destroy(rel);
+    destroy(cap);
+}
+
+#[test]
+fun test_set_subtitle_at_max_length() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rel, cap) = test_release(ctx);
+
+    rel.set_subtitle(&cap, test_helpers::long_string(MAX_SUBTITLE_LENGTH));
+    assert!(rel.subtitle().is_some());
+
+    destroy(rel);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EEmptyString, location = musicos::release)]
+fun test_set_subtitle_empty() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rel, cap) = test_release(ctx);
+
+    rel.set_subtitle(&cap, b"".to_string());
+
+    destroy(rel);
+    destroy(cap);
+}
+
+#[test, expected_failure(abort_code = EMaxSubtitleLengthExceeded, location = musicos::release)]
+fun test_set_subtitle_too_long() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rel, cap) = test_release(ctx);
+
+    rel.set_subtitle(&cap, test_helpers::long_string(MAX_SUBTITLE_LENGTH + 1));
+
+    destroy(rel);
+    destroy(cap);
+}
+
+// === Creation Validation ===
+
+#[test, expected_failure(abort_code = EEmptyString, location = musicos::release)]
+fun test_new_empty_title() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = release::new_release_registry_for_testing(ctx);
+    let discs = vector[disc::new(vector[test_track(ctx)], option::none())];
+    let (rel, cap) = release::new(
+        b"".to_string(),
+        test_helpers::cover_art(),
+        discs,
+        0u256,
+        &mut registry,
+    );
+    destroy(rel);
+    destroy(cap);
+    destroy(registry);
+}
+
+#[test, expected_failure(abort_code = ENoDiscs, location = musicos::release)]
+fun test_new_no_discs() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = release::new_release_registry_for_testing(ctx);
+    let (rel, cap) = release::new(
+        b"Empty".to_string(),
+        test_helpers::cover_art(),
+        vector[],
+        0u256,
+        &mut registry,
+    );
+    destroy(rel);
+    destroy(cap);
+    destroy(registry);
+}
+
+#[test, expected_failure(abort_code = EInvalidTrackSplitsSum, location = musicos::release)]
+fun test_new_splits_below_total() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = release::new_release_registry_for_testing(ctx);
+    let discs = vector[test_disc_with_n_tracks(1, 9999, ctx)]; // 99.99%
+    let (rel, cap) = release::new(
+        b"Underweight".to_string(),
+        test_helpers::cover_art(),
+        discs,
+        0u256,
+        &mut registry,
+    );
+    destroy(rel);
+    destroy(cap);
+    destroy(registry);
+}
+
+#[test, expected_failure(abort_code = EInvalidTrackSplitsSum, location = musicos::release)]
+fun test_new_splits_above_total() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = release::new_release_registry_for_testing(ctx);
+    let discs = vector[test_disc_with_n_tracks(2, 5001, ctx)]; // 100.02%
+    let (rel, cap) = release::new(
+        b"Overweight".to_string(),
+        test_helpers::cover_art(),
+        discs,
+        0u256,
+        &mut registry,
+    );
+    destroy(rel);
+    destroy(cap);
+    destroy(registry);
+}
+
+/// The same digest (recording set + splits + nonce) can only ever be claimed once.
+#[test, expected_failure] // aborts in sui::derived_object on the duplicate claim
+fun test_duplicate_digest_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let mut registry = release::new_release_registry_for_testing(ctx);
+    let rec_id = test_helpers::fake_id(ctx);
+    let comp_id = test_helpers::fake_id(ctx);
+    let rel_id = test_helpers::fake_id(ctx);
+
+    let disc1 = disc::new(
+        vector[track::new_for_testing<CompositionShare, RecordingShare>(
+            comp_id, rec_id, rel_id, b"Track".to_string(), test_helpers::cover_art(), 10000, 1500,
+        )],
+        option::none(),
+    );
+    let disc2 = disc::new(
+        vector[track::new_for_testing<CompositionShare, RecordingShare>(
+            comp_id, rec_id, rel_id, b"Track".to_string(), test_helpers::cover_art(), 10000, 1500,
+        )],
+        option::none(),
+    );
+
+    let (rel1, cap1) = release::new(
+        b"First".to_string(),
+        test_helpers::cover_art(),
+        vector[disc1],
+        7u256,
+        &mut registry,
+    );
+    // Identical recording ids, splits, and nonce: identical digest.
+    let (rel2, cap2) = release::new(
+        b"Second".to_string(),
+        test_helpers::cover_art(),
+        vector[disc2],
+        7u256,
+        &mut registry,
+    );
+    destroy(rel1);
+    destroy(cap1);
+    destroy(rel2);
+    destroy(cap2);
+    destroy(registry);
+}
+
+// === Credit Validation ===
+
+#[test, expected_failure(abort_code = EInvalidCreditRoleCount, location = musicos::release)]
+fun test_add_credit_two_roles_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rel, cap) = test_release(ctx);
+    let (party, party_cap) = test_helpers::individual(ctx);
+
+    rel.add_credit(
+        &cap,
+        &party,
+        credit::new(
+            b"Artist".to_string(),
+            vector[release_party_role::new_primary_role(), release_party_role::new_featured_role()],
+        ),
+    );
+
+    destroy(rel);
+    destroy(cap);
+    destroy(party);
+    destroy(party_cap);
+}
+
+#[test, expected_failure(abort_code = EPartyAlreadyCredited, location = musicos::release)]
+fun test_add_credit_duplicate_party_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rel, cap) = test_release(ctx);
+    let (party, party_cap) = test_helpers::individual(ctx);
+
+    rel.add_credit(
+        &cap,
+        &party,
+        credit::new(b"Artist".to_string(), vector[release_party_role::new_primary_role()]),
+    );
+    rel.add_credit(
+        &cap,
+        &party,
+        credit::new(b"Artist".to_string(), vector[release_party_role::new_featured_role()]),
+    );
+
+    destroy(rel);
+    destroy(cap);
+    destroy(party);
+    destroy(party_cap);
+}
+
+// === Publish Validation ===
+
+#[test, expected_failure(abort_code = ENoPrimaryCredit, location = musicos::release)]
+fun test_publish_without_primary_credit_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rel, cap) = test_release(ctx);
+    let (party, party_cap) = test_helpers::individual(ctx);
+
+    // A featured credit alone does not satisfy the primary-credit gate.
+    rel.add_credit(
+        &cap,
+        &party,
+        credit::new(b"Guest".to_string(), vector[release_party_role::new_featured_role()]),
+    );
+    let clock = sui::clock::create_for_testing(ctx);
+    rel.publish(&cap, &clock);
+
+    clock.destroy_for_testing();
+    destroy(cap);
+    destroy(party);
+    destroy(party_cap);
+}
+
+// === Authorization ===
+
+#[test, expected_failure(abort_code = EUnauthorized, location = musicos::release)]
+fun test_set_subtitle_wrong_cap_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rel1, cap1) = test_release(ctx);
+    let (rel2, cap2) = test_release(ctx);
+
+    rel1.set_subtitle(&cap2, b"Hijacked".to_string());
+
+    destroy(rel1);
+    destroy(cap1);
+    destroy(rel2);
+    destroy(cap2);
+}
+
+#[test, expected_failure(abort_code = EUnauthorized, location = musicos::release)]
+fun test_uid_mut_wrong_cap_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rel1, cap1) = test_release(ctx);
+    let (rel2, cap2) = test_release(ctx);
+
+    let _uid = rel1.uid_mut(&cap2);
+
+    destroy(rel1);
+    destroy(cap1);
+    destroy(rel2);
+    destroy(cap2);
+}
+
+// === Views ===
+
+#[test]
+fun test_views() {
+    let ctx = &mut tx_context::dummy();
+    let (rel, cap) = test_release(ctx);
+
+    assert!(rel.is_initialized_state());
+    assert!(!rel.is_published_state());
+    assert_eq!(*rel.title(), b"Album".to_string());
+    assert!(rel.credits().is_empty());
+    assert_eq!(rel.total_tracks(), 1);
+    assert_eq!(cap.release_id(), rel.id());
+
     destroy(rel);
     destroy(cap);
 }

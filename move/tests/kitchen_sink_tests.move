@@ -6,7 +6,6 @@ use musicos::disc;
 use musicos::recording;
 use musicos::recording_party_role;
 use musicos::release;
-use musicos::release_kind;
 use musicos::release_party_role;
 use musicos::test_helpers::{Self, CompositionShare, RecordingShare};
 use musicos::track;
@@ -38,7 +37,6 @@ fun make_10_roles(): vector<recording_party_role::RecordingPartyRole> {
 /// - 50 featured artists (MAX_FEATURED_ARTISTS)
 /// - title_version at 100 bytes (MAX_TITLE_VERSION_LENGTH)
 /// - subtitle at 200 bytes (MAX_SUBTITLE_LENGTH)
-/// - language set
 /// - Successfully publishes
 #[test]
 fun test_recording_kitchen_sink() {
@@ -50,8 +48,6 @@ fun test_recording_kitchen_sink() {
         b"Kitchen Sink Recording".to_string(),
         comp_id,
         5000,
-        true,  // is_explicit
-        false, // is_instrumental
         test_helpers::cover_art(),
         ctx,
     );
@@ -84,7 +80,6 @@ fun test_recording_kitchen_sink() {
     // Set all optional fields at max bounds
     rec.set_title_version(&cap, test_helpers::long_string(100)); // MAX_TITLE_VERSION_LENGTH
     rec.set_subtitle(&cap, test_helpers::long_string(200));       // MAX_SUBTITLE_LENGTH
-    rec.set_language(&cap, b"en".to_string());
 
     // Publish - proves all max bounds are achievable together
     let clock = sui::clock::create_for_testing(ctx);
@@ -103,7 +98,6 @@ fun test_recording_kitchen_sink() {
 /// - Track splits sum to exactly 10000 BPS (55 x 40 + 200 x 39 = 10000)
 /// - 50 credits (MAX_CREDITS), each with exactly 1 role (CREDIT_ROLE_COUNT)
 /// - Title at 300 bytes (MAX_TITLE_LENGTH)
-/// - Description at 500 bytes (MAX_DESCRIPTION_LENGTH)
 /// - Successfully publishes
 #[test]
 fun test_release_kitchen_sink() {
@@ -163,12 +157,10 @@ fun test_release_kitchen_sink() {
         d = d + 1;
     };
 
-    // Create release with max title and description.
+    // Create release with max title.
     // new_for_testing patches all tracks to point to the real release ID.
     let (mut rel, rel_cap) = release::new_for_testing(
-        release_kind::new_album_kind(),
         test_helpers::long_string(300), // MAX_TITLE_LENGTH
-        test_helpers::long_string(500), // MAX_DESCRIPTION_LENGTH
         test_helpers::cover_art(),
         discs,
         ctx,

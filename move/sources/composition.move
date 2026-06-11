@@ -7,10 +7,10 @@
 ///
 /// ### Key Features:
 ///
-/// - Share token initialization with fixed supply (100M tokens, 6 decimals)
+/// - Share token initialization with fixed supply (10M tokens, 6 decimals)
 /// - Party management with role assignments (Composer, Lyricist, Songwriter)
-/// - State machine: Initialized -> Published (immutable after publish)
-/// - Revenue and reward pool creation for reward distribution
+/// - State machine: Initialized -> Published (embedded fields immutable after
+///   publish; dynamic fields remain extensible via `uid_mut`)
 /// - Deterministic addresses via derived object pattern
 module musicos::composition;
 
@@ -39,12 +39,12 @@ public struct Composition<phantom CompositionShare> has key {
     state: CompositionState,
     /// Primary title of the composition.
     title: String,
-    /// Additional titles (translations, alternate names).
-    alternate_titles: vector<String>,
     /// Map of party IDs to their roles on this composition.
     credits: VecMap<ID, Credit<CompositionPartyRole>>,
-    /// Royalty rate this composition earns from each recording's revenue.
-    royalty_rate: BPS,
+    /// Royalty rate this composition earns from each recording's revenue,
+    /// paired with the epoch it was last changed in. Each rate stays in
+    /// effect for at least one full epoch.
+    royalty_rate: CompositionRoyaltyRate,
 }
 
 /// Capability that authorizes modifications to a specific composition.
@@ -54,6 +54,15 @@ public struct CompositionAdminCap<phantom CompositionShare> has key, store {
     /// Unique identifier for this capability.
     id: UID,
 }
+
+/// The royalty rate paired with the epoch in which it was last set.
+/// A rate change requires a full epoch to have elapsed since the last change —
+/// a rate set in epoch N is changeable from epoch N+2 onward — so every rate
+/// is in effect for at least one complete epoch. This bounds how a rate change
+/// can surprise a recording creator and makes bait-and-revert oscillation
+/// uneconomical: once a change lands, it is pinned in full public view for the
+/// remainder of that epoch plus the entire next one.
+public struct CompositionRoyaltyRate(BPS, u64) has copy, drop, store;
 
 // === Derivation Keys ===
 
@@ -97,43 +106,46 @@ public struct CompositionRoyaltySetEvent has copy, drop {
 const MIN_ROLES_PER_PARTY: u64 = 1;
 /// Maximum number of roles a party can have.
 const MAX_ROLES_PER_PARTY: u64 = 5;
-/// Maximum number of alternate titles allowed on a composition.
-const MAX_ALTERNATE_TITLES: u64 = 5;
 /// Maximum number of credits allowed on a composition.
 const MAX_CREDITS: u64 = 50;
 /// Maximum length of a title in bytes.
 const MAX_TITLE_LENGTH: u64 = 300;
-/// Maximum length of an alternate title in bytes.
-const MAX_ALTERNATE_TITLE_LENGTH: u64 = 300;
 /// Protocol-immutable floor for a composition's royalty rate (10%). A composition
 /// can set its rate at or above this, never below — preventing songwriters from
-/// being pressured into a sub-floor share. There is no protocol ceiling: an
-/// over-greedy rate is disciplined by the market (no one records it).
+/// being pressured into a sub-floor share. Mirrors the off-chain statutory
+/// mechanical rate paid to songwriters for covers (~9-12% of revenue).
 const MIN_ROYALTY_RATE_BPS: u16 = 1000;
+/// Protocol-immutable ceiling for a composition's royalty rate (20%). Anyone may
+/// record a published composition at the posted rate — a compulsory license —
+/// which is only meaningful if the rate is bounded; an uncapped rate would let a
+/// composition retroactively price out the cover right entirely. ~20% matches the
+/// composition side's share of streaming rights-holder revenue off-chain
+/// (publishing earns ~12-15% of gross vs ~52-58% to recordings).
+const MAX_ROYALTY_RATE_BPS: u16 = 2000;
 
 // === Errors ===
 
 // State errors (10-19)
 /// Operation requires Initialized state but composition is in a different state.
 const ENotInitializedState: u64 = 10;
+/// Royalty rate was changed less than one full epoch ago.
+const ERoyaltyRateCooldown: u64 = 11;
 
 // Validation errors (20-29)
 /// Party must have at least one role.
 const EMinRolesNotMet: u64 = 20;
 /// Royalty rate is below the protocol minimum.
 const EBelowMinRoyaltyRate: u64 = 21;
+/// Royalty rate is above the protocol maximum.
+const EAboveMaxRoyaltyRate: u64 = 22;
 
 // Constraint errors (30-39)
 /// Party has too many roles.
 const EExceedsMaxRoles: u64 = 30;
-/// Composition has too many alternate titles.
-const EMaxAlternateTitlesExceeded: u64 = 31;
 /// Composition has too many credits.
 const EMaxCreditsExceeded: u64 = 32;
 /// Title exceeds maximum length.
 const EMaxTitleLengthExceeded: u64 = 33;
-/// Alternate title exceeds maximum length.
-const EMaxAlternateTitleLengthExceeded: u64 = 34;
 /// String must not be empty.
 const EEmptyString: u64 = 35;
 
@@ -150,12 +162,11 @@ const ENoParties: u64 = 50;
 // === Lifecycle ===
 
 /// Creates a new composition with the given title and royalty rate.
-/// The royalty rate must be at least `MIN_ROYALTY_RATE_BPS`.
-/// Initializes share tokens (100M supply, 6 decimals) and returns:
+/// The royalty rate must be within `[MIN_ROYALTY_RATE_BPS, MAX_ROYALTY_RATE_BPS]`.
+/// Initializes share tokens (10M supply, 6 decimals) and returns:
 /// - The composition object
 /// - Admin capability for the owner
 /// - Initial share token balance
-/// - Promise that must be consumed by calling `share()`
 public fun new<CompositionShare>(
     title: String,
     royalty_rate_bps: u16,
@@ -170,14 +181,14 @@ public fun new<CompositionShare>(
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
     assert!(royalty_rate_bps >= MIN_ROYALTY_RATE_BPS, EBelowMinRoyaltyRate);
+    assert!(royalty_rate_bps <= MAX_ROYALTY_RATE_BPS, EAboveMaxRoyaltyRate);
 
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
-        alternate_titles: vector[],
         credits: vec_map::empty(),
-        royalty_rate: bps::new(royalty_rate_bps),
+        royalty_rate: CompositionRoyaltyRate(bps::new(royalty_rate_bps), ctx.epoch()),
     };
 
     let composition_admin_cap = CompositionAdminCap<CompositionShare> {
@@ -217,32 +228,6 @@ public fun publish<CompositionShare>(
     }
 }
 
-// === Title ===
-
-/// Adds an alternate title to the composition.
-/// Required State: Initialized
-public fun add_alternate_title<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-    alternate_title: String,
-) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            assert!(!alternate_title.is_empty(), EEmptyString);
-            assert!(
-                alternate_title.length() <= MAX_ALTERNATE_TITLE_LENGTH,
-                EMaxAlternateTitleLengthExceeded,
-            );
-            assert!(
-                self.alternate_titles.length() < MAX_ALTERNATE_TITLES,
-                EMaxAlternateTitlesExceeded,
-            );
-            self.alternate_titles.push_back(alternate_title);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
 // === People ===
 
 /// Adds a party to the composition with specified roles.
@@ -272,18 +257,23 @@ public fun add_credit<CompositionShare>(
 // === Financial ===
 
 /// Sets the royalty rate this composition earns from each recording.
-/// Must be at least the protocol minimum (`MIN_ROYALTY_RATE_BPS`); there is no
-/// maximum. The rate can be changed at any time, including after publishing —
-/// because each recording snapshots the rate when it is created, a change only
-/// affects recordings created afterward (existing recordings keep the rate they
-/// captured).
+/// Must be within `[MIN_ROYALTY_RATE_BPS, MAX_ROYALTY_RATE_BPS]`, and only
+/// after a full epoch has elapsed since the last change — a rate set in epoch
+/// N is changeable from epoch N+2 onward, so every rate is in effect for at
+/// least one complete epoch. The rate can be changed in any lifecycle state,
+/// including after publishing — because each recording snapshots the rate
+/// when it is created, a change only affects recordings created afterward
+/// (existing recordings keep the rate they captured).
 public fun set_royalty_rate<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
     royalty_rate_bps: u16,
+    ctx: &TxContext,
 ) {
     assert!(royalty_rate_bps >= MIN_ROYALTY_RATE_BPS, EBelowMinRoyaltyRate);
-    self.royalty_rate = bps::new(royalty_rate_bps);
+    assert!(royalty_rate_bps <= MAX_ROYALTY_RATE_BPS, EAboveMaxRoyaltyRate);
+    assert!(ctx.epoch() > self.royalty_rate.1 + 1, ERoyaltyRateCooldown);
+    self.royalty_rate = CompositionRoyaltyRate(bps::new(royalty_rate_bps), ctx.epoch());
 
     emit(CompositionRoyaltySetEvent {
         composition_id: self.id(),
@@ -318,13 +308,6 @@ public fun title<CompositionShare>(self: &Composition<CompositionShare>): &Strin
     &self.title
 }
 
-/// Returns the list of alternate titles.
-public fun alternate_titles<CompositionShare>(
-    self: &Composition<CompositionShare>,
-): &vector<String> {
-    &self.alternate_titles
-}
-
 /// Returns the party-to-credit mapping.
 public fun credits<CompositionShare>(
     self: &Composition<CompositionShare>,
@@ -334,7 +317,14 @@ public fun credits<CompositionShare>(
 
 /// Returns the royalty rate this composition earns from each recording.
 public fun royalty_rate<CompositionShare>(self: &Composition<CompositionShare>): BPS {
-    self.royalty_rate
+    self.royalty_rate.0
+}
+
+/// Returns the epoch in which the royalty rate was last changed.
+public fun royalty_rate_last_changed_epoch<CompositionShare>(
+    self: &Composition<CompositionShare>,
+): u64 {
+    self.royalty_rate.1
 }
 
 // === UID Functions ===
@@ -345,7 +335,9 @@ public fun uid<CompositionShare>(self: &Composition<CompositionShare>): &UID {
 }
 
 /// Returns a mutable reference to the composition's UID.
-/// Requires the admin capability.
+/// Requires the admin capability. Works in any lifecycle state — dynamic
+/// fields are the extension surface and stay admin-mutable after publish;
+/// only the embedded fields are frozen.
 public fun uid_mut<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
@@ -370,14 +362,14 @@ public fun new_for_testing<CompositionShare>(
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
     assert!(royalty_rate_bps >= MIN_ROYALTY_RATE_BPS, EBelowMinRoyaltyRate);
+    assert!(royalty_rate_bps <= MAX_ROYALTY_RATE_BPS, EAboveMaxRoyaltyRate);
 
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
-        alternate_titles: vector[],
         credits: vec_map::empty(),
-        royalty_rate: bps::new(royalty_rate_bps),
+        royalty_rate: CompositionRoyaltyRate(bps::new(royalty_rate_bps), ctx.epoch()),
     };
 
     let composition_admin_cap = CompositionAdminCap<CompositionShare> {

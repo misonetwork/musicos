@@ -16,12 +16,10 @@ module musicos::release;
 use bps::bps;
 use musicos::cover_art::CoverArt;
 use musicos::disc::Disc;
-use musicos::release_kind::ReleaseKind;
 use musicos::release_party_role::ReleasePartyRole;
 use partyos::credit::Credit;
 use partyos::party::Party;
 use std::string::String;
-use std::type_name::TypeName;
 use sui::bcs::to_bytes;
 use sui::clock::Clock;
 use sui::derived_object::{Self, claim};
@@ -39,16 +37,12 @@ public struct RELEASE() has drop;
 public struct Release has key {
     /// Unique identifier for this release.
     id: UID,
-    /// The type of release.
-    kind: ReleaseKind,
     /// Current lifecycle state.
     state: ReleaseState,
     /// Title of the release.
     title: String,
     /// Optional subtitle (e.g., "Deluxe Edition").
     subtitle: Option<String>,
-    /// Description of the release.
-    description: String,
     /// Attribution information for the release.
     credits: VecMap<ID, Credit<ReleasePartyRole>>,
     /// Collection of discs containing tracks.
@@ -96,10 +90,11 @@ public enum ReleaseState has copy, drop, store {
 // === Events ===
 
 /// Emitted once when a release is published. A pure pointer: it carries the
-/// release's identity. A release is immutable after publishing, so an indexer
-/// treats this as a signal to fetch the full, final object (discs, tracks,
-/// credits) by `release_id`; all indexed data — including the publish timestamp
-/// — lives in the object itself.
+/// release's identity. A release's embedded fields (discs, tracks, credits)
+/// are immutable after publishing, so an indexer treats this as a signal to
+/// fetch the full object by `release_id`; all indexed data — including the
+/// publish timestamp — lives in the object itself. Dynamic fields may still
+/// be attached by extensions afterward.
 public struct ReleasePublishedEvent has copy, drop {
     release_id: ID,
 }
@@ -108,8 +103,6 @@ public struct ReleasePublishedEvent has copy, drop {
 
 /// Number of roles allowed per credit on a release.
 const CREDIT_ROLE_COUNT: u64 = 1;
-/// Maximum length of a release description in bytes.
-const MAX_DESCRIPTION_LENGTH: u64 = 500;
 /// Maximum number of discs allowed in a release.
 const MAX_DISCS: u64 = 20;
 /// Maximum total number of tracks allowed across all discs.
@@ -118,6 +111,8 @@ const MAX_TRACKS: u64 = 255;
 const MAX_CREDITS: u64 = 50;
 /// Maximum length of a release title in bytes.
 const MAX_TITLE_LENGTH: u64 = 300;
+/// Maximum length of a release subtitle in bytes.
+const MAX_SUBTITLE_LENGTH: u64 = 300;
 
 // === Errors ===
 
@@ -138,14 +133,14 @@ const EInvalidTrackSplitsSum: u64 = 20;
 const EMaxDiscsExceeded: u64 = 30;
 /// Too many tracks in release.
 const EMaxTracksExceeded: u64 = 31;
-/// Too long description in release.
-const EMaxDescriptionLengthExceeded: u64 = 32;
 /// Release has too many credits.
 const EMaxCreditsExceeded: u64 = 33;
 /// Title exceeds maximum length.
 const EMaxTitleLengthExceeded: u64 = 34;
 /// String must not be empty.
 const EEmptyString: u64 = 35;
+/// Subtitle exceeds maximum length.
+const EMaxSubtitleLengthExceeded: u64 = 36;
 
 // Reference errors (50-59)
 /// Release must contain at least one disc.
@@ -172,9 +167,7 @@ fun init(_otw: RELEASE, ctx: &mut TxContext) {
 /// Creates a new release with the given configuration.
 /// Returns the release and admin capability.
 public fun new(
-    kind: ReleaseKind,
     title: String,
-    description: String,
     cover_art: CoverArt,
     discs: vector<Disc>,
     nonce: u256,
@@ -182,7 +175,6 @@ public fun new(
 ): (Release, ReleaseAdminCap) {
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
-    assert!(description.length() <= MAX_DESCRIPTION_LENGTH, EMaxDescriptionLengthExceeded);
     // Assert that the release has at least one disc.
     assert!(!discs.is_empty(), ENoDiscs);
     // Assert that the release doesn't have too many discs.
@@ -203,11 +195,9 @@ public fun new(
 
     let mut release = Release {
         id: release_uid,
-        kind,
         state: ReleaseState::Initialized(false),
         title,
         subtitle: option::none(),
-        description,
         credits: vec_map::empty(),
         discs,
         cover_art,
@@ -219,6 +209,23 @@ public fun new(
     };
 
     (release, release_admin_cap)
+}
+
+/// Sets the subtitle of the release (e.g., "Deluxe Edition").
+/// A subtitle is part of the release's identity — it distinguishes which
+/// edition this release is — so it lives in the frozen embedded fields.
+/// Required State: Initialized
+public fun set_subtitle(self: &mut Release, cap: &ReleaseAdminCap, subtitle: String) {
+    self.authorize(cap);
+
+    match (self.state) {
+        ReleaseState::Initialized(_) => {
+            assert!(!subtitle.is_empty(), EEmptyString);
+            assert!(subtitle.length() <= MAX_SUBTITLE_LENGTH, EMaxSubtitleLengthExceeded);
+            self.subtitle.swap_or_fill(subtitle);
+        },
+        _ => abort ENotInitializedState,
+    }
 }
 
 /// Adds a credit to the release for a party.
@@ -308,11 +315,6 @@ public fun id(self: &Release): ID {
     self.id.to_inner()
 }
 
-/// Returns the release kind.
-public fun kind(self: &Release): &ReleaseKind {
-    &self.kind
-}
-
 /// Returns the release state.
 public fun state(self: &Release): ReleaseState {
     self.state
@@ -342,11 +344,6 @@ public fun title(self: &Release): &String {
 /// Returns the optional subtitle.
 public fun subtitle(self: &Release): &Option<String> {
     &self.subtitle
-}
-
-/// Returns the release description.
-public fun description(self: &Release): &String {
-    &self.description
 }
 
 /// Returns a reference to the release credits.
@@ -391,13 +388,11 @@ public fun uid(self: &Release): &UID {
 }
 
 /// Returns a mutable reference to the release's UID.
-/// Requires the admin capability.
+/// Requires the admin capability. Works in any lifecycle state — dynamic
+/// fields are the extension surface and stay admin-mutable after publish;
+/// only the embedded fields are frozen.
 public fun uid_mut(self: &mut Release, cap: &ReleaseAdminCap): &mut UID {
     self.authorize(cap);
-    &mut self.id
-}
-
-public(package) fun uid_mut_internal(self: &mut Release): &mut UID {
     &mut self.id
 }
 
@@ -446,6 +441,12 @@ fun assert_track_assignments(self: &mut Release) {
 
 // === Test Only ===
 
+/// Runs the real module initializer (creates and shares the `ReleaseRegistry`).
+#[test_only]
+public fun init_for_testing(ctx: &mut TxContext) {
+    init(RELEASE(), ctx);
+}
+
 #[test_only]
 public fun new_release_registry_for_testing(ctx: &mut TxContext): ReleaseRegistry {
     ReleaseRegistry {
@@ -483,9 +484,7 @@ public fun prefill_credits_for_testing(self: &mut Release, n: u64, ctx: &mut TxC
 
 #[test_only]
 public fun new_for_testing(
-    kind: ReleaseKind,
     title: String,
-    description: String,
     cover_art: CoverArt,
     discs: vector<Disc>,
     ctx: &mut TxContext,
@@ -494,11 +493,9 @@ public fun new_for_testing(
 
     let mut release = Release {
         id: object::new(ctx),
-        kind,
         state: ReleaseState::Initialized(false),
         title,
         subtitle: option::none(),
-        description,
         credits: vec_map::empty(),
         discs,
         cover_art,

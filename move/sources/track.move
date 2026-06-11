@@ -9,7 +9,7 @@
 ///
 /// - Caches recording metadata for quick access
 /// - Supports optional track-specific cover art
-/// - Stores composition split for royalty calculations
+/// - Stores the track's split of release revenue and the composition royalty rate
 module musicos::track;
 
 use bps::bps::BPS;
@@ -39,9 +39,11 @@ public struct Track has drop, store {
     recording_share_type: TypeName,
     /// Description of the track.
     title: String,
-    /// Covert art for the track. Inherited from the recording by default.
+    /// Cover art for the track. Inherited from the recording by default.
     cover_art: CoverArt,
-    /// Split of revenue allocated to composition vs recording (in basis points).
+    /// This track's share of the release's revenue, in basis points. All
+    /// tracks in a release sum to 100%. (The composition-vs-recording split
+    /// within this share is governed by `composition_royalty_rate`.)
     split_bps: BPS,
 }
 
@@ -64,9 +66,9 @@ const EAlreadyAssigned: u64 = 1;
 
 // === Public Functions ===
 
-/// Creates a new track from a recording.
-/// Requires the recording admin capability.
-/// Captures the recording's metadata at creation time.
+/// Creates a new track by accepting a deal. The deal itself is the
+/// authorization — it was created by the recording's admin and carries the
+/// recording's metadata and the agreed split. Emits a `DealAcceptedEvent`.
 public fun new(deal: Deal): Track {
     let track = Track {
         state: TrackState::Unassigned { release_id: deal.release_id() },
@@ -80,7 +82,7 @@ public fun new(deal: Deal): Track {
         split_bps: deal.track_split_bps(),
     };
 
-    deal.destroy();
+    deal.accept();
 
     return track
 }
@@ -135,7 +137,7 @@ public fun cover_art(self: &Track): &CoverArt {
     &self.cover_art
 }
 
-/// Returns the split of revenue allocated to composition vs recording (in basis points).
+/// Returns this track's share of the release's revenue (in basis points).
 public fun split_bps(self: &Track): BPS {
     self.split_bps
 }

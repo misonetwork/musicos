@@ -8,9 +8,12 @@ use std::unit_test::{assert_eq, destroy};
 
 // Error codes from disc.move
 const EMaxTracksExceeded: u64 = 30;
+const EMaxTitleLengthExceeded: u64 = 31;
+const EEmptyString: u64 = 32;
 
 // Must match disc.move
 const MAX_TRACKS_PER_DISC: u64 = 50;
+const MAX_TITLE_LENGTH: u64 = 300;
 
 /// Helper to create a test track.
 fun test_track(ctx: &mut TxContext): track::Track {
@@ -49,5 +52,50 @@ fun test_new_exceeds_max_tracks() {
     });
 
     let d = disc::new(tracks, option::none());
+    destroy(d);
+}
+
+// === Title ===
+
+#[test]
+fun test_new_with_title() {
+    let ctx = &mut tx_context::dummy();
+    let d = disc::new(vector[test_track(ctx)], option::some(b"Disc One".to_string()));
+    assert_eq!(*d.title(), option::some(b"Disc One".to_string()));
+    destroy(d);
+}
+
+#[test, expected_failure(abort_code = EEmptyString, location = musicos::disc)]
+fun test_new_empty_title() {
+    let ctx = &mut tx_context::dummy();
+    let d = disc::new(vector[test_track(ctx)], option::some(b"".to_string()));
+    destroy(d);
+}
+
+#[test, expected_failure(abort_code = EMaxTitleLengthExceeded, location = musicos::disc)]
+fun test_new_title_too_long() {
+    let ctx = &mut tx_context::dummy();
+    let d = disc::new(
+        vector[test_track(ctx)],
+        option::some(test_helpers::long_string(MAX_TITLE_LENGTH + 1)),
+    );
+    destroy(d);
+}
+
+// === Artwork ===
+
+#[test]
+fun test_set_artwork() {
+    let ctx = &mut tx_context::dummy();
+    let mut d = disc::new(vector[test_track(ctx)], option::none());
+    assert!(d.artwork().is_none());
+
+    d.set_artwork(test_helpers::cover_art());
+    assert!(d.artwork().is_some());
+
+    // Setting again replaces the artwork.
+    d.set_artwork(test_helpers::cover_art());
+    assert!(d.artwork().is_some());
+
     destroy(d);
 }

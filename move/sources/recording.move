@@ -7,13 +7,13 @@
 ///
 /// ### Key Features:
 ///
-/// - Share token initialization with fixed supply (100M tokens, 6 decimals)
+/// - Share token initialization with fixed supply (10M tokens, 6 decimals)
 /// - Party management with role assignments (Producer, Vocalist, etc.)
-/// - State machine: Initialized -> Published (immutable after publish)
+/// - State machine: Initialized -> Published (embedded fields immutable after
+///   publish; dynamic fields remain extensible via `uid_mut`, e.g. masters)
 /// - Deterministic addresses via derived object pattern
 module musicos::recording;
 
-use gengo::language_code::{Self, LanguageCode};
 use bps::bps::BPS;
 #[test_only]
 use bps::bps;
@@ -58,12 +58,6 @@ public struct Recording<phantom RecordingShare> has key {
     featured_artist_ids: VecSet<ID>,
     /// Map of party IDs to their roles on this recording.
     credits: VecMap<ID, Credit<RecordingPartyRole>>,
-    /// Language of the vocals (if any).
-    language: Option<LanguageCode>,
-    /// Whether the recording contains explicit content.
-    is_explicit: bool,
-    /// Whether the recording is instrumental (no vocals).
-    is_instrumental: bool,
     /// Cover art for the recording.
     cover_art: CoverArt,
 }
@@ -106,10 +100,11 @@ public enum RecordingState has copy, drop, store {
 // === Events ===
 
 /// Emitted once when a recording is published. A pure pointer: it carries the
-/// recording's identity and its parent composition (for routing). A recording is
-/// immutable after publishing, so an indexer treats this as a signal to fetch
-/// the full, final object by `recording_id`; all indexed data — including the
-/// publish timestamp — lives in the object itself.
+/// recording's identity and its parent composition (for routing). A recording's
+/// embedded fields are immutable after publishing, so an indexer treats this as
+/// a signal to fetch the full object by `recording_id`; all indexed data —
+/// including the publish timestamp — lives in the object itself. Dynamic
+/// fields (e.g. masters attached by ingesters) may still change afterward.
 public struct RecordingPublishedEvent<phantom RecordingShare> has copy, drop {
     recording_id: ID,
     composition_id: ID,
@@ -181,16 +176,13 @@ const ERecordingGap: u64 = 53;
 // === Lifecycle ===
 
 /// Creates a new recording for a composition.
-/// Initializes share tokens (100M supply, 6 decimals) and returns:
+/// Initializes share tokens (10M supply, 6 decimals) and returns:
 /// - The recording object
 /// - Admin capability for the owner
 /// - Initial share token balance
-/// - Promise that must be consumed by calling `share()`
 public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     idx: u64,
-    is_explicit: bool,
-    is_instrumental: bool,
     cover_art: CoverArt,
     share_currency: &mut Currency<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
@@ -219,9 +211,6 @@ public fun new<RecordingShare, CompositionShare>(
         primary_artist_ids: vec_set::empty(),
         featured_artist_ids: vec_set::empty(),
         credits: vec_map::empty(),
-        language: option::none(),
-        is_explicit,
-        is_instrumental,
         cover_art,
     };
 
@@ -301,21 +290,6 @@ public fun set_subtitle<RecordingShare>(
             assert!(!subtitle.is_empty(), EEmptyString);
             assert!(subtitle.length() <= MAX_SUBTITLE_LENGTH, EMaxSubtitleLengthExceeded);
             self.subtitle.swap_or_fill(subtitle);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Sets the language of the recording.
-/// Required State: Initialized
-public fun set_language<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    language_code: String,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            self.language.swap_or_fill(language_code::new(language_code));
         },
         _ => abort ENotInitializedState,
     }
@@ -469,21 +443,6 @@ public fun credits<RecordingShare>(
     &self.credits
 }
 
-/// Returns the optional language code.
-public fun language<RecordingShare>(self: &Recording<RecordingShare>): &Option<LanguageCode> {
-    &self.language
-}
-
-/// Returns whether the recording contains explicit content.
-public fun is_explicit<RecordingShare>(self: &Recording<RecordingShare>): bool {
-    self.is_explicit
-}
-
-/// Returns whether the recording is instrumental.
-public fun is_instrumental<RecordingShare>(self: &Recording<RecordingShare>): bool {
-    self.is_instrumental
-}
-
 /// Returns a reference to the cover art.
 public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverArt {
     &self.cover_art
@@ -510,16 +469,12 @@ public fun uid<RecordingShare>(self: &Recording<RecordingShare>): &UID {
 }
 
 /// Returns a mutable reference to the recording's UID.
-/// Requires the admin capability.
+/// Requires the admin capability. Works in any lifecycle state — dynamic
+/// fields are the extension surface (e.g. masters) and stay admin-mutable
+/// after publish; only the embedded fields are frozen.
 public fun uid_mut<RecordingShare>(
     self: &mut Recording<RecordingShare>,
     _: &RecordingAdminCap<RecordingShare>,
-): &mut UID {
-    &mut self.id
-}
-
-public(package) fun uid_mut_internal<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
 ): &mut UID {
     &mut self.id
 }
@@ -531,8 +486,6 @@ public fun new_for_testing<RecordingShare>(
     title: String,
     composition_id: ID,
     composition_royalty_rate_bps: u16,
-    is_explicit: bool,
-    is_instrumental: bool,
     cover_art: CoverArt,
     ctx: &mut TxContext,
 ): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>) {
@@ -547,9 +500,6 @@ public fun new_for_testing<RecordingShare>(
         primary_artist_ids: vec_set::empty(),
         featured_artist_ids: vec_set::empty(),
         credits: vec_map::empty(),
-        language: option::none(),
-        is_explicit,
-        is_instrumental,
         cover_art,
     };
 

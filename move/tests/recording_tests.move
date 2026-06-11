@@ -41,8 +41,6 @@ fun new_test_recording(ctx: &mut TxContext): (
         b"Test Song".to_string(),
         comp_id,
         5000,
-        false,
-        false,
         test_helpers::cover_art(),
         ctx,
     )
@@ -513,7 +511,7 @@ fun test_add_featured_artist_exceeds_max() {
 fun test_distinct_id_per_index() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, comp_cap) =
-        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
+        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
 
     let id0 = recording::derive_recording_id_for_testing(&mut comp, 0);
     let id1 = recording::derive_recording_id_for_testing(&mut comp, 1);
@@ -530,7 +528,7 @@ fun test_distinct_id_per_index() {
 fun test_same_index_aborts() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, comp_cap) =
-        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
+        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
 
     let id0a = recording::derive_recording_id_for_testing(&mut comp, 0);
     let id0b = recording::derive_recording_id_for_testing(&mut comp, 0); // aborts
@@ -546,7 +544,7 @@ fun test_same_index_aborts() {
 fun test_gap_aborts() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, comp_cap) =
-        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
+        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
 
     let id0 = recording::derive_recording_id_for_testing(&mut comp, 0);
     let id2 = recording::derive_recording_id_for_testing(&mut comp, 2); // aborts: idx 1 absent
@@ -562,11 +560,45 @@ fun test_gap_aborts() {
 fun test_first_index_must_be_zero() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, comp_cap) =
-        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 5000, ctx);
+        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
 
     let id1 = recording::derive_recording_id_for_testing(&mut comp, 1); // aborts: idx 0 absent
 
     id1.delete();
     destroy(comp);
     destroy(comp_cap);
+}
+
+#[test, expected_failure(abort_code = EPartyNotCredited, location = musicos::recording)]
+fun test_add_featured_artist_not_credited() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rec, cap) = new_test_recording(ctx);
+    let (party, party_cap) = test_helpers::individual(ctx);
+
+    rec.add_featured_artist(&cap, &party); // never credited
+
+    destroy(rec);
+    destroy(cap);
+    destroy(party);
+    destroy(party_cap);
+}
+
+#[test, expected_failure(abort_code = EAlreadyFeaturedArtist, location = musicos::recording)]
+fun test_add_featured_artist_already_featured() {
+    let ctx = &mut tx_context::dummy();
+    let (mut rec, cap) = new_test_recording(ctx);
+    let (party, party_cap) = test_helpers::individual(ctx);
+
+    let cred = credit::new(
+        b"Guest".to_string(),
+        vector[recording_party_role::new_vocalist_role(option::none())],
+    );
+    rec.add_credit(&cap, &party, cred);
+    rec.add_featured_artist(&cap, &party);
+    rec.add_featured_artist(&cap, &party); // twice
+
+    destroy(rec);
+    destroy(cap);
+    destroy(party);
+    destroy(party_cap);
 }
