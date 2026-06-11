@@ -11,6 +11,19 @@ module musicos::recording_party_role;
 
 use std::string::String;
 
+// === Constants ===
+
+/// Maximum length of an instrument name in bytes.
+const MAX_INSTRUMENT_LENGTH: u64 = 100;
+
+// === Errors ===
+
+// Constraint errors (30-39)
+/// Instrument name exceeds maximum length.
+const EMaxInstrumentLengthExceeded: u64 = 30;
+/// String must not be empty.
+const EEmptyString: u64 = 35;
+
 // === Enums ===
 
 /// Represents a party's role on a recording.
@@ -141,10 +154,13 @@ public fun new_ensemble_role(level: Option<RecordingPartyRoleLevel>): RecordingP
 }
 
 /// Creates a new Instrumentalist role with instrument name and optional level.
+/// The instrument name freezes into credits at publish, so it is validated here.
 public fun new_instrumentalist_role(
     instrument: String,
     level: Option<RecordingPartyRoleLevel>,
 ): RecordingPartyRole {
+    assert!(!instrument.is_empty(), EEmptyString);
+    assert!(instrument.length() <= MAX_INSTRUMENT_LENGTH, EMaxInstrumentLengthExceeded);
     RecordingPartyRole::Instrumentalist(instrument, level)
 }
 

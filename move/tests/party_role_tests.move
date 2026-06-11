@@ -396,3 +396,27 @@ fun each_level_predicate_matches_exactly_one_variant() {
     });
     counts.do_ref!(|c| assert_eq!(*c, 1));
 }
+
+// === Instrumentalist name validation ===
+
+#[test]
+fun instrumentalist_accepts_max_length_name() {
+    let r = rpr::new_instrumentalist_role(
+        musicos::test_helpers::long_string(100),
+        option::none(),
+    );
+    assert!(r.is_instrumentalist_role());
+}
+
+#[test, expected_failure(abort_code = 35, location = musicos::recording_party_role)] // EEmptyString
+fun instrumentalist_rejects_empty_name() {
+    rpr::new_instrumentalist_role(b"".to_string(), option::none());
+}
+
+#[test, expected_failure(abort_code = 30, location = musicos::recording_party_role)] // EMaxInstrumentLengthExceeded
+fun instrumentalist_rejects_oversized_name() {
+    rpr::new_instrumentalist_role(
+        musicos::test_helpers::long_string(101),
+        option::none(),
+    );
+}

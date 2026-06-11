@@ -71,7 +71,7 @@ export const RecordingPartyRoleSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("Ensemble"), level: recordingRoleLevelEnum.optional() }),
   z.object({
     type: z.literal("Instrumentalist"),
-    instrument: z.string().min(1, "Instrument cannot be empty"),
+    instrument: z.string().min(1, "Instrument cannot be empty").max(100, "Instrument cannot exceed 100 characters"),
     level: recordingRoleLevelEnum.optional(),
   }),
   z.object({ type: z.literal("MasteringEngineer"), level: recordingRoleLevelEnum.optional() }),
