@@ -33,14 +33,11 @@ const MAX_SUBTITLE_LENGTH: u64 = 300;
 
 /// Helper to create a test recording.
 fun new_test_recording(ctx: &mut TxContext): (
-    recording::Recording<RecordingShare>,
+    recording::Recording<RecordingShare, CompositionShare>,
     recording::RecordingAdminCap<RecordingShare>,
 ) {
-    let comp_id = test_helpers::fake_id(ctx);
-    recording::new_for_testing<RecordingShare>(
+    recording::new_for_testing<RecordingShare, CompositionShare>(
         b"Test Song".to_string(),
-        comp_id,
-        5000,
         test_helpers::cover_art(),
         ctx,
     )

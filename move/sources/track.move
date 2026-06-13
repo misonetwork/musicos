@@ -2,57 +2,57 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Represents a track on a release, linking a recording to its position
-/// in the tracklist. Each track captures metadata from the recording at
-/// the time of release creation for efficient access during playback.
+/// in the tracklist.
 ///
-/// ### Key Features:
+/// A `Track` is the minimal positioned (recording, revenue-share) pair:
+/// - `recording_id` — the routing target for the track's revenue, and the
+///   handle through which all other metadata (title, cover art, and the
+///   recording/composition share-type identities) is reached.
+/// - `split_bps` — this track's share of the release's revenue; genuinely
+///   release-specific and not derivable from the recording.
+/// - `state` — the assign-once lifecycle that carries (then sheds) each deal's
+///   target release commitment; see `TrackState`.
 ///
-/// - Caches recording metadata for quick access
-/// - Supports optional track-specific cover art
-/// - Stores the track's split of release revenue and the composition royalty rate
+/// `Track` is intentionally monomorphic: a `Release` holds a `vector<Track>`
+/// of tracks from many different recordings/compositions, so it cannot be
+/// generic over their share types. It stores no title, cover art, or
+/// share-type — all derived from the recording via `recording_id`.
 module musicos::track;
 
 use bps::bps::BPS;
 #[test_only]
 use bps::bps;
-use musicos::cover_art::CoverArt;
 use musicos::deal::Deal;
-use std::string::String;
-use std::type_name::TypeName;
 
 // === Structs ===
 
-/// A track on a release containing a recording and its metadata.
-/// Metadata is captured at track creation time for efficient access.
+/// A track on a release: a positioned pointer to a recording with a revenue split.
 public struct Track has drop, store {
     /// Current state of the track.
     state: TrackState,
-    /// ID of the underlying composition.
-    composition_id: ID,
-    /// Type of the composition's share token.
-    composition_share_type: TypeName,
-    /// Royalty rate owed to the composition.
-    composition_royalty_rate: BPS,
-    /// ID of the recording on this track.
+    /// ID of the recording on this track. The routing target for the track's
+    /// revenue; also the handle a consumer uses to fetch the recording (whose
+    /// type carries the recording and composition share-type identities).
     recording_id: ID,
-    /// Type of the recording's share token.
-    recording_share_type: TypeName,
-    /// Description of the track.
-    title: String,
-    /// Cover art for the track. Inherited from the recording by default.
-    cover_art: CoverArt,
     /// This track's share of the release's revenue, in basis points. All
-    /// tracks in a release sum to 100%. (The composition-vs-recording split
-    /// within this share is governed by `composition_royalty_rate`.)
+    /// tracks in a release sum to 100%. The composition's cut is settled as
+    /// recording-share ownership at recording creation, so it is not split out
+    /// here — a track routes its full share to the recording.
     split_bps: BPS,
 }
 
 // === Enums ===
 
-/// Lifecycle state of a track within a release.
+/// Lifecycle state of a track within a release. A track is born `Unassigned`,
+/// carrying the target `release_id` its originating `Deal` committed to (the
+/// release id is a digest of the whole tracklist, so this is the recording
+/// owner's consent to the exact release configuration). At publish the release
+/// verifies the match and transitions the track to `Assigned`, which carries
+/// no id — shedding the 32-byte commitment once it has served its purpose.
 public enum TrackState has copy, drop, store {
-    /// Track has been created but not yet assigned to a release.
-    Unassigned { release_id: ID },
+    /// Track has been created but not yet assigned to a release. Carries the
+    /// target release id the originating deal committed to.
+    Unassigned(ID),
     /// Track has been assigned to its target release.
     Assigned,
 }
@@ -68,17 +68,17 @@ const EAlreadyAssigned: u64 = 1;
 
 /// Creates a new track by accepting a deal. The deal itself is the
 /// authorization — it was created by the recording's admin and carries the
-/// recording's metadata and the agreed split. Emits a `DealAcceptedEvent`.
-public fun new(deal: Deal): Track {
+/// recording's identity and the agreed split. Emits a `DealAcceptedEvent`.
+///
+/// The deal's `RecordingShare`/`CompositionShare` phantoms are erased here: a
+/// `Track` is monomorphic so it can live in a release's heterogeneous
+/// `vector<Track>`. The recording remains reachable via `recording_id`.
+public fun new<RecordingShare, CompositionShare>(
+    deal: Deal<RecordingShare, CompositionShare>,
+): Track {
     let track = Track {
-        state: TrackState::Unassigned { release_id: deal.release_id() },
-        composition_id: deal.composition_id(),
-        composition_share_type: *deal.composition_share_type(),
-        composition_royalty_rate: deal.composition_royalty_rate(),
+        state: TrackState::Unassigned(deal.release_id()),
         recording_id: deal.recording_id(),
-        recording_share_type: *deal.recording_share_type(),
-        title: *deal.track_title(),
-        cover_art: *deal.track_cover_art(),
         split_bps: deal.track_split_bps(),
     };
 
@@ -91,7 +91,7 @@ public fun new(deal: Deal): Track {
 /// the track's target release ID. Can only be called once per track.
 public(package) fun assign(self: &mut Track, release_uid: &UID) {
     match (self.state) {
-        TrackState::Unassigned { release_id } => {
+        TrackState::Unassigned(release_id) => {
             assert!(release_uid.to_inner() == release_id, EUnauthorizedAssignment);
             self.state = TrackState::Assigned;
         },
@@ -101,40 +101,9 @@ public(package) fun assign(self: &mut Track, release_uid: &UID) {
 
 // === Public View Functions ===
 
-/// Returns the ID of the underlying composition.
-public fun composition_id(self: &Track): ID {
-    self.composition_id
-}
-
-/// Returns the type of the composition's share token.
-public fun composition_share_type(self: &Track): &TypeName {
-    &self.composition_share_type
-}
-
-/// Returns the royalty rate owed to the composition.
-public fun composition_royalty_rate(self: &Track): BPS {
-    self.composition_royalty_rate
-}
-
-
 /// Returns the ID of the recording.
 public fun recording_id(self: &Track): ID {
     self.recording_id
-}
-
-/// Returns the type of the recording's share token.
-public fun recording_share_type(self: &Track): &TypeName {
-    &self.recording_share_type
-}
-
-/// Returns the title of the track.
-public fun title(self: &Track): &String {
-    &self.title
-}
-
-/// Returns the cover art for the track.
-public fun cover_art(self: &Track): &CoverArt {
-    &self.cover_art
 }
 
 /// Returns this track's share of the release's revenue (in basis points).
@@ -149,35 +118,21 @@ public fun is_assigned_state(self: &Track): bool {
 
 /// Returns true if the track is in the Unassigned state.
 public fun is_unassigned_state(self: &Track): bool {
-    match (self.state) { TrackState::Unassigned { .. } => true, _ => false }
+    match (self.state) { TrackState::Unassigned(_) => true, _ => false }
 }
 
 // === Test Only ===
 
 #[test_only]
-public fun new_for_testing<CompositionShare, RecordingShare>(
-    composition_id: ID,
-    recording_id: ID,
-    release_id: ID,
-    title: String,
-    cover_art: CoverArt,
-    split_bps_value: u16,
-    composition_royalty_rate_bps: u16,
-): Track {
+public fun new_for_testing(recording_id: ID, release_id: ID, split_bps_value: u16): Track {
     Track {
-        state: TrackState::Unassigned { release_id },
-        composition_id,
-        composition_share_type: std::type_name::with_defining_ids<CompositionShare>(),
-        composition_royalty_rate: bps::new(composition_royalty_rate_bps),
+        state: TrackState::Unassigned(release_id),
         recording_id,
-        recording_share_type: std::type_name::with_defining_ids<RecordingShare>(),
-        title,
-        cover_art,
         split_bps: bps::new(split_bps_value),
     }
 }
 
 #[test_only]
 public fun set_release_id_for_testing(self: &mut Track, release_id: ID) {
-    self.state = TrackState::Unassigned { release_id };
+    self.state = TrackState::Unassigned(release_id);
 }

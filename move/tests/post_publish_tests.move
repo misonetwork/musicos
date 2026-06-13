@@ -50,11 +50,8 @@ fun publish_recording(
     scenario: &mut test_scenario::Scenario,
 ): recording::RecordingAdminCap<RecordingShare> {
     let ctx = scenario.ctx();
-    let comp_id = test_helpers::fake_id(ctx);
-    let (mut rec, cap) = recording::new_for_testing<RecordingShare>(
+    let (mut rec, cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
         b"Song".to_string(),
-        comp_id,
-        1500,
         test_helpers::cover_art(),
         ctx,
     );
@@ -83,14 +80,10 @@ fun publish_release(scenario: &mut test_scenario::Scenario): release::ReleaseAdm
         b"Album".to_string(),
         test_helpers::cover_art(),
         vector[musicos::disc::new(
-            vector[musicos::track::new_for_testing<CompositionShare, RecordingShare>(
+            vector[musicos::track::new_for_testing(
                 test_helpers::fake_id(ctx),
                 test_helpers::fake_id(ctx),
-                test_helpers::fake_id(ctx),
-                b"Track".to_string(),
-                test_helpers::cover_art(),
                 10000,
-                1500,
             )],
             option::none(),
         )],
@@ -170,7 +163,7 @@ fun recording_set_title_version_after_publish_aborts() {
     let cap = publish_recording(&mut scenario);
 
     scenario.next_tx(OWNER);
-    let mut rec = scenario.take_shared<Recording<RecordingShare>>();
+    let mut rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
     rec.set_title_version(&cap, b"Radio Edit".to_string());
 
     destroy(rec);
@@ -184,7 +177,7 @@ fun recording_add_credit_after_publish_aborts() {
     let cap = publish_recording(&mut scenario);
 
     scenario.next_tx(OWNER);
-    let mut rec = scenario.take_shared<Recording<RecordingShare>>();
+    let mut rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
     let (party, party_cap) = test_helpers::individual(scenario.ctx());
     rec.add_credit(
         &cap,
@@ -248,7 +241,7 @@ fun recording_set_subtitle_after_publish_aborts() {
     let cap = publish_recording(&mut scenario);
 
     scenario.next_tx(OWNER);
-    let mut rec = scenario.take_shared<Recording<RecordingShare>>();
+    let mut rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
     rec.set_subtitle(&cap, b"Too Late".to_string());
 
     destroy(rec);
@@ -262,7 +255,7 @@ fun recording_add_primary_artist_after_publish_aborts() {
     let cap = publish_recording(&mut scenario);
 
     scenario.next_tx(OWNER);
-    let mut rec = scenario.take_shared<Recording<RecordingShare>>();
+    let mut rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
     let (party, party_cap) = test_helpers::individual(scenario.ctx());
     rec.add_primary_artist(&cap, &party);
 
@@ -279,7 +272,7 @@ fun recording_add_featured_artist_after_publish_aborts() {
     let cap = publish_recording(&mut scenario);
 
     scenario.next_tx(OWNER);
-    let mut rec = scenario.take_shared<Recording<RecordingShare>>();
+    let mut rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
     let (party, party_cap) = test_helpers::individual(scenario.ctx());
     rec.add_featured_artist(&cap, &party);
 
@@ -296,7 +289,7 @@ fun recording_publish_twice_aborts() {
     let cap = publish_recording(&mut scenario);
 
     scenario.next_tx(OWNER);
-    let rec = scenario.take_shared<Recording<RecordingShare>>();
+    let rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
     let clock = sui::clock::create_for_testing(scenario.ctx());
     rec.publish(&cap, &clock);
 
@@ -328,7 +321,7 @@ fun recording_uid_mut_works_after_publish() {
     let cap = publish_recording(&mut scenario);
 
     scenario.next_tx(OWNER);
-    let mut rec = scenario.take_shared<Recording<RecordingShare>>();
+    let mut rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
     assert!(rec.is_published_state());
     assert!(!rec.is_initialized_state());
     let _state = rec.state();

@@ -5,7 +5,7 @@ use partyos::credit;
 use musicos::disc;
 use musicos::release;
 use musicos::release_party_role;
-use musicos::test_helpers::{Self, CompositionShare, RecordingShare};
+use musicos::test_helpers;
 use musicos::track;
 use std::unit_test::{assert_eq, destroy};
 
@@ -32,14 +32,10 @@ const MAX_SUBTITLE_LENGTH: u64 = 300;
 
 /// Helper to create a single test track.
 fun test_track(ctx: &mut TxContext): track::Track {
-    track::new_for_testing<CompositionShare, RecordingShare>(
+    track::new_for_testing(
         test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),
-        test_helpers::fake_id(ctx),
-        b"Track".to_string(),
-        test_helpers::cover_art(),
         10000, // 100% split (single track)
-        5000,
     )
 }
 
@@ -47,14 +43,10 @@ fun test_track(ctx: &mut TxContext): track::Track {
 fun test_disc_with_n_tracks(n: u64, split_bps: u16, ctx: &mut TxContext): disc::Disc {
     let mut tracks = vector[];
     n.do!(|_| {
-        tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare>(
+        tracks.push_back(track::new_for_testing(
             test_helpers::fake_id(ctx),
             test_helpers::fake_id(ctx),
-            test_helpers::fake_id(ctx),
-            b"Track".to_string(),
-            test_helpers::cover_art(),
             split_bps,
-            5000,
         ));
     });
     disc::new(tracks, option::none())
@@ -129,14 +121,10 @@ fun test_new_exceeds_max_tracks() {
         let mut t = 0u64;
         while (t < n_tracks) {
             let split = if (global_idx < 16) 40 else 39;
-            tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare>(
+            tracks.push_back(track::new_for_testing(
                 test_helpers::fake_id(ctx),
                 test_helpers::fake_id(ctx),
-                test_helpers::fake_id(ctx),
-                b"Track".to_string(),
-                test_helpers::cover_art(),
                 split,
-                5000,
             ));
             global_idx = global_idx + 1;
             t = t + 1;
@@ -336,19 +324,14 @@ fun test_duplicate_digest_aborts() {
     let ctx = &mut tx_context::dummy();
     let mut registry = release::new_release_registry_for_testing(ctx);
     let rec_id = test_helpers::fake_id(ctx);
-    let comp_id = test_helpers::fake_id(ctx);
     let rel_id = test_helpers::fake_id(ctx);
 
     let disc1 = disc::new(
-        vector[track::new_for_testing<CompositionShare, RecordingShare>(
-            comp_id, rec_id, rel_id, b"Track".to_string(), test_helpers::cover_art(), 10000, 1500,
-        )],
+        vector[track::new_for_testing(rec_id, rel_id, 10000)],
         option::none(),
     );
     let disc2 = disc::new(
-        vector[track::new_for_testing<CompositionShare, RecordingShare>(
-            comp_id, rec_id, rel_id, b"Track".to_string(), test_helpers::cover_art(), 10000, 1500,
-        )],
+        vector[track::new_for_testing(rec_id, rel_id, 10000)],
         option::none(),
     );
 

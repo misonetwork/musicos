@@ -12,11 +12,15 @@
 /// - State machine: Initialized -> Published (embedded fields immutable after
 ///   publish; dynamic fields remain extensible via `uid_mut`, e.g. masters)
 /// - Deterministic addresses via derived object pattern
+///
+/// The recording carries its parent composition's identity as the
+/// `CompositionShare` phantom type parameter — the composition's share type is
+/// its durable identity (a share currency is published independently of musicos
+/// and survives a fresh republish, whereas an object ID does not). This makes
+/// the recording↔composition lineage compile-time enforced wherever the two
+/// meet, with no stored `composition_id` to keep or assert.
 module musicos::recording;
 
-use bps::bps::BPS;
-#[test_only]
-use bps::bps;
 use musicos::composition::Composition;
 use musicos::cover_art::CoverArt;
 use musicos::recording_party_role::RecordingPartyRole;
@@ -35,9 +39,10 @@ use sui::vec_set::{Self, VecSet};
 
 // === Structs ===
 
-/// An audio recording of a composition.
-/// The phantom RecordingShare type parameter links to the share token.
-public struct Recording<phantom RecordingShare> has key {
+/// An audio recording of a composition. The `RecordingShare` phantom links to
+/// this recording's own share token; the `CompositionShare` phantom is the
+/// durable identity of the parent composition (its share type).
+public struct Recording<phantom RecordingShare, phantom CompositionShare> has key {
     /// Unique identifier for this recording.
     id: UID,
     /// Current lifecycle state.
@@ -48,10 +53,6 @@ public struct Recording<phantom RecordingShare> has key {
     title_version: Option<String>,
     /// Subtitle of the recording.
     subtitle: Option<String>,
-    /// ID of the underlying composition.
-    composition_id: ID,
-    /// Royalty rate owed to the composition (captured from the composition at creation time).
-    composition_royalty_rate: BPS,
     // IDs of the primary artists on the recording.
     primary_artist_ids: VecSet<ID>,
     // IDs of the featured artists on the recording.
@@ -65,6 +66,12 @@ public struct Recording<phantom RecordingShare> has key {
 /// Capability that authorizes modifications to a specific recording.
 /// Initialized when a recording is registered and transferred to the owner.
 /// Address is derived from the recording for client-side discoverability.
+///
+/// Parameterized only by `RecordingShare` (not `CompositionShare`): the share
+/// type already uniquely identifies the recording, and the cap authorizes
+/// recording-scoped operations that have no bearing on the parent composition.
+/// Keeping it single-param stops the composition identity from contaminating
+/// every place a cap is held or passed.
 public struct RecordingAdminCap<phantom RecordingShare> has key, store {
     /// Unique identifier for this capability.
     id: UID,
@@ -100,14 +107,34 @@ public enum RecordingState has copy, drop, store {
 // === Events ===
 
 /// Emitted once when a recording is published. A pure pointer: it carries the
-/// recording's identity and its parent composition (for routing). A recording's
-/// embedded fields are immutable after publishing, so an indexer treats this as
-/// a signal to fetch the full object by `recording_id`; all indexed data —
-/// including the publish timestamp — lives in the object itself. Dynamic
-/// fields (e.g. masters attached by ingesters) may still change afterward.
-public struct RecordingPublishedEvent<phantom RecordingShare> has copy, drop {
+/// recording's identity, with the parent composition encoded as the
+/// `CompositionShare` phantom. A recording's embedded fields are immutable after
+/// publishing, so an indexer treats this as a signal to fetch the full object by
+/// `recording_id`; all indexed data — including the publish timestamp — lives in
+/// the object itself. Dynamic fields (e.g. masters attached by ingesters) may
+/// still change afterward.
+public struct RecordingPublishedEvent<phantom RecordingShare, phantom CompositionShare> has copy, drop {
+    recording_id: ID,
+}
+
+/// Emitted when a recording grants the composition its royalty-rate worth of
+/// recording shares at creation. The composition's cut is settled as cap-table
+/// ownership — `send_funds`ed to the composition's address — so its claim on
+/// recording revenue is enforced by share ownership, not by any revenue
+/// distributor choosing to honor a rate. The rate is not stored on the
+/// recording: this event (in the creation transaction's effects) is its
+/// canonical record. What the composition owner then does with the shares
+/// (hold, stake, sell) is outside the protocol's scope. The composition's
+/// object id is emitted here — where the `Composition` is still in hand — for
+/// off-chain convenience; on-chain the durable identity is the `CompositionShare`
+/// phantom.
+public struct CompositionSharesGrantedEvent<phantom RecordingShare, phantom CompositionShare> has copy, drop {
     recording_id: ID,
     composition_id: ID,
+    /// Recording-share base units granted to the composition.
+    value: u64,
+    /// The composition royalty rate applied at creation, in basis points.
+    rate_bps: u16,
 }
 
 // === Constants ===
@@ -176,18 +203,34 @@ const ERecordingGap: u64 = 53;
 // === Lifecycle ===
 
 /// Creates a new recording for a composition.
-/// Initializes share tokens (10M supply, 6 decimals) and returns:
-/// - The recording object
+///
+/// Initializes share tokens (10M supply, 6 decimals), then splits the
+/// composition's royalty-rate worth of those shares off the freshly minted
+/// supply and `send_funds`es them to the composition's address. This settles
+/// the composition's cut as cap-table ownership: the composition literally
+/// owns its share of the recording, so its claim on recording revenue is
+/// enforced by share ownership rather than by any revenue distributor choosing
+/// to honor a rate. What the composition owner then does with the shares
+/// (hold, stake, sell) is outside the protocol's scope.
+///
+/// Returns:
+/// - The recording object (typed to its parent composition's `CompositionShare`)
 /// - Admin capability for the owner
-/// - Initial share token balance
+/// - The creator's remaining share balance (full supply minus the
+///   composition's cut)
 public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     idx: u64,
     cover_art: CoverArt,
     share_currency: &mut Currency<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
-): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>, Balance<RecordingShare>) {
+): (
+    Recording<RecordingShare, CompositionShare>,
+    RecordingAdminCap<RecordingShare>,
+    Balance<RecordingShare>,
+) {
     let composition_id = composition.id();
+    let composition_royalty_rate = composition.royalty_rate();
 
     // Recordings are indexed per composition. Require contiguity (no gaps) so the
     // set is enumerable by deriving idx 0,1,2,… until one is absent: idx 0 is the
@@ -200,14 +243,12 @@ public fun new<RecordingShare, CompositionShare>(
         );
     };
 
-    let mut recording = Recording<RecordingShare> {
+    let mut recording = Recording<RecordingShare, CompositionShare> {
         id: claim(composition.uid_mut_internal(), RecordingKey(idx)),
         state: RecordingState::Initialized,
         title: *composition.title(),
         title_version: option::none(),
         subtitle: option::none(),
-        composition_id,
-        composition_royalty_rate: composition.royalty_rate(),
         primary_artist_ids: vec_set::empty(),
         featured_artist_ids: vec_set::empty(),
         credits: vec_map::empty(),
@@ -218,10 +259,28 @@ public fun new<RecordingShare, CompositionShare>(
         id: claim(&mut recording.id, RecordingAdminCapKey()),
     };
 
-    let recording_shares = share::initialize<RecordingShare>(
+    let mut recording_shares = share::initialize<RecordingShare>(
         share_currency,
         share_treasury_cap,
     );
+
+    // Settle the composition's royalty rate as ownership rather than as a
+    // distribution-time routing parameter: split the rate's worth of recording
+    // shares off the freshly minted supply and send it to the composition's
+    // address. The composition now owns its cut of the recording outright; the
+    // remainder returns to the creator. The split is internal and the
+    // composition's portion is never returned to the caller, so the creator
+    // cannot retain it.
+    let composition_cut = composition_royalty_rate.apply(recording_shares.value());
+    let composition_shares = recording_shares.split(composition_cut);
+    composition_shares.send_funds(composition_id.to_address());
+
+    emit(CompositionSharesGrantedEvent<RecordingShare, CompositionShare> {
+        recording_id: recording.id(),
+        composition_id,
+        value: composition_cut,
+        rate_bps: composition_royalty_rate.value(),
+    });
 
     (recording, recording_admin_cap, recording_shares)
 }
@@ -229,8 +288,8 @@ public fun new<RecordingShare, CompositionShare>(
 /// Publishes the recording, making it immutable.
 /// Requires at least one party to be assigned.
 /// Required State: Initialized
-public fun publish<RecordingShare>(
-    mut self: Recording<RecordingShare>,
+public fun publish<RecordingShare, CompositionShare>(
+    mut self: Recording<RecordingShare, CompositionShare>,
     _: &RecordingAdminCap<RecordingShare>,
     clock: &Clock,
 ) {
@@ -245,9 +304,8 @@ public fun publish<RecordingShare>(
             let published_at_ms = clock.timestamp_ms();
             self.state = RecordingState::Published(published_at_ms);
 
-            emit(RecordingPublishedEvent<RecordingShare> {
+            emit(RecordingPublishedEvent<RecordingShare, CompositionShare> {
                 recording_id: self.id(),
-                composition_id: self.composition_id,
             });
 
             transfer::share_object(self);
@@ -260,8 +318,8 @@ public fun publish<RecordingShare>(
 
 /// Sets the title version (e.g., "Radio Edit", "Extended Mix").
 /// Required State: Initialized
-public fun set_title_version<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
+public fun set_title_version<RecordingShare, CompositionShare>(
+    self: &mut Recording<RecordingShare, CompositionShare>,
     _: &RecordingAdminCap<RecordingShare>,
     title_version: String,
 ) {
@@ -280,8 +338,8 @@ public fun set_title_version<RecordingShare>(
 
 /// Sets the subtitle of the recording.
 /// Required State: Initialized
-public fun set_subtitle<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
+public fun set_subtitle<RecordingShare, CompositionShare>(
+    self: &mut Recording<RecordingShare, CompositionShare>,
     _: &RecordingAdminCap<RecordingShare>,
     subtitle: String,
 ) {
@@ -300,8 +358,8 @@ public fun set_subtitle<RecordingShare>(
 /// Adds a party to the recording with specified roles.
 /// Each party must have 1-10 roles.
 /// Required State: Initialized
-public fun add_credit<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
+public fun add_credit<RecordingShare, CompositionShare>(
+    self: &mut Recording<RecordingShare, CompositionShare>,
     _: &RecordingAdminCap<RecordingShare>,
     party: &Party,
     credit: Credit<RecordingPartyRole>,
@@ -324,8 +382,8 @@ public fun add_credit<RecordingShare>(
 /// Adds a party as a primary artist on the recording.
 /// The party must already be credited and not already assigned as primary or featured.
 /// Required State: Initialized
-public fun add_primary_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
+public fun add_primary_artist<RecordingShare, CompositionShare>(
+    self: &mut Recording<RecordingShare, CompositionShare>,
     _: &RecordingAdminCap<RecordingShare>,
     party: &Party,
 ) {
@@ -353,8 +411,8 @@ public fun add_primary_artist<RecordingShare>(
 /// Adds a party as a featured artist on the recording.
 /// The party must already be credited and not already assigned as primary or featured.
 /// Required State: Initialized
-public fun add_featured_artist<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
+public fun add_featured_artist<RecordingShare, CompositionShare>(
+    self: &mut Recording<RecordingShare, CompositionShare>,
     _: &RecordingAdminCap<RecordingShare>,
     party: &Party,
 ) {
@@ -382,80 +440,93 @@ public fun add_featured_artist<RecordingShare>(
 // === Public View Functions ===
 
 /// Returns the recording's object ID.
-public fun id<RecordingShare>(self: &Recording<RecordingShare>): ID {
+public fun id<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): ID {
     self.id.to_inner()
 }
 
 /// Returns the current lifecycle state.
-public fun state<RecordingShare>(self: &Recording<RecordingShare>): RecordingState {
+public fun state<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): RecordingState {
     self.state
 }
 
 /// Returns true if the recording is in the Initialized state.
-public fun is_initialized_state<RecordingShare>(self: &Recording<RecordingShare>): bool {
+public fun is_initialized_state<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): bool {
     match (self.state) { RecordingState::Initialized => true, _ => false }
 }
 
 /// Returns true if the recording is in the Published state.
-public fun is_published_state<RecordingShare>(self: &Recording<RecordingShare>): bool {
+public fun is_published_state<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): bool {
     match (self.state) { RecordingState::Published(_) => true, _ => false }
 }
 
 /// Returns the primary title.
-public fun title<RecordingShare>(self: &Recording<RecordingShare>): &String {
+public fun title<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): &String {
     &self.title
 }
 
 /// Returns the optional title version.
-public fun title_version<RecordingShare>(self: &Recording<RecordingShare>): &Option<String> {
+public fun title_version<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): &Option<String> {
     &self.title_version
 }
 
 /// Returns the optional subtitle.
-public fun subtitle<RecordingShare>(self: &Recording<RecordingShare>): &Option<String> {
+public fun subtitle<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): &Option<String> {
     &self.subtitle
 }
 
-/// Returns the ID of the underlying composition.
-public fun composition_id<RecordingShare>(self: &Recording<RecordingShare>): ID {
-    self.composition_id
-}
-
-/// Returns the royalty rate owed to the composition.
-public fun composition_royalty_rate<RecordingShare>(self: &Recording<RecordingShare>): BPS {
-    self.composition_royalty_rate
-}
-
 /// Returns a reference to the primary artist IDs.
-public fun primary_artist_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
+public fun primary_artist_ids<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): &VecSet<ID> {
     &self.primary_artist_ids
 }
 
 /// Returns a reference to the featured artist IDs.
-public fun featured_artist_ids<RecordingShare>(self: &Recording<RecordingShare>): &VecSet<ID> {
+public fun featured_artist_ids<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): &VecSet<ID> {
     &self.featured_artist_ids
 }
 
 /// Returns the party-to-roles mapping.
-public fun credits<RecordingShare>(
-    self: &Recording<RecordingShare>,
+public fun credits<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
 ): &VecMap<ID, Credit<RecordingPartyRole>> {
     &self.credits
 }
 
 /// Returns a reference to the cover art.
-public fun cover_art<RecordingShare>(self: &Recording<RecordingShare>): &CoverArt {
+public fun cover_art<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): &CoverArt {
     &self.cover_art
 }
 
 /// Returns whether the provided ID is a primary artist on the recording.
-public fun is_primary_artist<RecordingShare>(self: &Recording<RecordingShare>, party_id: ID): bool {
+public fun is_primary_artist<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+    party_id: ID,
+): bool {
     self.primary_artist_ids.contains(&party_id)
 }
 
 /// Returns whether the party is a featured artist on the recording.
-public fun is_featured_artist<RecordingShare>(
-    self: &Recording<RecordingShare>,
+public fun is_featured_artist<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
     party_id: ID,
 ): bool {
     self.featured_artist_ids.contains(&party_id)
@@ -464,7 +535,9 @@ public fun is_featured_artist<RecordingShare>(
 // === UID Functions ===
 
 /// Returns a reference to the recording's UID for reading dynamic fields.
-public fun uid<RecordingShare>(self: &Recording<RecordingShare>): &UID {
+public fun uid<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): &UID {
     &self.id
 }
 
@@ -472,8 +545,8 @@ public fun uid<RecordingShare>(self: &Recording<RecordingShare>): &UID {
 /// Requires the admin capability. Works in any lifecycle state — dynamic
 /// fields are the extension surface (e.g. masters) and stay admin-mutable
 /// after publish; only the embedded fields are frozen.
-public fun uid_mut<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
+public fun uid_mut<RecordingShare, CompositionShare>(
+    self: &mut Recording<RecordingShare, CompositionShare>,
     _: &RecordingAdminCap<RecordingShare>,
 ): &mut UID {
     &mut self.id
@@ -482,21 +555,17 @@ public fun uid_mut<RecordingShare>(
 // === Test Only ===
 
 #[test_only]
-public fun new_for_testing<RecordingShare>(
+public fun new_for_testing<RecordingShare, CompositionShare>(
     title: String,
-    composition_id: ID,
-    composition_royalty_rate_bps: u16,
     cover_art: CoverArt,
     ctx: &mut TxContext,
-): (Recording<RecordingShare>, RecordingAdminCap<RecordingShare>) {
-    let mut recording = Recording<RecordingShare> {
+): (Recording<RecordingShare, CompositionShare>, RecordingAdminCap<RecordingShare>) {
+    let mut recording = Recording<RecordingShare, CompositionShare> {
         id: object::new(ctx),
         state: RecordingState::Initialized,
         title,
         title_version: option::none(),
         subtitle: option::none(),
-        composition_id,
-        composition_royalty_rate: bps::new(composition_royalty_rate_bps),
         primary_artist_ids: vec_set::empty(),
         featured_artist_ids: vec_set::empty(),
         credits: vec_map::empty(),
@@ -513,8 +582,8 @@ public fun new_for_testing<RecordingShare>(
 /// Pre-fills a recording with `n` fake credits (bypasses public API validation).
 /// Each credit gets a unique fake party ID and a single vocalist role.
 #[test_only]
-public fun prefill_credits_for_testing<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
+public fun prefill_credits_for_testing<RecordingShare, CompositionShare>(
+    self: &mut Recording<RecordingShare, CompositionShare>,
     n: u64,
     ctx: &mut TxContext,
 ) {
@@ -535,8 +604,8 @@ public fun prefill_credits_for_testing<RecordingShare>(
 
 /// Pre-fills a recording with `n` fake credits and designates them as primary artists.
 #[test_only]
-public fun prefill_primary_artists_for_testing<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
+public fun prefill_primary_artists_for_testing<RecordingShare, CompositionShare>(
+    self: &mut Recording<RecordingShare, CompositionShare>,
     n: u64,
     ctx: &mut TxContext,
 ) {
@@ -558,8 +627,8 @@ public fun prefill_primary_artists_for_testing<RecordingShare>(
 
 /// Pre-fills a recording with `n` fake credits and designates them as featured artists.
 #[test_only]
-public fun prefill_featured_artists_for_testing<RecordingShare>(
-    self: &mut Recording<RecordingShare>,
+public fun prefill_featured_artists_for_testing<RecordingShare, CompositionShare>(
+    self: &mut Recording<RecordingShare, CompositionShare>,
     n: u64,
     ctx: &mut TxContext,
 ) {

@@ -79,11 +79,11 @@ fun recording_new_snapshots_composition_and_claims_idx_zero() {
         treasury_cap,
     );
 
-    // Snapshot semantics: title and royalty rate captured from the composition.
-    assert_eq!(shares.value(), SHARE_SUPPLY);
+    // Title is captured from the composition. The creator keeps the full
+    // supply minus the composition's royalty-rate cut (15% of 10M), which
+    // `recording::new` splits off and sends to the composition's address.
+    assert_eq!(shares.value(), SHARE_SUPPLY - 1_500_000_000_000);
     assert_eq!(*rec.title(), b"Song".to_string());
-    assert_eq!(rec.composition_id(), comp.id());
-    assert_eq!(rec.composition_royalty_rate().value(), 1500);
     assert!(rec.is_initialized_state());
     assert!(!rec.is_published_state());
 

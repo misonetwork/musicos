@@ -43,11 +43,8 @@ fun test_recording_kitchen_sink() {
     let ctx = &mut tx_context::dummy();
 
     // Create recording
-    let comp_id = test_helpers::fake_id(ctx);
-    let (mut rec, cap) = recording::new_for_testing<RecordingShare>(
+    let (mut rec, cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
         b"Kitchen Sink Recording".to_string(),
-        comp_id,
-        5000,
         test_helpers::cover_art(),
         ctx,
     );
@@ -118,14 +115,10 @@ fun test_release_kitchen_sink() {
         let mut t: u64 = 0;
         while (t < 13) {
             let split_bps = if (global_idx < 55) 40 else 39;
-            disc_tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare>(
-                test_helpers::fake_id(ctx),
+            disc_tracks.push_back(track::new_for_testing(
                 test_helpers::fake_id(ctx),
                 dummy_release_id,
-                b"Track".to_string(),
-                test_helpers::cover_art(),
                 split_bps,
-                5000,
             ));
             global_idx = global_idx + 1;
             t = t + 1;
@@ -141,14 +134,10 @@ fun test_release_kitchen_sink() {
         let mut t: u64 = 0;
         while (t < 12) {
             let split_bps = if (global_idx < 55) 40 else 39;
-            disc_tracks.push_back(track::new_for_testing<CompositionShare, RecordingShare>(
-                test_helpers::fake_id(ctx),
+            disc_tracks.push_back(track::new_for_testing(
                 test_helpers::fake_id(ctx),
                 dummy_release_id,
-                b"Track".to_string(),
-                test_helpers::cover_art(),
                 split_bps,
-                5000,
             ));
             global_idx = global_idx + 1;
             t = t + 1;

@@ -60,7 +60,6 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
             vector[composition_party_role::new_composer_role()],
         ),
     );
-    let composition_id = comp.id();
     let clock = sui::clock::create_for_testing(scenario.ctx());
     comp.publish(&comp_cap, &clock); // shares the composition
     clock.destroy_for_testing();
@@ -71,10 +70,8 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
     // === Tx 2 (ARTIST): create and publish a recording of it ===
     scenario.next_tx(ARTIST);
     let comp = scenario.take_shared<Composition<CompositionShare>>();
-    let (mut rec, rec_cap) = recording::new_for_testing<RecordingShare>(
+    let (mut rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
         b"Song".to_string(),
-        comp.id(),
-        ROYALTY_RATE_BPS,
         test_helpers::cover_art(),
         scenario.ctx(),
     );
@@ -98,7 +95,7 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
     // === Tx 3 (ARTIST): strike a deal bound to the predicted release id ===
     scenario.next_tx(ARTIST);
     let comp = scenario.take_shared<Composition<CompositionShare>>();
-    let rec = scenario.take_shared<Recording<RecordingShare>>();
+    let rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
     let registry = scenario.take_shared<ReleaseRegistry>();
     let recording_id = rec.id();
     let predicted_release_id = release::derive_release_id(
@@ -109,12 +106,9 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
     );
     let d = deal::new(
         &rec_cap,
-        &comp,
         &rec,
         predicted_release_id,
         10000,
-        option::none(),
-        option::none(),
         scenario.ctx(),
     );
     transfer::public_transfer(d, LABEL);
@@ -124,7 +118,7 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
 
     // === Tx 4 (LABEL): accept the deal into a track, create and publish ===
     scenario.next_tx(LABEL);
-    let d = scenario.take_from_sender<Deal>();
+    let d = scenario.take_from_sender<Deal<RecordingShare, CompositionShare>>();
     let t = track::new(d); // accepts the deal, emits DealAcceptedEvent
     let mut registry = scenario.take_shared<ReleaseRegistry>();
     let (mut rel, rel_cap) = release::new(
@@ -150,8 +144,8 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
     rel.publish(&rel_cap, &clock); // verifies track assignment, shares
     clock.destroy_for_testing();
     // Exactly one accept, no rejects, in this transaction's event stream.
-    assert_eq!(sui::event::events_by_type<deal::DealAcceptedEvent>().length(), 1);
-    assert_eq!(sui::event::events_by_type<deal::DealRejectedEvent>().length(), 0);
+    assert_eq!(sui::event::events_by_type<deal::DealAcceptedEvent<RecordingShare, CompositionShare>>().length(), 1);
+    assert_eq!(sui::event::events_by_type<deal::DealRejectedEvent<RecordingShare, CompositionShare>>().length(), 0);
     test_scenario::return_shared(registry);
     destroy(label_party);
     destroy(label_party_cap);
@@ -167,10 +161,8 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
     assert!(rel.contains_recording(recording_id));
     let track_ref = &rel.discs()[0].tracks()[0];
     assert!(track_ref.is_assigned_state());
-    assert_eq!(track_ref.composition_id(), composition_id);
     assert_eq!(track_ref.recording_id(), recording_id);
     assert_eq!(track_ref.split_bps().value(), 10000);
-    assert_eq!(track_ref.composition_royalty_rate().value(), ROYALTY_RATE_BPS);
     test_scenario::return_shared(rel);
 
     destroy(rec_cap);
@@ -186,15 +178,13 @@ fun publish_aborts_when_track_targets_a_different_release() {
 
     // One actor for brevity — the binding doesn't depend on senders.
     scenario.next_tx(SONGWRITER);
-    let (comp, _comp_cap) = composition::new_for_testing<CompositionShare>(
+    let (_comp, _comp_cap) = composition::new_for_testing<CompositionShare>(
         b"Song".to_string(),
         ROYALTY_RATE_BPS,
         scenario.ctx(),
     );
-    let (rec, rec_cap) = recording::new_for_testing<RecordingShare>(
+    let (rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
         b"Song".to_string(),
-        comp.id(),
-        ROYALTY_RATE_BPS,
         test_helpers::cover_art(),
         scenario.ctx(),
     );
@@ -210,12 +200,9 @@ fun publish_aborts_when_track_targets_a_different_release() {
     );
     let d = deal::new(
         &rec_cap,
-        &comp,
         &rec,
         wrong_release_id,
         10000,
-        option::none(),
-        option::none(),
         scenario.ctx(),
     );
     // ...but the release is created with nonce 2: different derived id.
