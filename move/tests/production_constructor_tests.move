@@ -37,7 +37,6 @@ fun composition_new_initializes_fixed_share_supply() {
     assert_eq!(comp.royalty_rate_last_changed_epoch(), ctx.epoch());
     assert!(comp.is_initialized_state());
     assert!(!comp.is_published_state());
-    assert!(comp.credits().is_empty());
 
     destroy(comp);
     destroy(cap);
@@ -74,7 +73,6 @@ fun recording_new_snapshots_composition_and_claims_idx_zero() {
     let (rec, rec_cap, shares) = recording::new<Share, CompositionShare>(
         &mut comp,
         0,
-        test_helpers::cover_art(),
         &mut currency,
         treasury_cap,
     );
@@ -95,6 +93,32 @@ fun recording_new_snapshots_composition_and_claims_idx_zero() {
     destroy(currency);
 }
 
+#[test]
+fun recording_new_zero_rate_grants_no_shares() {
+    let ctx = &mut tx_context::dummy();
+    let (mut comp, comp_cap) =
+        composition::new_for_testing<CompositionShare>(b"Generative Track".to_string(), 0, ctx);
+    let (mut currency, treasury_cap) = test_share::currency_for_testing(ctx);
+
+    let (rec, rec_cap, shares) = recording::new<Share, CompositionShare>(
+        &mut comp,
+        0,
+        &mut currency,
+        treasury_cap,
+    );
+
+    // A 0% composition royalty grants the composition no recording shares: the
+    // split/send is skipped, so the creator retains the entire supply.
+    assert_eq!(shares.value(), SHARE_SUPPLY);
+
+    destroy(comp);
+    destroy(comp_cap);
+    destroy(rec);
+    destroy(rec_cap);
+    destroy(shares);
+    destroy(currency);
+}
+
 #[test, expected_failure(abort_code = 53, location = musicos::recording)] // ERecordingGap
 fun recording_new_nonzero_first_idx_aborts() {
     let ctx = &mut tx_context::dummy();
@@ -106,7 +130,6 @@ fun recording_new_nonzero_first_idx_aborts() {
     let (rec, rec_cap, shares) = recording::new<Share, CompositionShare>(
         &mut comp,
         1,
-        test_helpers::cover_art(),
         &mut currency,
         treasury_cap,
     );
@@ -119,18 +142,21 @@ fun recording_new_nonzero_first_idx_aborts() {
     destroy(currency);
 }
 
-#[test, expected_failure(abort_code = 21, location = musicos::composition)] // EBelowMinRoyaltyRate
-fun composition_new_below_floor_aborts() {
+#[test]
+fun composition_new_at_zero_rate_succeeds() {
     let ctx = &mut tx_context::dummy();
     let (mut currency, treasury_cap) = test_share::currency_for_testing(ctx);
 
+    // No floor: a generative composition with no authored work may carry a 0% rate.
     let (comp, cap, shares) = composition::new<Share>(
-        b"Stingy Song".to_string(),
-        999,
+        b"Generative Work".to_string(),
+        0,
         &mut currency,
         treasury_cap,
         ctx,
     );
+
+    assert_eq!(comp.royalty_rate().value(), 0);
 
     destroy(comp);
     destroy(cap);
@@ -150,7 +176,6 @@ fun recording_new_contiguous_indices_succeed() {
     let (rec0, rec_cap0, shares0) = recording::new<Share, CompositionShare>(
         &mut comp,
         0,
-        test_helpers::cover_art(),
         &mut currency0,
         treasury_cap0,
     );
@@ -159,7 +184,6 @@ fun recording_new_contiguous_indices_succeed() {
     let (rec1, rec_cap1, shares1) = recording::new<Share, CompositionShare>(
         &mut comp,
         1,
-        test_helpers::cover_art(),
         &mut currency1,
         treasury_cap1,
     );

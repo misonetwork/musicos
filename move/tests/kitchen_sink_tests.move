@@ -1,40 +1,17 @@
 #[test_only]
 module musicos::kitchen_sink_tests;
 
-use partyos::credit;
 use musicos::disc;
 use musicos::recording;
-use musicos::recording_party_role;
 use musicos::release;
-use musicos::release_party_role;
 use musicos::test_helpers::{Self, CompositionShare, RecordingShare};
 use musicos::track;
 use std::unit_test::destroy;
 
-// === Helpers ===
-
-/// Creates 10 distinct recording party roles for a credit.
-fun make_10_roles(): vector<recording_party_role::RecordingPartyRole> {
-    vector[
-        recording_party_role::new_producer_role(option::none()),
-        recording_party_role::new_vocalist_role(option::none()),
-        recording_party_role::new_arranger_role(option::none()),
-        recording_party_role::new_conductor_role(option::none()),
-        recording_party_role::new_editor_role(option::none()),
-        recording_party_role::new_mixing_engineer_role(option::none()),
-        recording_party_role::new_mastering_engineer_role(option::none()),
-        recording_party_role::new_recording_engineer_role(option::none()),
-        recording_party_role::new_programmer_role(option::none()),
-        recording_party_role::new_sound_designer_role(option::none()),
-    ]
-}
-
 // === Tests ===
 
-/// Kitchen sink test: creates a recording with ALL fields at maximum bounds.
-/// - 150 credits (MAX_CREDITS), each with 10 roles (MAX_ROLES_PER_CREDIT)
-/// - 20 primary artists (MAX_PRIMARY_ARTISTS)
-/// - 50 featured artists (MAX_FEATURED_ARTISTS)
+/// Kitchen sink test: creates a recording with the embedded fields at maximum
+/// bounds.
 /// - title_version at 100 bytes (MAX_TITLE_VERSION_LENGTH)
 /// - subtitle at 200 bytes (MAX_SUBTITLE_LENGTH)
 /// - Successfully publishes
@@ -45,34 +22,8 @@ fun test_recording_kitchen_sink() {
     // Create recording
     let (mut rec, cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
         b"Kitchen Sink Recording".to_string(),
-        test_helpers::cover_art(),
         ctx,
     );
-
-    // Create 150 parties (stored in a vector for reuse)
-    let mut parties = vector[];
-    let mut party_caps = vector[];
-    150u64.do!(|_| {
-        let (party, party_cap) = test_helpers::individual(ctx);
-        parties.push_back(party);
-        party_caps.push_back(party_cap);
-    });
-
-    // Add 150 credits, each with 10 distinct roles (MAX_CREDITS x MAX_ROLES_PER_CREDIT)
-    150u64.do!(|i| {
-        let cred = credit::new(b"Artist".to_string(), make_10_roles());
-        rec.add_credit(&cap, &parties[i], cred);
-    });
-
-    // Designate first 20 as primary artists (MAX_PRIMARY_ARTISTS)
-    20u64.do!(|i| {
-        rec.add_primary_artist(&cap, &parties[i]);
-    });
-
-    // Designate next 50 as featured artists (MAX_FEATURED_ARTISTS)
-    50u64.do!(|i| {
-        rec.add_featured_artist(&cap, &parties[20 + i]);
-    });
 
     // Set all optional fields at max bounds
     rec.set_title_version(&cap, test_helpers::long_string(100)); // MAX_TITLE_VERSION_LENGTH
@@ -85,15 +36,13 @@ fun test_recording_kitchen_sink() {
     // Cleanup
     clock.destroy_for_testing();
     destroy(cap);
-    parties.destroy!(|p| destroy(p));
-    party_caps.destroy!(|c| destroy(c));
 }
 
-/// Kitchen sink test: creates a release with ALL fields at maximum bounds.
+/// Kitchen sink test: creates a release with the structural fields at maximum
+/// bounds.
 /// - 20 discs (MAX_DISCS) with 255 total tracks (MAX_TRACKS)
 ///   - 15 discs x 13 tracks = 195, 5 discs x 12 tracks = 60, total = 255
 /// - Track splits sum to exactly 10000 BPS (55 x 40 + 200 x 39 = 10000)
-/// - 50 credits (MAX_CREDITS), each with exactly 1 role (CREDIT_ROLE_COUNT)
 /// - Title at 300 bytes (MAX_TITLE_LENGTH)
 /// - Successfully publishes
 #[test]
@@ -148,44 +97,11 @@ fun test_release_kitchen_sink() {
 
     // Create release with max title.
     // new_for_testing patches all tracks to point to the real release ID.
-    let (mut rel, rel_cap) = release::new_for_testing(
+    let (rel, rel_cap) = release::new_for_testing(
         test_helpers::long_string(300), // MAX_TITLE_LENGTH
-        test_helpers::cover_art(),
         discs,
         ctx,
     );
-
-    // Add 50 credits (MAX_CREDITS), each with exactly 1 role (CREDIT_ROLE_COUNT).
-    // First credit must be Primary (required for publish).
-    let mut parties = vector[];
-    let mut party_caps = vector[];
-
-    let (party0, party_cap0) = test_helpers::individual(ctx);
-    rel.add_credit(
-        &rel_cap,
-        &party0,
-        credit::new(
-            b"Primary Artist".to_string(),
-            vector[release_party_role::new_primary_role()],
-        ),
-    );
-    parties.push_back(party0);
-    party_caps.push_back(party_cap0);
-
-    // Remaining 49 credits as Featured
-    49u64.do!(|_| {
-        let (party, party_cap) = test_helpers::individual(ctx);
-        rel.add_credit(
-            &rel_cap,
-            &party,
-            credit::new(
-                b"Featured".to_string(),
-                vector[release_party_role::new_featured_role()],
-            ),
-        );
-        parties.push_back(party);
-        party_caps.push_back(party_cap);
-    });
 
     // Publish - proves all max bounds are achievable together
     let clock = sui::clock::create_for_testing(ctx);
@@ -194,6 +110,4 @@ fun test_release_kitchen_sink() {
     // Cleanup
     clock.destroy_for_testing();
     destroy(rel_cap);
-    parties.destroy!(|p| destroy(p));
-    party_caps.destroy!(|c| destroy(c));
 }

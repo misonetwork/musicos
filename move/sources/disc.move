@@ -8,10 +8,13 @@
 ///
 /// - Maximum of 50 tracks per disc
 /// - Automatic duration calculation from tracks
-/// - Optional disc-specific artwork
+///
+/// Artwork is intentionally NOT part of core: it is display metadata whose
+/// format evolves over time (static → animated → future formats), so it lives
+/// in the `artwork` extension (keyed by disc index on the release) rather than
+/// frozen in an immutable struct here.
 module musicos::disc;
 
-use musicos::cover_art::CoverArt;
 use musicos::track::Track;
 use std::string::String;
 
@@ -21,8 +24,6 @@ use std::string::String;
 public struct Disc has drop, store {
     /// Ordered list of tracks on this disc.
     tracks: vector<Track>,
-    /// Optional disc-specific artwork (e.g., for multi-disc sets with different covers).
-    artwork: Option<CoverArt>,
     /// Title of the disc.
     title: Option<String>,
 }
@@ -60,14 +61,8 @@ public fun new(tracks: vector<Track>, title: Option<String>): Disc {
 
     Disc {
         tracks,
-        artwork: option::none(),
         title,
     }
-}
-
-/// Sets or updates the disc-specific artwork.
-public fun set_artwork(self: &mut Disc, artwork: CoverArt) {
-    self.artwork.swap_or_fill(artwork);
 }
 
 // === Public View Functions ===
@@ -75,11 +70,6 @@ public fun set_artwork(self: &mut Disc, artwork: CoverArt) {
 /// Returns a reference to all tracks on this disc.
 public fun tracks(self: &Disc): &vector<Track> {
     &self.tracks
-}
-
-/// Returns the optional disc-specific artwork.
-public fun artwork(self: &Disc): &Option<CoverArt> {
-    &self.artwork
 }
 
 /// Returns the optional title of this disc.

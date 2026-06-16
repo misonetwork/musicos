@@ -5,53 +5,60 @@
 
 /**
  * Represents a track on a release, linking a recording to its position in the
- * tracklist. Each track captures metadata from the recording at the time of
- * release creation for efficient access during playback.
+ * tracklist.
  * 
- * ### Key Features:
+ * A `Track` is the minimal positioned (recording, revenue-share) pair:
  * 
- * - Caches recording metadata for quick access
- * - Supports optional track-specific cover art
- * - Stores the track's split of release revenue and the composition royalty rate
+ * - `recording_id` — the routing target for the track's revenue, and the handle
+ *   through which all other metadata (title, cover art, and the
+ *   recording/composition share-type identities) is reached.
+ * - `split_bps` — this track's share of the release's revenue; genuinely
+ *   release-specific and not derivable from the recording.
+ * - `state` — the assign-once lifecycle that carries (then sheds) each deal's
+ *   target release commitment; see `TrackState`.
+ * 
+ * `Track` is intentionally monomorphic: a `Release` holds a `vector<Track>` of
+ * tracks from many different recordings/compositions, so it cannot be generic over
+ * their share types. It stores no title, cover art, or share-type — all derived
+ * from the recording via `recording_id`.
  */
 
 import { MoveEnum, MoveStruct, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
 import { bcs } from '@mysten/sui/bcs';
 import { type Transaction, type TransactionArgument } from '@mysten/sui/transactions';
-import * as type_name from './deps/std/type_name.js';
 import * as bps from './deps/bps/bps.js';
-import * as cover_art from './cover_art.js';
 const $moduleName = '@local-pkg/musicos::track';
-/** Lifecycle state of a track within a release. */
+/**
+ * Lifecycle state of a track within a release. A track is born `Unassigned`,
+ * carrying the target `release_id` its originating `Deal` committed to (the
+ * release id is a digest of the whole tracklist, so this is the recording owner's
+ * consent to the exact release configuration). At publish the release verifies the
+ * match and transitions the track to `Assigned`, which carries no id — shedding
+ * the 32-byte commitment once it has served its purpose.
+ */
 export const TrackState = new MoveEnum({ name: `${$moduleName}::TrackState`, fields: {
-        /** Track has been created but not yet assigned to a release. */
-        Unassigned: new MoveStruct({ name: `TrackState.Unassigned`, fields: {
-                release_id: bcs.Address
-            } }),
+        /**
+          * Track has been created but not yet assigned to a release. Carries the target
+          * release id the originating deal committed to.
+          */
+        Unassigned: bcs.Address,
         /** Track has been assigned to its target release. */
         Assigned: null
     } });
 export const Track = new MoveStruct({ name: `${$moduleName}::Track`, fields: {
         /** Current state of the track. */
         state: TrackState,
-        /** ID of the underlying composition. */
-        composition_id: bcs.Address,
-        /** Type of the composition's share token. */
-        composition_share_type: type_name.TypeName,
-        /** Royalty rate owed to the composition. */
-        composition_royalty_rate: bps.BPS,
-        /** ID of the recording on this track. */
+        /**
+         * ID of the recording on this track. The routing target for the track's revenue;
+         * also the handle a consumer uses to fetch the recording (whose type carries the
+         * recording and composition share-type identities).
+         */
         recording_id: bcs.Address,
-        /** Type of the recording's share token. */
-        recording_share_type: type_name.TypeName,
-        /** Description of the track. */
-        title: bcs.string(),
-        /** Cover art for the track. Inherited from the recording by default. */
-        cover_art: cover_art.CoverArt,
         /**
          * This track's share of the release's revenue, in basis points. All tracks in a
-         * release sum to 100%. (The composition-vs-recording split within this share is
-         * governed by `composition_royalty_rate`.)
+         * release sum to 100%. The composition's cut is settled as recording-share
+         * ownership at recording creation, so it is not split out here — a track routes
+         * its full share to the recording.
          */
         split_bps: bps.BPS
     } });
@@ -63,11 +70,19 @@ export interface NewOptions {
     arguments: NewArguments | [
         deal: RawTransactionArgument<string>
     ];
+    typeArguments: [
+        string,
+        string
+    ];
 }
 /**
  * Creates a new track by accepting a deal. The deal itself is the authorization —
- * it was created by the recording's admin and carries the recording's metadata and
+ * it was created by the recording's admin and carries the recording's identity and
  * the agreed split. Emits a `DealAcceptedEvent`.
+ *
+ * The deal's `RecordingShare`/`CompositionShare` phantoms are erased here: a
+ * `Track` is monomorphic so it can live in a release's heterogeneous
+ * `vector<Track>`. The recording remains reachable via `recording_id`.
  */
 export function _new(options: NewOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
@@ -80,75 +95,7 @@ export function _new(options: NewOptions) {
         module: 'track',
         function: 'new',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface CompositionIdArguments {
-    self: TransactionArgument;
-}
-export interface CompositionIdOptions {
-    package?: string;
-    arguments: CompositionIdArguments | [
-        self: TransactionArgument
-    ];
-}
-/** Returns the ID of the underlying composition. */
-export function compositionId(options: CompositionIdOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'track',
-        function: 'composition_id',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface CompositionShareTypeArguments {
-    self: TransactionArgument;
-}
-export interface CompositionShareTypeOptions {
-    package?: string;
-    arguments: CompositionShareTypeArguments | [
-        self: TransactionArgument
-    ];
-}
-/** Returns the type of the composition's share token. */
-export function compositionShareType(options: CompositionShareTypeOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'track',
-        function: 'composition_share_type',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface CompositionRoyaltyRateArguments {
-    self: TransactionArgument;
-}
-export interface CompositionRoyaltyRateOptions {
-    package?: string;
-    arguments: CompositionRoyaltyRateArguments | [
-        self: TransactionArgument
-    ];
-}
-/** Returns the royalty rate owed to the composition. */
-export function compositionRoyaltyRate(options: CompositionRoyaltyRateOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'track',
-        function: 'composition_royalty_rate',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+        typeArguments: options.typeArguments
     });
 }
 export interface RecordingIdArguments {
@@ -171,75 +118,6 @@ export function recordingId(options: RecordingIdOptions) {
         package: packageAddress,
         module: 'track',
         function: 'recording_id',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface RecordingShareTypeArguments {
-    self: TransactionArgument;
-}
-export interface RecordingShareTypeOptions {
-    package?: string;
-    arguments: RecordingShareTypeArguments | [
-        self: TransactionArgument
-    ];
-}
-/** Returns the type of the recording's share token. */
-export function recordingShareType(options: RecordingShareTypeOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'track',
-        function: 'recording_share_type',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface TitleArguments {
-    self: TransactionArgument;
-}
-export interface TitleOptions {
-    package?: string;
-    arguments: TitleArguments | [
-        self: TransactionArgument
-    ];
-}
-/** Returns the title of the track. */
-export function title(options: TitleOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'track',
-        function: 'title',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface CoverArtArguments {
-    self: TransactionArgument;
-}
-export interface CoverArtOptions {
-    package?: string;
-    arguments: CoverArtArguments | [
-        self: TransactionArgument
-    ];
-}
-/** Returns the cover art for the track. */
-export function coverArt(options: CoverArtOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'track',
-        function: 'cover_art',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

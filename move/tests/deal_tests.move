@@ -21,7 +21,6 @@ fun composition_and_recording(
         composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
     let (rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
         b"Song".to_string(),
-        test_helpers::cover_art(),
         ctx,
     );
     (comp, comp_cap, rec, rec_cap)

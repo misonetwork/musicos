@@ -11,24 +11,25 @@
  * 
  * - Multi-disc releases with track sequencing
  * - Configurable per-track revenue splits
- * - Revenue distribution to composition and recording royalty pools
  * - State machine: Initialized -> Published
+ * 
+ * Attribution (credits, primary/featured artists) is intentionally NOT part of
+ * core: it is display-oriented, varies across platforms, and is never read by the
+ * economics. It lives in a first-party credits extension attached via `uid_mut`,
+ * so core takes no dependency on an identity package and core publish enforces no
+ * attribution.
  */
 
 import { MoveTuple, MoveEnum, MoveStruct, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
 import { bcs } from '@mysten/sui/bcs';
 import { type Transaction, type TransactionArgument } from '@mysten/sui/transactions';
-import * as vec_map from './deps/sui/vec_map.js';
-import * as credit from './deps/partyos/credit.js';
-import * as release_party_role from './release_party_role.js';
 import * as disc from './disc.js';
-import * as cover_art from './cover_art.js';
 const $moduleName = '@local-pkg/musicos::release';
 export const RELEASE = new MoveTuple({ name: `${$moduleName}::RELEASE`, fields: [bcs.bool()] });
 /** Lifecycle state of a release. */
 export const ReleaseState = new MoveEnum({ name: `${$moduleName}::ReleaseState`, fields: {
-        /** Release is initialized but not yet created. */
-        Initialized: bcs.bool(),
+        /** Release is initialized but not yet published. */
+        Initialized: null,
         /** Release is published and immutable. Includes publication timestamp. */
         Published: bcs.u64()
     } });
@@ -41,12 +42,8 @@ export const Release = new MoveStruct({ name: `${$moduleName}::Release`, fields:
         title: bcs.string(),
         /** Optional subtitle (e.g., "Deluxe Edition"). */
         subtitle: bcs.option(bcs.string()),
-        /** Attribution information for the release. */
-        credits: vec_map.VecMap(bcs.Address, credit.Credit(release_party_role.ReleasePartyRole)),
         /** Collection of discs containing tracks. */
-        discs: bcs.vector(disc.Disc),
-        /** Cover artwork for the release. */
-        cover_art: cover_art.CoverArt
+        discs: bcs.vector(disc.Disc)
     } });
 export const ReleaseKey = new MoveTuple({ name: `${$moduleName}::ReleaseKey`, fields: [bcs.vector(bcs.u8())] });
 export const ReleaseRegistry = new MoveStruct({ name: `${$moduleName}::ReleaseRegistry`, fields: {
@@ -64,7 +61,6 @@ export const ReleasePublishedEvent = new MoveStruct({ name: `${$moduleName}::Rel
     } });
 export interface NewArguments {
     title: RawTransactionArgument<string>;
-    coverArt: TransactionArgument;
     discs: TransactionArgument;
     nonce: RawTransactionArgument<number | bigint>;
     registry: RawTransactionArgument<string>;
@@ -73,7 +69,6 @@ export interface NewOptions {
     package?: string;
     arguments: NewArguments | [
         title: RawTransactionArgument<string>,
-        coverArt: TransactionArgument,
         discs: TransactionArgument,
         nonce: RawTransactionArgument<number | bigint>,
         registry: RawTransactionArgument<string>
@@ -87,12 +82,11 @@ export function _new(options: NewOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
     const argumentsTypes = [
         '0x1::string::String',
-        null,
         'vector<null>',
         'u256',
         null
     ] satisfies (string | null)[];
-    const parameterNames = ["title", "coverArt", "discs", "nonce", "registry"];
+    const parameterNames = ["title", "discs", "nonce", "registry"];
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'release',
@@ -133,41 +127,6 @@ export function setSubtitle(options: SetSubtitleOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
-export interface AddCreditArguments {
-    self: RawTransactionArgument<string>;
-    cap: RawTransactionArgument<string>;
-    party: RawTransactionArgument<string>;
-    credit: TransactionArgument;
-}
-export interface AddCreditOptions {
-    package?: string;
-    arguments: AddCreditArguments | [
-        self: RawTransactionArgument<string>,
-        cap: RawTransactionArgument<string>,
-        party: RawTransactionArgument<string>,
-        credit: TransactionArgument
-    ];
-}
-/**
- * Adds a credit to the release for a party. Each credit must have exactly one role
- * (Primary or Featured). Required State: Initialized
- */
-export function addCredit(options: AddCreditOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null,
-        null,
-        null,
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "cap", "party", "credit"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'add_credit',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
 export interface PublishArguments {
     self: RawTransactionArgument<string>;
     cap: RawTransactionArgument<string>;
@@ -182,6 +141,9 @@ export interface PublishOptions {
 /**
  * Publishes the release, making it immutable. Track splits must be set and sum to
  * 100% before publishing. Required State: Initialized
+ *
+ * Note: core enforces no attribution requirement — credits live in the credits
+ * extension and may be attached before or after publish via `uid_mut`.
  */
 export function publish(options: PublishOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
@@ -398,29 +360,6 @@ export function subtitle(options: SubtitleOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
-export interface CreditsArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface CreditsOptions {
-    package?: string;
-    arguments: CreditsArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-/** Returns a reference to the release credits. */
-export function credits(options: CreditsOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'credits',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
 export interface DiscsArguments {
     self: RawTransactionArgument<string>;
 }
@@ -441,29 +380,6 @@ export function discs(options: DiscsOptions) {
         package: packageAddress,
         module: 'release',
         function: 'discs',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface CoverArtArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface CoverArtOptions {
-    package?: string;
-    arguments: CoverArtArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-/** Returns a reference to the cover art. */
-export function coverArt(options: CoverArtOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'cover_art',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
@@ -575,8 +491,9 @@ export interface UidMutOptions {
 }
 /**
  * Returns a mutable reference to the release's UID. Requires the admin capability.
- * Works in any lifecycle state — dynamic fields are the extension surface and stay
- * admin-mutable after publish; only the embedded fields are frozen.
+ * Works in any lifecycle state — dynamic fields are the extension surface (e.g.
+ * credits) and stay admin-mutable after publish; only the embedded fields are
+ * frozen.
  */
 export function uidMut(options: UidMutOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';

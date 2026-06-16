@@ -8,10 +8,16 @@
 /// ### Key Features:
 ///
 /// - Share token initialization with fixed supply (10M tokens, 6 decimals)
-/// - Party management with role assignments (Producer, Vocalist, etc.)
 /// - State machine: Initialized -> Published (embedded fields immutable after
-///   publish; dynamic fields remain extensible via `uid_mut`, e.g. masters)
+///   publish; dynamic fields remain extensible via `uid_mut`, e.g. masters,
+///   and credits/attribution attached by the credits extension)
 /// - Deterministic addresses via derived object pattern
+///
+/// Attribution (credits, primary/featured artists) is intentionally NOT part of
+/// core: it is display-oriented, varies across platforms, and is never read by
+/// the economics. It lives in a first-party credits extension attached via
+/// `uid_mut`, so core takes no dependency on an identity package and core
+/// publish enforces no attribution.
 ///
 /// The recording carries its parent composition's identity as the
 /// `CompositionShare` phantom type parameter — the composition's share type is
@@ -22,10 +28,6 @@
 module musicos::recording;
 
 use musicos::composition::Composition;
-use musicos::cover_art::CoverArt;
-use musicos::recording_party_role::RecordingPartyRole;
-use partyos::credit::Credit;
-use partyos::party::Party;
 use share::share;
 use std::string::String;
 use sui::balance::Balance;
@@ -34,8 +36,6 @@ use sui::coin::TreasuryCap;
 use sui::coin_registry::Currency;
 use sui::derived_object::{Self, claim};
 use sui::event::emit;
-use sui::vec_map::{Self, VecMap};
-use sui::vec_set::{Self, VecSet};
 
 // === Structs ===
 
@@ -53,14 +53,6 @@ public struct Recording<phantom RecordingShare, phantom CompositionShare> has ke
     title_version: Option<String>,
     /// Subtitle of the recording.
     subtitle: Option<String>,
-    // IDs of the primary artists on the recording.
-    primary_artist_ids: VecSet<ID>,
-    // IDs of the featured artists on the recording.
-    featured_artist_ids: VecSet<ID>,
-    /// Map of party IDs to their roles on this recording.
-    credits: VecMap<ID, Credit<RecordingPartyRole>>,
-    /// Cover art for the recording.
-    cover_art: CoverArt,
 }
 
 /// Capability that authorizes modifications to a specific recording.
@@ -111,8 +103,8 @@ public enum RecordingState has copy, drop, store {
 /// `CompositionShare` phantom. A recording's embedded fields are immutable after
 /// publishing, so an indexer treats this as a signal to fetch the full object by
 /// `recording_id`; all indexed data — including the publish timestamp — lives in
-/// the object itself. Dynamic fields (e.g. masters attached by ingesters) may
-/// still change afterward.
+/// the object itself. Dynamic fields (e.g. masters attached by ingesters,
+/// credits attached by the credits extension) may still change afterward.
 public struct RecordingPublishedEvent<phantom RecordingShare, phantom CompositionShare> has copy, drop {
     recording_id: ID,
 }
@@ -139,16 +131,6 @@ public struct CompositionSharesGrantedEvent<phantom RecordingShare, phantom Comp
 
 // === Constants ===
 
-/// Minimum number of roles a party must have.
-const MIN_ROLES_PER_CREDIT: u64 = 1;
-/// Maximum number of roles a party can have.
-const MAX_ROLES_PER_CREDIT: u64 = 10;
-/// Maximum number of credits allowed on a recording.
-const MAX_CREDITS: u64 = 150;
-/// Maximum number of primary artists allowed on a recording.
-const MAX_PRIMARY_ARTISTS: u64 = 20;
-/// Maximum number of featured artists allowed on a recording.
-const MAX_FEATURED_ARTISTS: u64 = 50;
 /// Maximum length of a title version in bytes.
 const MAX_TITLE_VERSION_LENGTH: u64 = 100;
 /// Maximum length of a subtitle in bytes.
@@ -160,19 +142,7 @@ const MAX_SUBTITLE_LENGTH: u64 = 300;
 /// Operation requires Initialized state but recording is in a different state.
 const ENotInitializedState: u64 = 10;
 
-// Validation errors (20-29)
-/// Party must have at least one role.
-const EMinRolesNotMet: u64 = 20;
-
 // Constraint errors (30-39)
-/// Party has too many roles.
-const EExceedsMaxRoles: u64 = 30;
-/// Recording has too many credits.
-const EMaxCreditsExceeded: u64 = 32;
-/// Recording has too many primary artists.
-const EMaxPrimaryArtistsExceeded: u64 = 34;
-/// Recording has too many featured artists.
-const EMaxFeaturedArtistsExceeded: u64 = 35;
 /// Title version exceeds maximum length.
 const EMaxTitleVersionLengthExceeded: u64 = 36;
 /// Subtitle exceeds maximum length.
@@ -180,21 +150,7 @@ const EMaxSubtitleLengthExceeded: u64 = 37;
 /// String must not be empty.
 const EEmptyString: u64 = 38;
 
-// Conflict errors (40-49)
-/// Party already has a credit on this recording.
-const EPartyAlreadyCredited: u64 = 40;
-/// Party is already a primary artist.
-const EAlreadyPrimaryArtist: u64 = 41;
-/// Party is already a featured artist.
-const EAlreadyFeaturedArtist: u64 = 42;
-
 // Reference errors (50-59)
-/// Recording must have at least one party to publish.
-const ENoParties: u64 = 50;
-/// Recording must have at least one primary artist to publish.
-const ENoPrimaryArtistAssigned: u64 = 51;
-/// Party is not credited on the recording.
-const EPartyNotCredited: u64 = 52;
 /// Recordings must be created with contiguous indices — idx N requires N-1 to exist.
 const ERecordingGap: u64 = 53;
 
@@ -221,7 +177,6 @@ const ERecordingGap: u64 = 53;
 public fun new<RecordingShare, CompositionShare>(
     composition: &mut Composition<CompositionShare>,
     idx: u64,
-    cover_art: CoverArt,
     share_currency: &mut Currency<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
 ): (
@@ -249,10 +204,6 @@ public fun new<RecordingShare, CompositionShare>(
         title: *composition.title(),
         title_version: option::none(),
         subtitle: option::none(),
-        primary_artist_ids: vec_set::empty(),
-        featured_artist_ids: vec_set::empty(),
-        credits: vec_map::empty(),
-        cover_art,
     };
 
     let recording_admin_cap = RecordingAdminCap<RecordingShare> {
@@ -271,9 +222,16 @@ public fun new<RecordingShare, CompositionShare>(
     // remainder returns to the creator. The split is internal and the
     // composition's portion is never returned to the caller, so the creator
     // cannot retain it.
+    //
+    // A 0% rate (e.g. a generative recording with no authored composition) yields
+    // no cut: skip the split/send so we don't open a zero-value share accumulator
+    // for the composition. The grant event is still emitted as the canonical
+    // record that the applied rate was zero.
     let composition_cut = composition_royalty_rate.apply(recording_shares.value());
-    let composition_shares = recording_shares.split(composition_cut);
-    composition_shares.send_funds(composition_id.to_address());
+    if (composition_cut > 0) {
+        let composition_shares = recording_shares.split(composition_cut);
+        composition_shares.send_funds(composition_id.to_address());
+    };
 
     emit(CompositionSharesGrantedEvent<RecordingShare, CompositionShare> {
         recording_id: recording.id(),
@@ -285,9 +243,11 @@ public fun new<RecordingShare, CompositionShare>(
     (recording, recording_admin_cap, recording_shares)
 }
 
-/// Publishes the recording, making it immutable.
-/// Requires at least one party to be assigned.
+/// Publishes the recording, making its embedded fields immutable.
 /// Required State: Initialized
+///
+/// Note: core enforces no attribution requirement — credits live in the credits
+/// extension and may be attached before or after publish via `uid_mut`.
 public fun publish<RecordingShare, CompositionShare>(
     mut self: Recording<RecordingShare, CompositionShare>,
     _: &RecordingAdminCap<RecordingShare>,
@@ -295,11 +255,6 @@ public fun publish<RecordingShare, CompositionShare>(
 ) {
     match (self.state) {
         RecordingState::Initialized => {
-            // Assert the recording has at least one party.
-            assert!(!self.credits.is_empty(), ENoParties);
-            // Assert the recording has at least one primary artist.
-            assert!(!self.primary_artist_ids.is_empty(), ENoPrimaryArtistAssigned);
-
             // Set the recording's publish timestamp.
             let published_at_ms = clock.timestamp_ms();
             self.state = RecordingState::Published(published_at_ms);
@@ -348,90 +303,6 @@ public fun set_subtitle<RecordingShare, CompositionShare>(
             assert!(!subtitle.is_empty(), EEmptyString);
             assert!(subtitle.length() <= MAX_SUBTITLE_LENGTH, EMaxSubtitleLengthExceeded);
             self.subtitle.swap_or_fill(subtitle);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-// === People ===
-
-/// Adds a party to the recording with specified roles.
-/// Each party must have 1-10 roles.
-/// Required State: Initialized
-public fun add_credit<RecordingShare, CompositionShare>(
-    self: &mut Recording<RecordingShare, CompositionShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    party: &Party,
-    credit: Credit<RecordingPartyRole>,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            assert!(credit.roles().length() >= MIN_ROLES_PER_CREDIT, EMinRolesNotMet);
-            assert!(credit.roles().length() <= MAX_ROLES_PER_CREDIT, EExceedsMaxRoles);
-            assert!(self.credits.length() < MAX_CREDITS, EMaxCreditsExceeded);
-
-            let party_id = party.id();
-            // Abort early if party already has a credit on this recording.
-            assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
-            self.credits.insert(party_id, credit);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Adds a party as a primary artist on the recording.
-/// The party must already be credited and not already assigned as primary or featured.
-/// Required State: Initialized
-public fun add_primary_artist<RecordingShare, CompositionShare>(
-    self: &mut Recording<RecordingShare, CompositionShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    party: &Party,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            assert!(
-                self.primary_artist_ids.length() < MAX_PRIMARY_ARTISTS,
-                EMaxPrimaryArtistsExceeded,
-            );
-
-            let party_id = party.id();
-            // Assert the party is credited on the recording.
-            assert!(self.credits.contains(&party_id), EPartyNotCredited);
-            // Assert the party is not already a featured artist.
-            assert!(!self.featured_artist_ids.contains(&party_id), EAlreadyFeaturedArtist);
-            // Assert the party is not already a primary artist.
-            assert!(!self.primary_artist_ids.contains(&party_id), EAlreadyPrimaryArtist);
-
-            self.primary_artist_ids.insert(party_id);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
-/// Adds a party as a featured artist on the recording.
-/// The party must already be credited and not already assigned as primary or featured.
-/// Required State: Initialized
-public fun add_featured_artist<RecordingShare, CompositionShare>(
-    self: &mut Recording<RecordingShare, CompositionShare>,
-    _: &RecordingAdminCap<RecordingShare>,
-    party: &Party,
-) {
-    match (self.state) {
-        RecordingState::Initialized => {
-            assert!(
-                self.featured_artist_ids.length() < MAX_FEATURED_ARTISTS,
-                EMaxFeaturedArtistsExceeded,
-            );
-
-            let party_id = party.id();
-            // Assert the party is credited on the recording.
-            assert!(self.credits.contains(&party_id), EPartyNotCredited);
-            // Assert the party is not already a primary artist.
-            assert!(!self.primary_artist_ids.contains(&party_id), EAlreadyPrimaryArtist);
-            // Assert the party is not already a featured artist.
-            assert!(!self.featured_artist_ids.contains(&party_id), EAlreadyFeaturedArtist);
-
-            self.featured_artist_ids.insert(party_id);
         },
         _ => abort ENotInitializedState,
     }
@@ -488,50 +359,6 @@ public fun subtitle<RecordingShare, CompositionShare>(
     &self.subtitle
 }
 
-/// Returns a reference to the primary artist IDs.
-public fun primary_artist_ids<RecordingShare, CompositionShare>(
-    self: &Recording<RecordingShare, CompositionShare>,
-): &VecSet<ID> {
-    &self.primary_artist_ids
-}
-
-/// Returns a reference to the featured artist IDs.
-public fun featured_artist_ids<RecordingShare, CompositionShare>(
-    self: &Recording<RecordingShare, CompositionShare>,
-): &VecSet<ID> {
-    &self.featured_artist_ids
-}
-
-/// Returns the party-to-roles mapping.
-public fun credits<RecordingShare, CompositionShare>(
-    self: &Recording<RecordingShare, CompositionShare>,
-): &VecMap<ID, Credit<RecordingPartyRole>> {
-    &self.credits
-}
-
-/// Returns a reference to the cover art.
-public fun cover_art<RecordingShare, CompositionShare>(
-    self: &Recording<RecordingShare, CompositionShare>,
-): &CoverArt {
-    &self.cover_art
-}
-
-/// Returns whether the provided ID is a primary artist on the recording.
-public fun is_primary_artist<RecordingShare, CompositionShare>(
-    self: &Recording<RecordingShare, CompositionShare>,
-    party_id: ID,
-): bool {
-    self.primary_artist_ids.contains(&party_id)
-}
-
-/// Returns whether the party is a featured artist on the recording.
-public fun is_featured_artist<RecordingShare, CompositionShare>(
-    self: &Recording<RecordingShare, CompositionShare>,
-    party_id: ID,
-): bool {
-    self.featured_artist_ids.contains(&party_id)
-}
-
 // === UID Functions ===
 
 /// Returns a reference to the recording's UID for reading dynamic fields.
@@ -543,8 +370,8 @@ public fun uid<RecordingShare, CompositionShare>(
 
 /// Returns a mutable reference to the recording's UID.
 /// Requires the admin capability. Works in any lifecycle state — dynamic
-/// fields are the extension surface (e.g. masters) and stay admin-mutable
-/// after publish; only the embedded fields are frozen.
+/// fields are the extension surface (e.g. masters, credits) and stay
+/// admin-mutable after publish; only the embedded fields are frozen.
 public fun uid_mut<RecordingShare, CompositionShare>(
     self: &mut Recording<RecordingShare, CompositionShare>,
     _: &RecordingAdminCap<RecordingShare>,
@@ -557,7 +384,6 @@ public fun uid_mut<RecordingShare, CompositionShare>(
 #[test_only]
 public fun new_for_testing<RecordingShare, CompositionShare>(
     title: String,
-    cover_art: CoverArt,
     ctx: &mut TxContext,
 ): (Recording<RecordingShare, CompositionShare>, RecordingAdminCap<RecordingShare>) {
     let mut recording = Recording<RecordingShare, CompositionShare> {
@@ -566,10 +392,6 @@ public fun new_for_testing<RecordingShare, CompositionShare>(
         title,
         title_version: option::none(),
         subtitle: option::none(),
-        primary_artist_ids: vec_set::empty(),
-        featured_artist_ids: vec_set::empty(),
-        credits: vec_map::empty(),
-        cover_art,
     };
 
     let recording_admin_cap = RecordingAdminCap<RecordingShare> {
@@ -577,75 +399,6 @@ public fun new_for_testing<RecordingShare, CompositionShare>(
     };
 
     (recording, recording_admin_cap)
-}
-
-/// Pre-fills a recording with `n` fake credits (bypasses public API validation).
-/// Each credit gets a unique fake party ID and a single vocalist role.
-#[test_only]
-public fun prefill_credits_for_testing<RecordingShare, CompositionShare>(
-    self: &mut Recording<RecordingShare, CompositionShare>,
-    n: u64,
-    ctx: &mut TxContext,
-) {
-    use partyos::credit;
-    use musicos::recording_party_role;
-
-    n.do!(|_| {
-        let uid = object::new(ctx);
-        let id = uid.to_inner();
-        uid.delete();
-        let credit = credit::new(
-            b"Test".to_string(),
-            vector[recording_party_role::new_vocalist_role(option::none())],
-        );
-        self.credits.insert(id, credit);
-    });
-}
-
-/// Pre-fills a recording with `n` fake credits and designates them as primary artists.
-#[test_only]
-public fun prefill_primary_artists_for_testing<RecordingShare, CompositionShare>(
-    self: &mut Recording<RecordingShare, CompositionShare>,
-    n: u64,
-    ctx: &mut TxContext,
-) {
-    use partyos::credit;
-    use musicos::recording_party_role;
-
-    n.do!(|_| {
-        let uid = object::new(ctx);
-        let id = uid.to_inner();
-        uid.delete();
-        let credit = credit::new(
-            b"Test".to_string(),
-            vector[recording_party_role::new_vocalist_role(option::none())],
-        );
-        self.credits.insert(id, credit);
-        self.primary_artist_ids.insert(id);
-    });
-}
-
-/// Pre-fills a recording with `n` fake credits and designates them as featured artists.
-#[test_only]
-public fun prefill_featured_artists_for_testing<RecordingShare, CompositionShare>(
-    self: &mut Recording<RecordingShare, CompositionShare>,
-    n: u64,
-    ctx: &mut TxContext,
-) {
-    use partyos::credit;
-    use musicos::recording_party_role;
-
-    n.do!(|_| {
-        let uid = object::new(ctx);
-        let id = uid.to_inner();
-        uid.delete();
-        let credit = credit::new(
-            b"Test".to_string(),
-            vector[recording_party_role::new_vocalist_role(option::none())],
-        );
-        self.credits.insert(id, credit);
-        self.featured_artist_ids.insert(id);
-    });
 }
 
 /// Claims a recording id off a composition via the real RecordingKey derivation

@@ -6,7 +6,7 @@ import type { SuiGraphQLClient } from "@mysten/sui/graphql";
 import * as parsers from "./parsers.ts";
 import * as queries from "./queries.ts";
 import * as transactions from "./transactions.ts";
-import type { Composition, CompositionAdminCap, Party, Recording, RecordingAdminCap, Release, ReleaseAdminCap } from "./types.ts";
+import type { Composition, CompositionAdminCap, Recording, RecordingAdminCap, Release, ReleaseAdminCap } from "./types.ts";
 
 // Generated call modules (type-safe Move calls) and BCS structs.
 import * as composition from "./contracts/musicos/composition.ts";
@@ -15,10 +15,6 @@ import * as release from "./contracts/musicos/release.ts";
 import * as deal from "./contracts/musicos/deal.ts";
 import * as track from "./contracts/musicos/track.ts";
 import * as disc from "./contracts/musicos/disc.ts";
-import * as coverArt from "./contracts/musicos/cover_art.ts";
-import * as compositionRole from "./contracts/musicos/composition_party_role.ts";
-import * as recordingRole from "./contracts/musicos/recording_party_role.ts";
-import * as releaseRole from "./contracts/musicos/release_party_role.ts";
 
 export interface MusicOSOptions<Name extends string = "musicos"> {
   /** Name for the client extension. Defaults to "musicos". */
@@ -132,11 +128,8 @@ export class MusicOSClient {
     return queries.getReleaseRegistry(this.#requireGraphQL(), this.#musicOsPackageId);
   }
 
-  // === Party & Share Currency ===
+  // === Share Currency ===
 
-  async getParty(partyId: string): Promise<Party> {
-    return queries.getParty(this.#client, partyId);
-  }
   async getShareCurrencyType(shareCurrencyId: string): Promise<string> {
     return queries.getShareCurrencyType(this.#client, shareCurrencyId);
   }
@@ -149,7 +142,6 @@ export class MusicOSClient {
   get tx() {
     const client = this.#client;
     return {
-      createParty: transactions.createParty,
       publishShareCurrency: transactions.publishShareCurrency,
       initializeShareCurrency: transactions.initializeShareCurrency,
       publishComposition: (p: Omit<transactions.PublishCompositionParams, "client">) =>
@@ -166,7 +158,7 @@ export class MusicOSClient {
   // === Generated type-safe Move calls (for tx.add) ===
 
   get call() {
-    return { composition, recording, release, deal, track, disc, coverArt, compositionRole, recordingRole, releaseRole };
+    return { composition, recording, release, deal, track, disc };
   }
 
   // === Generated BCS structs (for parsing object/event content) ===
@@ -179,7 +171,6 @@ export class MusicOSClient {
       Deal: deal.Deal,
       Track: track.Track,
       Disc: disc.Disc,
-      CoverArt: coverArt.CoverArt,
       CompositionPublishedEvent: composition.CompositionPublishedEvent,
       CompositionRoyaltySetEvent: composition.CompositionRoyaltySetEvent,
       RecordingPublishedEvent: recording.RecordingPublishedEvent,

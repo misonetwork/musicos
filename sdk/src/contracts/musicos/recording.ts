@@ -11,21 +11,28 @@
  * ### Key Features:
  * 
  * - Share token initialization with fixed supply (10M tokens, 6 decimals)
- * - Party management with role assignments (Producer, Vocalist, etc.)
  * - State machine: Initialized -> Published (embedded fields immutable after
- *   publish; dynamic fields remain extensible via `uid_mut`, e.g. masters)
+ *   publish; dynamic fields remain extensible via `uid_mut`, e.g. masters, and
+ *   credits/attribution attached by the credits extension)
  * - Deterministic addresses via derived object pattern
+ * 
+ * Attribution (credits, primary/featured artists) is intentionally NOT part of
+ * core: it is display-oriented, varies across platforms, and is never read by the
+ * economics. It lives in a first-party credits extension attached via `uid_mut`,
+ * so core takes no dependency on an identity package and core publish enforces no
+ * attribution.
+ * 
+ * The recording carries its parent composition's identity as the
+ * `CompositionShare` phantom type parameter — the composition's share type is its
+ * durable identity (a share currency is published independently of musicos and
+ * survives a fresh republish, whereas an object ID does not). This makes the
+ * recording↔composition lineage compile-time enforced wherever the two meet, with
+ * no stored `composition_id` to keep or assert.
  */
 
 import { MoveEnum, MoveStruct, MoveTuple, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
 import { bcs } from '@mysten/sui/bcs';
-import { type Transaction, type TransactionArgument } from '@mysten/sui/transactions';
-import * as bps from './deps/bps/bps.js';
-import * as vec_set from './deps/sui/vec_set.js';
-import * as vec_map from './deps/sui/vec_map.js';
-import * as credit from './deps/partyos/credit.js';
-import * as recording_party_role from './recording_party_role.js';
-import * as cover_art from './cover_art.js';
+import { type Transaction } from '@mysten/sui/transactions';
 const $moduleName = '@local-pkg/musicos::recording';
 /** Lifecycle state of a recording. */
 export const RecordingState = new MoveEnum({ name: `${$moduleName}::RecordingState`, fields: {
@@ -34,7 +41,7 @@ export const RecordingState = new MoveEnum({ name: `${$moduleName}::RecordingSta
         /** Recording is published and immutable. Includes publication timestamp. */
         Published: bcs.u64()
     } });
-export const Recording = new MoveStruct({ name: `${$moduleName}::Recording<phantom RecordingShare>`, fields: {
+export const Recording = new MoveStruct({ name: `${$moduleName}::Recording<phantom RecordingShare, phantom CompositionShare>`, fields: {
         /** Unique identifier for this recording. */
         id: bcs.Address,
         /** Current lifecycle state. */
@@ -44,20 +51,7 @@ export const Recording = new MoveStruct({ name: `${$moduleName}::Recording<phant
         /** Version suffix (e.g., "Radio Edit", "Extended Mix"). */
         title_version: bcs.option(bcs.string()),
         /** Subtitle of the recording. */
-        subtitle: bcs.option(bcs.string()),
-        /** ID of the underlying composition. */
-        composition_id: bcs.Address,
-        /**
-         * Royalty rate owed to the composition (captured from the composition at creation
-         * time).
-         */
-        composition_royalty_rate: bps.BPS,
-        primary_artist_ids: vec_set.VecSet(bcs.Address),
-        featured_artist_ids: vec_set.VecSet(bcs.Address),
-        /** Map of party IDs to their roles on this recording. */
-        credits: vec_map.VecMap(bcs.Address, credit.Credit(recording_party_role.RecordingPartyRole)),
-        /** Cover art for the recording. */
-        cover_art: cover_art.CoverArt
+        subtitle: bcs.option(bcs.string())
     } });
 export const RecordingAdminCap = new MoveStruct({ name: `${$moduleName}::RecordingAdminCap<phantom RecordingShare>`, fields: {
         /** Unique identifier for this capability. */
@@ -65,14 +59,20 @@ export const RecordingAdminCap = new MoveStruct({ name: `${$moduleName}::Recordi
     } });
 export const RecordingAdminCapKey = new MoveTuple({ name: `${$moduleName}::RecordingAdminCapKey`, fields: [bcs.bool()] });
 export const RecordingKey = new MoveTuple({ name: `${$moduleName}::RecordingKey`, fields: [bcs.u64()] });
-export const RecordingPublishedEvent = new MoveStruct({ name: `${$moduleName}::RecordingPublishedEvent<phantom RecordingShare>`, fields: {
+export const RecordingPublishedEvent = new MoveStruct({ name: `${$moduleName}::RecordingPublishedEvent<phantom RecordingShare, phantom CompositionShare>`, fields: {
+        recording_id: bcs.Address
+    } });
+export const CompositionSharesGrantedEvent = new MoveStruct({ name: `${$moduleName}::CompositionSharesGrantedEvent<phantom RecordingShare, phantom CompositionShare>`, fields: {
         recording_id: bcs.Address,
-        composition_id: bcs.Address
+        composition_id: bcs.Address,
+        /** Recording-share base units granted to the composition. */
+        value: bcs.u64(),
+        /** The composition royalty rate applied at creation, in basis points. */
+        rate_bps: bcs.u16()
     } });
 export interface NewArguments {
     composition: RawTransactionArgument<string>;
     idx: RawTransactionArgument<number | bigint>;
-    coverArt: TransactionArgument;
     shareCurrency: RawTransactionArgument<string>;
     shareTreasuryCap: RawTransactionArgument<string>;
 }
@@ -81,7 +81,6 @@ export interface NewOptions {
     arguments: NewArguments | [
         composition: RawTransactionArgument<string>,
         idx: RawTransactionArgument<number | bigint>,
-        coverArt: TransactionArgument,
         shareCurrency: RawTransactionArgument<string>,
         shareTreasuryCap: RawTransactionArgument<string>
     ];
@@ -91,12 +90,23 @@ export interface NewOptions {
     ];
 }
 /**
- * Creates a new recording for a composition. Initializes share tokens (10M supply,
- * 6 decimals) and returns:
+ * Creates a new recording for a composition.
  *
- * - The recording object
+ * Initializes share tokens (10M supply, 6 decimals), then splits the composition's
+ * royalty-rate worth of those shares off the freshly minted supply and
+ * `send_funds`es them to the composition's address. This settles the composition's
+ * cut as cap-table ownership: the composition literally owns its share of the
+ * recording, so its claim on recording revenue is enforced by share ownership
+ * rather than by any revenue distributor choosing to honor a rate. What the
+ * composition owner then does with the shares (hold, stake, sell) is outside the
+ * protocol's scope.
+ *
+ * Returns:
+ *
+ * - The recording object (typed to its parent composition's `CompositionShare`)
  * - Admin capability for the owner
- * - Initial share token balance
+ * - The creator's remaining share balance (full supply minus the composition's
+ *   cut)
  */
 export function _new(options: NewOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
@@ -104,10 +114,9 @@ export function _new(options: NewOptions) {
         null,
         'u64',
         null,
-        null,
         null
     ] satisfies (string | null)[];
-    const parameterNames = ["composition", "idx", "coverArt", "shareCurrency", "shareTreasuryCap"];
+    const parameterNames = ["composition", "idx", "shareCurrency", "shareTreasuryCap"];
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'recording',
@@ -127,12 +136,16 @@ export interface PublishOptions {
         _: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
 /**
- * Publishes the recording, making it immutable. Requires at least one party to be
- * assigned. Required State: Initialized
+ * Publishes the recording, making its embedded fields immutable. Required State:
+ * Initialized
+ *
+ * Note: core enforces no attribution requirement — credits live in the credits
+ * extension and may be attached before or after publish via `uid_mut`.
  */
 export function publish(options: PublishOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
@@ -163,6 +176,7 @@ export interface SetTitleVersionOptions {
         titleVersion: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
@@ -199,6 +213,7 @@ export interface SetSubtitleOptions {
         subtitle: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
@@ -219,119 +234,6 @@ export function setSubtitle(options: SetSubtitleOptions) {
         typeArguments: options.typeArguments
     });
 }
-export interface AddCreditArguments {
-    self: RawTransactionArgument<string>;
-    _: RawTransactionArgument<string>;
-    party: RawTransactionArgument<string>;
-    credit: TransactionArgument;
-}
-export interface AddCreditOptions {
-    package?: string;
-    arguments: AddCreditArguments | [
-        self: RawTransactionArgument<string>,
-        _: RawTransactionArgument<string>,
-        party: RawTransactionArgument<string>,
-        credit: TransactionArgument
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/**
- * Adds a party to the recording with specified roles. Each party must have 1-10
- * roles. Required State: Initialized
- */
-export function addCredit(options: AddCreditOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null,
-        null,
-        null,
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "_", "party", "credit"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'add_credit',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface AddPrimaryArtistArguments {
-    self: RawTransactionArgument<string>;
-    _: RawTransactionArgument<string>;
-    party: RawTransactionArgument<string>;
-}
-export interface AddPrimaryArtistOptions {
-    package?: string;
-    arguments: AddPrimaryArtistArguments | [
-        self: RawTransactionArgument<string>,
-        _: RawTransactionArgument<string>,
-        party: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/**
- * Adds a party as a primary artist on the recording. The party must already be
- * credited and not already assigned as primary or featured. Required State:
- * Initialized
- */
-export function addPrimaryArtist(options: AddPrimaryArtistOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null,
-        null,
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "_", "party"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'add_primary_artist',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface AddFeaturedArtistArguments {
-    self: RawTransactionArgument<string>;
-    _: RawTransactionArgument<string>;
-    party: RawTransactionArgument<string>;
-}
-export interface AddFeaturedArtistOptions {
-    package?: string;
-    arguments: AddFeaturedArtistArguments | [
-        self: RawTransactionArgument<string>,
-        _: RawTransactionArgument<string>,
-        party: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/**
- * Adds a party as a featured artist on the recording. The party must already be
- * credited and not already assigned as primary or featured. Required State:
- * Initialized
- */
-export function addFeaturedArtist(options: AddFeaturedArtistOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null,
-        null,
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "_", "party"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'add_featured_artist',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
 export interface IdArguments {
     self: RawTransactionArgument<string>;
 }
@@ -341,6 +243,7 @@ export interface IdOptions {
         self: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
@@ -368,6 +271,7 @@ export interface StateOptions {
         self: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
@@ -395,6 +299,7 @@ export interface IsInitializedStateOptions {
         self: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
@@ -422,6 +327,7 @@ export interface IsPublishedStateOptions {
         self: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
@@ -449,6 +355,7 @@ export interface TitleOptions {
         self: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
@@ -476,6 +383,7 @@ export interface TitleVersionOptions {
         self: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
@@ -503,6 +411,7 @@ export interface SubtitleOptions {
         self: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
@@ -521,228 +430,6 @@ export function subtitle(options: SubtitleOptions) {
         typeArguments: options.typeArguments
     });
 }
-export interface CompositionIdArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface CompositionIdOptions {
-    package?: string;
-    arguments: CompositionIdArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns the ID of the underlying composition. */
-export function compositionId(options: CompositionIdOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'composition_id',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface CompositionRoyaltyRateArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface CompositionRoyaltyRateOptions {
-    package?: string;
-    arguments: CompositionRoyaltyRateArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns the royalty rate owed to the composition. */
-export function compositionRoyaltyRate(options: CompositionRoyaltyRateOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'composition_royalty_rate',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface PrimaryArtistIdsArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface PrimaryArtistIdsOptions {
-    package?: string;
-    arguments: PrimaryArtistIdsArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns a reference to the primary artist IDs. */
-export function primaryArtistIds(options: PrimaryArtistIdsOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'primary_artist_ids',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface FeaturedArtistIdsArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface FeaturedArtistIdsOptions {
-    package?: string;
-    arguments: FeaturedArtistIdsArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns a reference to the featured artist IDs. */
-export function featuredArtistIds(options: FeaturedArtistIdsOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'featured_artist_ids',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface CreditsArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface CreditsOptions {
-    package?: string;
-    arguments: CreditsArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns the party-to-roles mapping. */
-export function credits(options: CreditsOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'credits',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface CoverArtArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface CoverArtOptions {
-    package?: string;
-    arguments: CoverArtArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns a reference to the cover art. */
-export function coverArt(options: CoverArtOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'cover_art',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface IsPrimaryArtistArguments {
-    self: RawTransactionArgument<string>;
-    partyId: RawTransactionArgument<string>;
-}
-export interface IsPrimaryArtistOptions {
-    package?: string;
-    arguments: IsPrimaryArtistArguments | [
-        self: RawTransactionArgument<string>,
-        partyId: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns whether the provided ID is a primary artist on the recording. */
-export function isPrimaryArtist(options: IsPrimaryArtistOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null,
-        '0x2::object::ID'
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "partyId"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'is_primary_artist',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface IsFeaturedArtistArguments {
-    self: RawTransactionArgument<string>;
-    partyId: RawTransactionArgument<string>;
-}
-export interface IsFeaturedArtistOptions {
-    package?: string;
-    arguments: IsFeaturedArtistArguments | [
-        self: RawTransactionArgument<string>,
-        partyId: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns whether the party is a featured artist on the recording. */
-export function isFeaturedArtist(options: IsFeaturedArtistOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null,
-        '0x2::object::ID'
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "partyId"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'is_featured_artist',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
 export interface UidArguments {
     self: RawTransactionArgument<string>;
 }
@@ -752,6 +439,7 @@ export interface UidOptions {
         self: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
@@ -781,14 +469,15 @@ export interface UidMutOptions {
         _: RawTransactionArgument<string>
     ];
     typeArguments: [
+        string,
         string
     ];
 }
 /**
  * Returns a mutable reference to the recording's UID. Requires the admin
  * capability. Works in any lifecycle state — dynamic fields are the extension
- * surface (e.g. masters) and stay admin-mutable after publish; only the embedded
- * fields are frozen.
+ * surface (e.g. masters, credits) and stay admin-mutable after publish; only the
+ * embedded fields are frozen.
  */
 export function uidMut(options: UidMutOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';

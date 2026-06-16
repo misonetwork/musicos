@@ -42,7 +42,7 @@ export function parseCompositionRoyaltySetEvent(bytes: Uint8Array): CompositionR
 
 export function parseRecordingPublishedEvent(bytes: Uint8Array): RecordingPublishedEvent {
   const e = RecordingPublishedEventBcs.parse(bytes);
-  return { recordingId: e.recording_id, compositionId: e.composition_id };
+  return { recordingId: e.recording_id };
 }
 
 // === Release ===
@@ -60,12 +60,7 @@ export function parseDealCreatedEvent(bytes: Uint8Array): DealCreatedEvent {
     dealId: e.deal_id,
     releaseId: e.release_id,
     recordingId: e.recording_id,
-    compositionId: e.composition_id,
-    trackTitle: e.track_title,
     trackSplitBps: { value: e.track_split_bps_value },
-    trackCoverArtStaticBlobId: e.track_cover_art_static_blob_id.toString(),
-    trackCoverArtAnimatedBlobId:
-      e.track_cover_art_animated_blob_id != null ? e.track_cover_art_animated_blob_id.toString() : undefined,
   };
 }
 
@@ -75,7 +70,6 @@ export function parseDealAcceptedEvent(bytes: Uint8Array): DealAcceptedEvent {
     dealId: e.deal_id,
     releaseId: e.release_id,
     recordingId: e.recording_id,
-    compositionId: e.composition_id,
   };
 }
 
@@ -85,6 +79,5 @@ export function parseDealRejectedEvent(bytes: Uint8Array): DealRejectedEvent {
     dealId: e.deal_id,
     releaseId: e.release_id,
     recordingId: e.recording_id,
-    compositionId: e.composition_id,
   };
 }

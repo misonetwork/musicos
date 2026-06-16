@@ -11,191 +11,6 @@ export interface BPS {
 }
 
 // ============================================================================
-// Party
-// ============================================================================
-
-/** Type of party (individual or group). */
-export type PartyKind =
-  | { type: "Individual" }
-  | { type: "Group"; memberIds: string[] };
-
-/**
- * A party (artist, producer, etc.) in the music ecosystem.
- * Can represent an individual or a group of parties.
- */
-export interface Party {
-  /** Unique identifier for this party. */
-  id: string;
-  /** Whether this is an individual or group party. */
-  kind: PartyKind;
-  /** Human-readable name of the party. */
-  name: string;
-}
-
-// ============================================================================
-// Walrus Storage
-// ============================================================================
-
-/** Reference to data stored as a Walrus blob. MusicOS enforces blob-only storage for all creative assets. */
-export type WalrusData = {
-  type: "Blob";
-  blobId: string;
-  /**
-   * Present when the blob is AES-encrypted. `dek` is the Seal-sealed
-   * data-encryption key (hex) — itself a Seal `EncryptedObject` that encodes
-   * the decryption-policy package.
-   */
-  encryption?: { dek: string };
-};
-
-// ============================================================================
-// Cover Art
-// ============================================================================
-
-/** Cover artwork with a required still image and optional animation. */
-export interface CoverArt {
-  /** Required still image. */
-  still: WalrusData;
-  /** Optional animated version (GIF, video, etc.). */
-  animated?: WalrusData;
-}
-
-// ============================================================================
-// Party Roles
-// ============================================================================
-
-/** Roles that parties can hold on a composition. */
-export type CompositionPartyRole =
-  | { type: "Adapter" }
-  | { type: "Arranger" }
-  | { type: "Composer" }
-  | { type: "Lyricist" }
-  | { type: "Songwriter" }
-  | { type: "Translator" };
-
-/** Helper to extract composition role type names. */
-export type CompositionPartyRoleType = CompositionPartyRole["type"];
-
-/** All available composition party role types. */
-export const COMPOSITION_PARTY_ROLES: readonly CompositionPartyRoleType[] = [
-  "Adapter",
-  "Arranger",
-  "Composer",
-  "Lyricist",
-  "Songwriter",
-  "Translator",
-] as const;
-
-/** Seniority or prominence level of a party on a recording. */
-export type RecordingPartyRoleLevel =
-  | "Additional"
-  | "Assistant"
-  | "Associate"
-  | "Backing"
-  | "Executive"
-  | "Featured"
-  | "Lead"
-  | "Primary"
-  | "Principal";
-
-/** All available recording party role levels. */
-export const RECORDING_PARTY_ROLE_LEVELS: readonly RecordingPartyRoleLevel[] = [
-  "Additional",
-  "Assistant",
-  "Associate",
-  "Backing",
-  "Executive",
-  "Featured",
-  "Lead",
-  "Primary",
-  "Principal",
-] as const;
-
-/** Roles that parties can hold on a recording. */
-export type RecordingPartyRole =
-  | { type: "Actor"; level?: RecordingPartyRoleLevel }
-  | { type: "Arranger"; level?: RecordingPartyRoleLevel }
-  | { type: "ArtistsAndRepertoire" }
-  | { type: "Choir"; level?: RecordingPartyRoleLevel }
-  | { type: "ChoirMaster"; level?: RecordingPartyRoleLevel }
-  | { type: "Conductor"; level?: RecordingPartyRoleLevel }
-  | { type: "Contractor"; level?: RecordingPartyRoleLevel }
-  | { type: "Copyist" }
-  | { type: "Editor"; level?: RecordingPartyRoleLevel }
-  | { type: "Ensemble"; level?: RecordingPartyRoleLevel }
-  | { type: "Instrumentalist"; instrument: string; level?: RecordingPartyRoleLevel }
-  | { type: "MasteringEngineer"; level?: RecordingPartyRoleLevel }
-  | { type: "MixingEngineer"; level?: RecordingPartyRoleLevel }
-  | { type: "MusicDirector"; level?: RecordingPartyRoleLevel }
-  | { type: "MusicSupervisor"; level?: RecordingPartyRoleLevel }
-  | { type: "Narrator"; level?: RecordingPartyRoleLevel }
-  | { type: "Orchestra"; level?: RecordingPartyRoleLevel }
-  | { type: "Orchestrator"; level?: RecordingPartyRoleLevel }
-  | { type: "Producer"; level?: RecordingPartyRoleLevel }
-  | { type: "Programmer"; level?: RecordingPartyRoleLevel }
-  | { type: "RecordingEngineer"; level?: RecordingPartyRoleLevel }
-  | { type: "RemixingEngineer"; level?: RecordingPartyRoleLevel }
-  | { type: "SoundDesigner"; level?: RecordingPartyRoleLevel }
-  | { type: "Vocalist"; level?: RecordingPartyRoleLevel };
-
-/** Helper to extract recording role type names. */
-export type RecordingPartyRoleType = RecordingPartyRole["type"];
-
-/** All available recording party role types. */
-export const RECORDING_PARTY_ROLES: readonly RecordingPartyRoleType[] = [
-  "Actor",
-  "Arranger",
-  "ArtistsAndRepertoire",
-  "Choir",
-  "ChoirMaster",
-  "Conductor",
-  "Contractor",
-  "Copyist",
-  "Editor",
-  "Ensemble",
-  "Instrumentalist",
-  "MasteringEngineer",
-  "MixingEngineer",
-  "MusicDirector",
-  "MusicSupervisor",
-  "Narrator",
-  "Orchestra",
-  "Orchestrator",
-  "Producer",
-  "Programmer",
-  "RecordingEngineer",
-  "RemixingEngineer",
-  "SoundDesigner",
-  "Vocalist",
-] as const;
-
-// ============================================================================
-// Credits
-// ============================================================================
-
-/** Credit entry for a party on a composition or recording. */
-export interface Credit<Role> {
-  /** Display name for the credited party. */
-  displayName: string;
-  /** Roles assigned to the party. */
-  roles: Role[];
-}
-
-/** Credit for a party on a composition. */
-export type CompositionCredit = Credit<CompositionPartyRole>;
-
-/** Credit for a party on a recording. */
-export type RecordingCredit = Credit<RecordingPartyRole>;
-
-/** Roles that parties can hold on a release. */
-export type ReleasePartyRole =
-  | { type: "Primary" }
-  | { type: "Featured" };
-
-/** Credit for a party on a release. */
-export type ReleaseCredit = Credit<ReleasePartyRole>;
-
-// ============================================================================
 // Composition
 // ============================================================================
 
@@ -220,9 +35,7 @@ export interface Composition {
   state: CompositionState;
   /** Primary title of the composition. */
   title: string;
-  /** Map of party IDs to their credits on this composition. */
-  credits: Record<string, CompositionCredit>;
-  /** Royalty rate this composition earns from each recording's revenue (basis points, 1000-2000). */
+  /** Royalty rate this composition earns from each recording's revenue (basis points, 0-2000). */
   royaltyRate: BPS;
   /** Epoch in which the royalty rate was last changed (changeable after one full elapsed epoch). */
   royaltyRateLastChangedEpoch: number;
@@ -284,28 +97,15 @@ export interface Recording {
   titleVersion?: string;
   /** Subtitle of the recording. */
   subtitle?: string;
-  /** ID of the underlying composition. */
-  compositionId: string;
-  /** Royalty rate owed to the composition, captured at creation time (basis points). */
-  compositionRoyaltyRate: BPS;
-  /** IDs of the primary artists on the recording. */
-  primaryArtistIds: string[];
-  /** IDs of the featured artists on the recording. */
-  featuredArtistIds: string[];
-  /** Map of party IDs to their credits on this recording. */
-  credits: Record<string, RecordingCredit>;
-  /** Cover art for the recording. */
-  coverArt: CoverArt;
 }
 
 /**
- * Emitted once when a recording is published. A pure pointer carrying the
- * recording's identity and its parent composition (for routing) — an indexer
- * fetches the full immutable object by `recordingId`.
+ * Emitted once when a recording is published. A pure pointer carrying only the
+ * recording's identity — an indexer fetches the full immutable object by
+ * `recordingId`.
  */
 export interface RecordingPublishedEvent {
   recordingId: string;
-  compositionId: string;
 }
 
 /**
@@ -330,25 +130,14 @@ export type TrackState = "Unassigned" | "Assigned";
 
 /**
  * A track on a release, linking a recording to its position in the tracklist.
- * Captures metadata from the recording at the time of release creation.
+ * The recording is the handle through which all other metadata (title, share
+ * types, composition lineage) is reached.
  */
 export interface Track {
   /** Current state of the track (Unassigned until the release claims it, then Assigned). */
   state: TrackState;
-  /** ID of the underlying composition. */
-  compositionId: string;
-  /** Type of the composition's share token. */
-  compositionShareType: string;
-  /** Royalty rate owed to the composition (basis points). */
-  compositionRoyaltyRate: BPS;
   /** ID of the recording on this track. */
   recordingId: string;
-  /** Type of the recording's share token. */
-  recordingShareType: string;
-  /** Title of the track. */
-  title: string;
-  /** Cover art for the track (inherited from recording by default). */
-  coverArt: CoverArt;
   /** Revenue split for this track within the release (in basis points). */
   splitBps: BPS;
 }
@@ -364,8 +153,6 @@ export interface Track {
 export interface Disc {
   /** Ordered list of tracks on this disc. */
   tracks: Track[];
-  /** Optional disc-specific artwork (e.g., for multi-disc sets with different covers). */
-  artwork?: CoverArt;
   /** Optional disc title (e.g., for multi-disc sets). */
   title?: string;
 }
@@ -396,18 +183,14 @@ export interface Release {
   title: string;
   /** Optional subtitle (e.g., "Deluxe Edition"). */
   subtitle?: string;
-  /** Map of party IDs to their credits on this release. */
-  credits: Record<string, ReleaseCredit>;
   /** Collection of discs containing tracks. */
   discs: Disc[];
-  /** Cover artwork for the release. */
-  coverArt: CoverArt;
 }
 
 /**
  * Emitted once when a release is published. A pure pointer carrying only the
  * release's identity — an indexer fetches the full immutable object (discs,
- * tracks, credits) by `releaseId`.
+ * tracks) by `releaseId`.
  */
 export interface ReleasePublishedEvent {
   releaseId: string;
@@ -434,11 +217,7 @@ export interface DealCreatedEvent {
   dealId: string;
   releaseId: string;
   recordingId: string;
-  compositionId: string;
-  trackTitle: string;
   trackSplitBps: BPS;
-  trackCoverArtStaticBlobId: string;
-  trackCoverArtAnimatedBlobId?: string;
 }
 
 /**
@@ -450,7 +229,6 @@ export interface DealAcceptedEvent {
   dealId: string;
   releaseId: string;
   recordingId: string;
-  compositionId: string;
 }
 
 /** Emitted when a deal is rejected: destroyed without inclusion in a release. Terminal. */
@@ -458,5 +236,4 @@ export interface DealRejectedEvent {
   dealId: string;
   releaseId: string;
   recordingId: string;
-  compositionId: string;
 }

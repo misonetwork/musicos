@@ -10,7 +10,3 @@ export * as release from "./contracts/musicos/release.ts";
 export * as deal from "./contracts/musicos/deal.ts";
 export * as track from "./contracts/musicos/track.ts";
 export * as disc from "./contracts/musicos/disc.ts";
-export * as coverArt from "./contracts/musicos/cover_art.ts";
-export * as compositionPartyRole from "./contracts/musicos/composition_party_role.ts";
-export * as recordingPartyRole from "./contracts/musicos/recording_party_role.ts";
-export * as releasePartyRole from "./contracts/musicos/release_party_role.ts";

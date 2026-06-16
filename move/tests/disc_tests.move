@@ -77,21 +77,3 @@ fun test_new_title_too_long() {
     );
     destroy(d);
 }
-
-// === Artwork ===
-
-#[test]
-fun test_set_artwork() {
-    let ctx = &mut tx_context::dummy();
-    let mut d = disc::new(vector[test_track(ctx)], option::none());
-    assert!(d.artwork().is_none());
-
-    d.set_artwork(test_helpers::cover_art());
-    assert!(d.artwork().is_some());
-
-    // Setting again replaces the artwork.
-    d.set_artwork(test_helpers::cover_art());
-    assert!(d.artwork().is_some());
-
-    destroy(d);
-}

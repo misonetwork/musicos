@@ -8,16 +8,18 @@
 /// ### Key Features:
 ///
 /// - Share token initialization with fixed supply (10M tokens, 6 decimals)
-/// - Party management with role assignments (Composer, Lyricist, Songwriter)
 /// - State machine: Initialized -> Published (embedded fields immutable after
 ///   publish; dynamic fields remain extensible via `uid_mut`)
 /// - Deterministic addresses via derived object pattern
+///
+/// Attribution (credits) is intentionally NOT part of core: it is
+/// display-oriented, varies across platforms, and is never read by the
+/// economics. It lives in a first-party credits extension attached via
+/// `uid_mut`, so core takes no dependency on an identity package and core
+/// publish enforces no attribution.
 module musicos::composition;
 
 use bps::bps::{Self, BPS};
-use musicos::composition_party_role::CompositionPartyRole;
-use partyos::credit::Credit;
-use partyos::party::Party;
 use share::share;
 use std::string::String;
 use sui::balance::Balance;
@@ -26,7 +28,6 @@ use sui::coin::TreasuryCap;
 use sui::coin_registry::Currency;
 use sui::derived_object::claim;
 use sui::event::emit;
-use sui::vec_map::{Self, VecMap};
 
 // === Structs ===
 
@@ -39,8 +40,6 @@ public struct Composition<phantom CompositionShare> has key {
     state: CompositionState,
     /// Primary title of the composition.
     title: String,
-    /// Map of party IDs to their roles on this composition.
-    credits: VecMap<ID, Credit<CompositionPartyRole>>,
     /// Royalty rate this composition earns from each recording's revenue,
     /// paired with the epoch it was last changed in. Each rate stays in
     /// effect for at least one full epoch.
@@ -102,25 +101,19 @@ public struct CompositionRoyaltySetEvent has copy, drop {
 
 // === Constants ===
 
-/// Minimum number of roles a party must have.
-const MIN_ROLES_PER_PARTY: u64 = 1;
-/// Maximum number of roles a party can have.
-const MAX_ROLES_PER_PARTY: u64 = 5;
-/// Maximum number of credits allowed on a composition.
-const MAX_CREDITS: u64 = 50;
 /// Maximum length of a title in bytes.
 const MAX_TITLE_LENGTH: u64 = 300;
-/// Protocol-immutable floor for a composition's royalty rate (10%). A composition
-/// can set its rate at or above this, never below — preventing songwriters from
-/// being pressured into a sub-floor share. Mirrors the off-chain statutory
-/// mechanical rate paid to songwriters for covers (~9-12% of revenue).
-const MIN_ROYALTY_RATE_BPS: u16 = 1000;
 /// Protocol-immutable ceiling for a composition's royalty rate (20%). Anyone may
 /// record a published composition at the posted rate — a compulsory license —
 /// which is only meaningful if the rate is bounded; an uncapped rate would let a
 /// composition retroactively price out the cover right entirely. ~20% matches the
 /// composition side's share of streaming rights-holder revenue off-chain
 /// (publishing earns ~12-15% of gross vs ~52-58% to recordings).
+///
+/// There is intentionally no floor: the rate may be as low as 0%. A composition
+/// that captures no defined songwriting contribution — e.g. a purely generative
+/// recording with no authored underlying work — can legitimately carry a 0%
+/// rate, in which case it is granted no recording shares at creation.
 const MAX_ROYALTY_RATE_BPS: u16 = 2000;
 
 // === Errors ===
@@ -132,37 +125,22 @@ const ENotInitializedState: u64 = 10;
 const ERoyaltyRateCooldown: u64 = 11;
 
 // Validation errors (20-29)
-/// Party must have at least one role.
-const EMinRolesNotMet: u64 = 20;
-/// Royalty rate is below the protocol minimum.
-const EBelowMinRoyaltyRate: u64 = 21;
 /// Royalty rate is above the protocol maximum.
 const EAboveMaxRoyaltyRate: u64 = 22;
 
 // Constraint errors (30-39)
-/// Party has too many roles.
-const EExceedsMaxRoles: u64 = 30;
-/// Composition has too many credits.
-const EMaxCreditsExceeded: u64 = 32;
 /// Title exceeds maximum length.
 const EMaxTitleLengthExceeded: u64 = 33;
 /// String must not be empty.
 const EEmptyString: u64 = 35;
-
-// Conflict errors (40-49)
-/// Party already has a credit on this composition.
-const EPartyAlreadyCredited: u64 = 40;
-
-// Reference errors (50-59)
-/// Composition must have at least one party to publish.
-const ENoParties: u64 = 50;
 
 // === Public Functions ===
 
 // === Lifecycle ===
 
 /// Creates a new composition with the given title and royalty rate.
-/// The royalty rate must be within `[MIN_ROYALTY_RATE_BPS, MAX_ROYALTY_RATE_BPS]`.
+/// The royalty rate must not exceed `MAX_ROYALTY_RATE_BPS`; there is no floor,
+/// so 0% is permitted (e.g. a generative recording with no authored composition).
 /// Initializes share tokens (10M supply, 6 decimals) and returns:
 /// - The composition object
 /// - Admin capability for the owner
@@ -180,14 +158,12 @@ public fun new<CompositionShare>(
 ) {
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
-    assert!(royalty_rate_bps >= MIN_ROYALTY_RATE_BPS, EBelowMinRoyaltyRate);
     assert!(royalty_rate_bps <= MAX_ROYALTY_RATE_BPS, EAboveMaxRoyaltyRate);
 
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
-        credits: vec_map::empty(),
         royalty_rate: CompositionRoyaltyRate(bps::new(royalty_rate_bps), ctx.epoch()),
     };
 
@@ -203,9 +179,11 @@ public fun new<CompositionShare>(
     (composition, composition_admin_cap, composition_shares)
 }
 
-/// Publishes the composition, making it immutable.
-/// Requires at least one party.
+/// Publishes the composition, making its embedded fields immutable.
 /// Required State: Initialized
+///
+/// Note: core enforces no attribution requirement — credits live in the credits
+/// extension and may be attached before or after publish via `uid_mut`.
 public fun publish<CompositionShare>(
     mut self: Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
@@ -213,8 +191,6 @@ public fun publish<CompositionShare>(
 ) {
     match (self.state) {
         CompositionState::Initialized => {
-            assert!(!self.credits.is_empty(), ENoParties);
-
             let published_at_ms = clock.timestamp_ms();
             self.state = CompositionState::Published(published_at_ms);
 
@@ -228,37 +204,11 @@ public fun publish<CompositionShare>(
     }
 }
 
-// === People ===
-
-/// Adds a party to the composition with specified roles.
-/// Each party must have 1-5 roles.
-/// Required State: Initialized
-public fun add_credit<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-    party: &Party,
-    credit: Credit<CompositionPartyRole>,
-) {
-    match (self.state) {
-        CompositionState::Initialized => {
-            assert!(credit.roles().length() >= MIN_ROLES_PER_PARTY, EMinRolesNotMet);
-            assert!(credit.roles().length() <= MAX_ROLES_PER_PARTY, EExceedsMaxRoles);
-            assert!(self.credits.length() < MAX_CREDITS, EMaxCreditsExceeded);
-
-            let party_id = party.id();
-            // Abort early if party already has a credit on this composition.
-            assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
-            self.credits.insert(party_id, credit);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
 // === Financial ===
 
 /// Sets the royalty rate this composition earns from each recording.
-/// Must be within `[MIN_ROYALTY_RATE_BPS, MAX_ROYALTY_RATE_BPS]`, and only
-/// after a full epoch has elapsed since the last change — a rate set in epoch
+/// Must not exceed `MAX_ROYALTY_RATE_BPS` (there is no floor; 0% is allowed),
+/// and only after a full epoch has elapsed since the last change — a rate set in epoch
 /// N is changeable from epoch N+2 onward, so every rate is in effect for at
 /// least one complete epoch. The rate can be changed in any lifecycle state,
 /// including after publishing — because each recording snapshots the rate
@@ -270,7 +220,6 @@ public fun set_royalty_rate<CompositionShare>(
     royalty_rate_bps: u16,
     ctx: &TxContext,
 ) {
-    assert!(royalty_rate_bps >= MIN_ROYALTY_RATE_BPS, EBelowMinRoyaltyRate);
     assert!(royalty_rate_bps <= MAX_ROYALTY_RATE_BPS, EAboveMaxRoyaltyRate);
     assert!(ctx.epoch() > self.royalty_rate.1 + 1, ERoyaltyRateCooldown);
     self.royalty_rate = CompositionRoyaltyRate(bps::new(royalty_rate_bps), ctx.epoch());
@@ -295,24 +244,23 @@ public fun state<CompositionShare>(self: &Composition<CompositionShare>): Compos
 
 /// Returns true if the composition is in the Initialized state.
 public fun is_initialized_state<CompositionShare>(self: &Composition<CompositionShare>): bool {
-    match (self.state) { CompositionState::Initialized => true, _ => false }
+    match (self.state) {
+        CompositionState::Initialized => true,
+        _ => false,
+    }
 }
 
 /// Returns true if the composition is in the Published state.
 public fun is_published_state<CompositionShare>(self: &Composition<CompositionShare>): bool {
-    match (self.state) { CompositionState::Published(_) => true, _ => false }
+    match (self.state) {
+        CompositionState::Published(_) => true,
+        _ => false,
+    }
 }
 
 /// Returns the primary title.
 public fun title<CompositionShare>(self: &Composition<CompositionShare>): &String {
     &self.title
-}
-
-/// Returns the party-to-credit mapping.
-public fun credits<CompositionShare>(
-    self: &Composition<CompositionShare>,
-): &VecMap<ID, Credit<CompositionPartyRole>> {
-    &self.credits
 }
 
 /// Returns the royalty rate this composition earns from each recording.
@@ -361,14 +309,12 @@ public fun new_for_testing<CompositionShare>(
 ): (Composition<CompositionShare>, CompositionAdminCap<CompositionShare>) {
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
-    assert!(royalty_rate_bps >= MIN_ROYALTY_RATE_BPS, EBelowMinRoyaltyRate);
     assert!(royalty_rate_bps <= MAX_ROYALTY_RATE_BPS, EAboveMaxRoyaltyRate);
 
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
-        credits: vec_map::empty(),
         royalty_rate: CompositionRoyaltyRate(bps::new(royalty_rate_bps), ctx.epoch()),
     };
 

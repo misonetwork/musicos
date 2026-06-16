@@ -9,23 +9,23 @@
 ///
 /// - Multi-disc releases with track sequencing
 /// - Configurable per-track revenue splits
-/// - Revenue distribution to composition and recording royalty pools
 /// - State machine: Initialized -> Published
+///
+/// Attribution (credits, primary/featured artists) is intentionally NOT part of
+/// core: it is display-oriented, varies across platforms, and is never read by
+/// the economics. It lives in a first-party credits extension attached via
+/// `uid_mut`, so core takes no dependency on an identity package and core
+/// publish enforces no attribution.
 module musicos::release;
 
 use bps::bps;
-use musicos::cover_art::CoverArt;
 use musicos::disc::Disc;
-use musicos::release_party_role::ReleasePartyRole;
-use partyos::credit::Credit;
-use partyos::party::Party;
 use std::string::String;
 use sui::bcs::to_bytes;
 use sui::clock::Clock;
 use sui::derived_object::{Self, claim};
 use sui::event::emit;
 use sui::hash::blake2b256;
-use sui::vec_map::{Self, VecMap};
 
 public use fun release_admin_cap_release_id as ReleaseAdminCap.release_id;
 
@@ -43,12 +43,8 @@ public struct Release has key {
     title: String,
     /// Optional subtitle (e.g., "Deluxe Edition").
     subtitle: Option<String>,
-    /// Attribution information for the release.
-    credits: VecMap<ID, Credit<ReleasePartyRole>>,
     /// Collection of discs containing tracks.
     discs: vector<Disc>,
-    /// Cover artwork for the release.
-    cover_art: CoverArt,
 }
 
 /// Key for release UID derivation.
@@ -75,11 +71,8 @@ public struct ReleaseAdminCapKey() has copy, drop, store;
 
 /// Lifecycle state of a release.
 public enum ReleaseState has copy, drop, store {
-    /// Release is initialized but not yet created.
-    Initialized(
-        /// Indicates if the release has a primary credit.
-        bool,
-    ),
+    /// Release is initialized but not yet published.
+    Initialized,
     /// Release is published and immutable. Includes publication timestamp.
     Published(
         /// Timestamp (ms) when published.
@@ -90,25 +83,21 @@ public enum ReleaseState has copy, drop, store {
 // === Events ===
 
 /// Emitted once when a release is published. A pure pointer: it carries the
-/// release's identity. A release's embedded fields (discs, tracks, credits)
-/// are immutable after publishing, so an indexer treats this as a signal to
+/// release's identity. A release's embedded fields (discs, tracks) are
+/// immutable after publishing, so an indexer treats this as a signal to
 /// fetch the full object by `release_id`; all indexed data — including the
-/// publish timestamp — lives in the object itself. Dynamic fields may still
-/// be attached by extensions afterward.
+/// publish timestamp — lives in the object itself. Dynamic fields (e.g.
+/// credits attached by the credits extension) may still be attached afterward.
 public struct ReleasePublishedEvent has copy, drop {
     release_id: ID,
 }
 
 // === Constants ===
 
-/// Number of roles allowed per credit on a release.
-const CREDIT_ROLE_COUNT: u64 = 1;
 /// Maximum number of discs allowed in a release.
 const MAX_DISCS: u64 = 20;
 /// Maximum total number of tracks allowed across all discs.
 const MAX_TRACKS: u64 = 255;
-/// Maximum number of credits allowed on a release.
-const MAX_CREDITS: u64 = 50;
 /// Maximum length of a release title in bytes.
 const MAX_TITLE_LENGTH: u64 = 300;
 /// Maximum length of a release subtitle in bytes.
@@ -133,8 +122,6 @@ const EInvalidTrackSplitsSum: u64 = 20;
 const EMaxDiscsExceeded: u64 = 30;
 /// Too many tracks in release.
 const EMaxTracksExceeded: u64 = 31;
-/// Release has too many credits.
-const EMaxCreditsExceeded: u64 = 33;
 /// Title exceeds maximum length.
 const EMaxTitleLengthExceeded: u64 = 34;
 /// String must not be empty.
@@ -145,11 +132,6 @@ const EMaxSubtitleLengthExceeded: u64 = 36;
 // Reference errors (50-59)
 /// Release must contain at least one disc.
 const ENoDiscs: u64 = 51;
-/// Release must contain at least one credit.
-const ENoPrimaryCredit: u64 = 52;
-/// Invalid number of roles in credit.
-const EInvalidCreditRoleCount: u64 = 53;
-const EPartyAlreadyCredited: u64 = 54;
 
 // === Init Function ===
 
@@ -168,7 +150,6 @@ fun init(_otw: RELEASE, ctx: &mut TxContext) {
 /// Returns the release and admin capability.
 public fun new(
     title: String,
-    cover_art: CoverArt,
     discs: vector<Disc>,
     nonce: u256,
     registry: &mut ReleaseRegistry,
@@ -195,12 +176,10 @@ public fun new(
 
     let mut release = Release {
         id: release_uid,
-        state: ReleaseState::Initialized(false),
+        state: ReleaseState::Initialized,
         title,
         subtitle: option::none(),
-        credits: vec_map::empty(),
         discs,
-        cover_art,
     };
 
     let release_admin_cap = ReleaseAdminCap {
@@ -219,7 +198,7 @@ public fun set_subtitle(self: &mut Release, cap: &ReleaseAdminCap, subtitle: Str
     self.authorize(cap);
 
     match (self.state) {
-        ReleaseState::Initialized(_) => {
+        ReleaseState::Initialized => {
             assert!(!subtitle.is_empty(), EEmptyString);
             assert!(subtitle.length() <= MAX_SUBTITLE_LENGTH, EMaxSubtitleLengthExceeded);
             self.subtitle.swap_or_fill(subtitle);
@@ -228,50 +207,17 @@ public fun set_subtitle(self: &mut Release, cap: &ReleaseAdminCap, subtitle: Str
     }
 }
 
-/// Adds a credit to the release for a party.
-/// Each credit must have exactly one role (Primary or Featured).
-/// Required State: Initialized
-public fun add_credit(
-    self: &mut Release,
-    cap: &ReleaseAdminCap,
-    party: &Party,
-    credit: Credit<ReleasePartyRole>,
-) {
-    self.authorize(cap);
-
-    match (&mut self.state) {
-        ReleaseState::Initialized(has_primary_credit) => {
-            assert!(self.credits.length() < MAX_CREDITS, EMaxCreditsExceeded);
-            // Assert the credit has a single role (releases only support "Primary" or "Featured").
-            assert!(credit.roles().length() == CREDIT_ROLE_COUNT, EInvalidCreditRoleCount);
-
-            // Loop through the credit roles and check if the credit has a primary role.
-            // If yes, set the has_primary_credit flag to true.
-            credit.roles().do_ref!(|role| {
-                if (role.is_primary_role()) {
-                    *has_primary_credit = true;
-                }
-            });
-
-            // Insert the credit into the release credits map.
-            let party_id = party.id();
-            assert!(!self.credits.contains(&party_id), EPartyAlreadyCredited);
-            self.credits.insert(party_id, credit);
-        },
-        _ => abort ENotInitializedState,
-    }
-}
-
 /// Publishes the release, making it immutable.
 /// Track splits must be set and sum to 100% before publishing.
 /// Required State: Initialized
+///
+/// Note: core enforces no attribution requirement — credits live in the credits
+/// extension and may be attached before or after publish via `uid_mut`.
 public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock) {
     self.authorize(cap);
 
     match (self.state) {
-        ReleaseState::Initialized(has_primary_credit) => {
-            // Assert that the release has a primary credit.
-            assert!(has_primary_credit, ENoPrimaryCredit);
+        ReleaseState::Initialized => {
             // Assert that the tracks are assigned to the release.
             self.assert_track_assignments();
 
@@ -323,7 +269,7 @@ public fun state(self: &Release): ReleaseState {
 /// Returns true if the release is in the Initialized state.
 public fun is_initialized_state(self: &Release): bool {
     match (self.state) {
-        ReleaseState::Initialized(_) => true,
+        ReleaseState::Initialized => true,
         _ => false,
     }
 }
@@ -346,19 +292,9 @@ public fun subtitle(self: &Release): &Option<String> {
     &self.subtitle
 }
 
-/// Returns a reference to the release credits.
-public fun credits(self: &Release): &VecMap<ID, Credit<ReleasePartyRole>> {
-    &self.credits
-}
-
 /// Returns a reference to all discs.
 public fun discs(self: &Release): &vector<Disc> {
     &self.discs
-}
-
-/// Returns a reference to the cover art.
-public fun cover_art(self: &Release): &CoverArt {
-    &self.cover_art
 }
 
 /// Returns the total number of tracks across all discs.
@@ -389,8 +325,8 @@ public fun uid(self: &Release): &UID {
 
 /// Returns a mutable reference to the release's UID.
 /// Requires the admin capability. Works in any lifecycle state — dynamic
-/// fields are the extension surface and stay admin-mutable after publish;
-/// only the embedded fields are frozen.
+/// fields are the extension surface (e.g. credits) and stay admin-mutable
+/// after publish; only the embedded fields are frozen.
 public fun uid_mut(self: &mut Release, cap: &ReleaseAdminCap): &mut UID {
     self.authorize(cap);
     &mut self.id
@@ -454,38 +390,9 @@ public fun new_release_registry_for_testing(ctx: &mut TxContext): ReleaseRegistr
     }
 }
 
-/// Pre-fills a release with `n` fake credits (bypasses public API validation).
-/// The first credit is designated as a primary role.
-#[test_only]
-public fun prefill_credits_for_testing(self: &mut Release, n: u64, ctx: &mut TxContext) {
-    use partyos::credit;
-    use musicos::release_party_role;
-
-    n.do!(|i| {
-        let uid = object::new(ctx);
-        let id = uid.to_inner();
-        uid.delete();
-        let role = if (i == 0) {
-            release_party_role::new_primary_role()
-        } else {
-            release_party_role::new_featured_role()
-        };
-        let credit = credit::new(
-            b"Test".to_string(),
-            vector[role],
-        );
-        self.credits.insert(id, credit);
-        // Set has_primary_credit flag for the first credit
-        if (i == 0) {
-            self.state = ReleaseState::Initialized(true);
-        };
-    });
-}
-
 #[test_only]
 public fun new_for_testing(
     title: String,
-    cover_art: CoverArt,
     discs: vector<Disc>,
     ctx: &mut TxContext,
 ): (Release, ReleaseAdminCap) {
@@ -493,12 +400,10 @@ public fun new_for_testing(
 
     let mut release = Release {
         id: object::new(ctx),
-        state: ReleaseState::Initialized(false),
+        state: ReleaseState::Initialized,
         title,
         subtitle: option::none(),
-        credits: vec_map::empty(),
         discs,
-        cover_art,
     };
 
     // Patch all tracks to point to this release's ID so publish() can assign them.

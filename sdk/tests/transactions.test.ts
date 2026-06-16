@@ -36,14 +36,13 @@ function kinds(tx: Transaction): string[] {
   return (tx.getData() as { commands: { $kind: string }[] }).commands.map((c) => c.$kind);
 }
 
-test("createDeal wires deal::new (7 args, both share types) and transfers the deal", () => {
+test("createDeal wires deal::new (4 args, both share types) and transfers the deal", () => {
   const tx = new Transaction();
   createDeal({
     recordingId: A,
     recordingAdminCapId: A,
-    compositionId: A,
-    compositionShareType: `${PKG}::s::S`,
     recordingShareType: `${PKG}::r::R`,
+    compositionShareType: `${PKG}::s::S`,
     releaseId: A,
     trackSplitBps: 5000,
     recipientAddress: A,
@@ -52,24 +51,22 @@ test("createDeal wires deal::new (7 args, both share types) and transfers the de
 
   const dealNew = moveCalls(tx).find((c) => c.module === "deal" && c.function === "new");
   expect(dealNew).toBeDefined();
-  // (cap, composition, recording, release_id, split, title_opt, cover_opt)
-  expect(dealNew!.argCount).toBe(7);
-  expect(dealNew!.typeArguments).toEqual([`${PKG}::s::S`, `${PKG}::r::R`]);
+  // (cap, recording, release_id, split)
+  expect(dealNew!.argCount).toBe(4);
+  // typeArguments order is [RecordingShare, CompositionShare]
+  expect(dealNew!.typeArguments).toEqual([`${PKG}::r::R`, `${PKG}::s::S`]);
   expect(kinds(tx)).toContain("TransferObjects");
 });
 
-test("publishRelease wires deal -> track -> disc -> release::new -> add_credit -> publish", () => {
+test("publishRelease wires deal -> track -> disc -> release::new -> set_subtitle -> publish", () => {
   const tx = new Transaction();
   publishRelease({
-    walrusDataPackageId: PKG,
     title: "LP",
     subtitle: "Deluxe Edition",
-    credits: [{ partyId: A, role: "Primary", displayName: "Artist" }],
-    coverArt: { stillData: { blobId: "1" } },
     discs: [
       {
         tracks: [
-          { compositionId: A, compositionShareType: `${PKG}::s::S`, recordingId: A, recordingAdminCapId: A, recordingShareType: `${PKG}::r::R`, splitBps: 10000 },
+          { recordingId: A, recordingAdminCapId: A, recordingShareType: `${PKG}::r::R`, compositionShareType: `${PKG}::s::S`, splitBps: 10000 },
         ],
       },
     ],
@@ -77,7 +74,6 @@ test("publishRelease wires deal -> track -> disc -> release::new -> add_credit -
     releaseId: A,
     releaseNonce: "0",
     musicOsPackageId: PKG,
-    partyOsPackageId: PKG,
     adminAddress: A,
   })(tx);
 
@@ -88,8 +84,9 @@ test("publishRelease wires deal -> track -> disc -> release::new -> add_credit -
   expect(has("disc", "new")).toBe(true);
   expect(has("release", "new")).toBe(true);
   expect(has("release", "set_subtitle")).toBe(true);
-  expect(has("release", "add_credit")).toBe(true);
   expect(has("release", "publish")).toBe(true);
-  // release::new takes (title, cover_art, discs, nonce, registry)
-  expect(calls.find((c) => c.module === "release" && c.function === "new")!.argCount).toBe(5);
+  // track::new now carries both share types
+  expect(calls.find((c) => c.module === "track" && c.function === "new")!.typeArguments).toEqual([`${PKG}::r::R`, `${PKG}::s::S`]);
+  // release::new takes (title, discs, nonce, registry)
+  expect(calls.find((c) => c.module === "release" && c.function === "new")!.argCount).toBe(4);
 });

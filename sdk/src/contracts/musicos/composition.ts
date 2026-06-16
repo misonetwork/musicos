@@ -11,19 +11,20 @@
  * ### Key Features:
  * 
  * - Share token initialization with fixed supply (10M tokens, 6 decimals)
- * - Party management with role assignments (Composer, Lyricist, Songwriter)
  * - State machine: Initialized -> Published (embedded fields immutable after
  *   publish; dynamic fields remain extensible via `uid_mut`)
  * - Deterministic addresses via derived object pattern
+ * 
+ * Attribution (credits) is intentionally NOT part of core: it is display-oriented,
+ * varies across platforms, and is never read by the economics. It lives in a
+ * first-party credits extension attached via `uid_mut`, so core takes no
+ * dependency on an identity package and core publish enforces no attribution.
  */
 
 import { MoveEnum, MoveTuple, MoveStruct, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
 import { bcs } from '@mysten/sui/bcs';
-import { type Transaction, type TransactionArgument } from '@mysten/sui/transactions';
+import { type Transaction } from '@mysten/sui/transactions';
 import * as bps from './deps/bps/bps.js';
-import * as vec_map from './deps/sui/vec_map.js';
-import * as credit from './deps/partyos/credit.js';
-import * as composition_party_role from './composition_party_role.js';
 const $moduleName = '@local-pkg/musicos::composition';
 /** Lifecycle state of a composition. */
 export const CompositionState = new MoveEnum({ name: `${$moduleName}::CompositionState`, fields: {
@@ -40,8 +41,6 @@ export const Composition = new MoveStruct({ name: `${$moduleName}::Composition<p
         state: CompositionState,
         /** Primary title of the composition. */
         title: bcs.string(),
-        /** Map of party IDs to their roles on this composition. */
-        credits: vec_map.VecMap(bcs.Address, credit.Credit(composition_party_role.CompositionPartyRole)),
         /**
          * Royalty rate this composition earns from each recording's revenue, paired with
          * the epoch it was last changed in. Each rate stays in effect for at least one
@@ -81,8 +80,9 @@ export interface NewOptions {
 }
 /**
  * Creates a new composition with the given title and royalty rate. The royalty
- * rate must be within `[MIN_ROYALTY_RATE_BPS, MAX_ROYALTY_RATE_BPS]`. Initializes
- * share tokens (10M supply, 6 decimals) and returns:
+ * rate must not exceed `MAX_ROYALTY_RATE_BPS`; there is no floor, so 0% is
+ * permitted (e.g. a generative recording with no authored composition).
+ * Initializes share tokens (10M supply, 6 decimals) and returns:
  *
  * - The composition object
  * - Admin capability for the owner
@@ -120,8 +120,11 @@ export interface PublishOptions {
     ];
 }
 /**
- * Publishes the composition, making it immutable. Requires at least one party.
- * Required State: Initialized
+ * Publishes the composition, making its embedded fields immutable. Required State:
+ * Initialized
+ *
+ * Note: core enforces no attribution requirement — credits live in the credits
+ * extension and may be attached before or after publish via `uid_mut`.
  */
 export function publish(options: PublishOptions) {
     const packageAddress = options.package ?? '@local-pkg/musicos';
@@ -135,45 +138,6 @@ export function publish(options: PublishOptions) {
         package: packageAddress,
         module: 'composition',
         function: 'publish',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface AddCreditArguments {
-    self: RawTransactionArgument<string>;
-    _: RawTransactionArgument<string>;
-    party: RawTransactionArgument<string>;
-    credit: TransactionArgument;
-}
-export interface AddCreditOptions {
-    package?: string;
-    arguments: AddCreditArguments | [
-        self: RawTransactionArgument<string>,
-        _: RawTransactionArgument<string>,
-        party: RawTransactionArgument<string>,
-        credit: TransactionArgument
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/**
- * Adds a party to the composition with specified roles. Each party must have 1-5
- * roles. Required State: Initialized
- */
-export function addCredit(options: AddCreditOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null,
-        null,
-        null,
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "_", "party", "credit"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'composition',
-        function: 'add_credit',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
         typeArguments: options.typeArguments
     });
@@ -195,9 +159,9 @@ export interface SetRoyaltyRateOptions {
     ];
 }
 /**
- * Sets the royalty rate this composition earns from each recording. Must be within
- * `[MIN_ROYALTY_RATE_BPS, MAX_ROYALTY_RATE_BPS]`, and only after a full epoch has
- * elapsed since the last change — a rate set in epoch N is changeable from epoch
+ * Sets the royalty rate this composition earns from each recording. Must not
+ * exceed `MAX_ROYALTY_RATE_BPS` (there is no floor; 0% is allowed), and only after
+ * a full epoch has elapsed since the last change — a rate set in epoch N is changeable from epoch
  * N+2 onward, so every rate is in effect for at least one complete epoch. The rate
  * can be changed in any lifecycle state, including after publishing — because each
  * recording snapshots the rate when it is created, a change only affects
@@ -350,33 +314,6 @@ export function title(options: TitleOptions) {
         package: packageAddress,
         module: 'composition',
         function: 'title',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface CreditsArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface CreditsOptions {
-    package?: string;
-    arguments: CreditsArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns the party-to-credit mapping. */
-export function credits(options: CreditsOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'composition',
-        function: 'credits',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
         typeArguments: options.typeArguments
     });

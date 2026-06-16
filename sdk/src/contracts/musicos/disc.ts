@@ -11,23 +11,21 @@
  * 
  * - Maximum of 50 tracks per disc
  * - Automatic duration calculation from tracks
- * - Optional disc-specific artwork
+ * 
+ * Artwork is intentionally NOT part of core: it is display metadata whose format
+ * evolves over time (static → animated → future formats), so it lives in the
+ * `artwork` extension (keyed by disc index on the release) rather than frozen in
+ * an immutable struct here.
  */
 
 import { MoveStruct, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
 import { bcs } from '@mysten/sui/bcs';
 import { type Transaction, type TransactionArgument } from '@mysten/sui/transactions';
 import * as track from './track.js';
-import * as cover_art from './cover_art.js';
 const $moduleName = '@local-pkg/musicos::disc';
 export const Disc = new MoveStruct({ name: `${$moduleName}::Disc`, fields: {
         /** Ordered list of tracks on this disc. */
         tracks: bcs.vector(track.Track),
-        /**
-         * Optional disc-specific artwork (e.g., for multi-disc sets with different
-         * covers).
-         */
-        artwork: bcs.option(cover_art.CoverArt),
         /** Title of the disc. */
         title: bcs.option(bcs.string())
     } });
@@ -62,32 +60,6 @@ export function _new(options: NewOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
-export interface SetArtworkArguments {
-    self: TransactionArgument;
-    artwork: TransactionArgument;
-}
-export interface SetArtworkOptions {
-    package?: string;
-    arguments: SetArtworkArguments | [
-        self: TransactionArgument,
-        artwork: TransactionArgument
-    ];
-}
-/** Sets or updates the disc-specific artwork. */
-export function setArtwork(options: SetArtworkOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null,
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "artwork"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'disc',
-        function: 'set_artwork',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
 export interface TracksArguments {
     self: TransactionArgument;
 }
@@ -108,29 +80,6 @@ export function tracks(options: TracksOptions) {
         package: packageAddress,
         module: 'disc',
         function: 'tracks',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface ArtworkArguments {
-    self: TransactionArgument;
-}
-export interface ArtworkOptions {
-    package?: string;
-    arguments: ArtworkArguments | [
-        self: TransactionArgument
-    ];
-}
-/** Returns the optional disc-specific artwork. */
-export function artwork(options: ArtworkOptions) {
-    const packageAddress = options.package ?? '@local-pkg/musicos';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'disc',
-        function: 'artwork',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

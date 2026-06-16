@@ -18,16 +18,12 @@
 module musicos::release_e2e_tests;
 
 use musicos::composition::{Self, Composition};
-use musicos::composition_party_role;
 use musicos::deal::{Self, Deal};
 use musicos::disc;
 use musicos::recording::{Self, Recording};
-use musicos::recording_party_role;
 use musicos::release::{Self, Release, ReleaseRegistry};
-use musicos::release_party_role;
 use musicos::test_helpers::{Self, CompositionShare, RecordingShare};
 use musicos::track;
-use partyos::credit;
 use std::unit_test::{assert_eq, destroy};
 use sui::test_scenario;
 
@@ -46,51 +42,27 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
 
     // === Tx 1 (SONGWRITER): create and publish the composition ===
     scenario.next_tx(SONGWRITER);
-    let (mut comp, comp_cap) = composition::new_for_testing<CompositionShare>(
+    let (comp, comp_cap) = composition::new_for_testing<CompositionShare>(
         b"Song".to_string(),
         ROYALTY_RATE_BPS,
         scenario.ctx(),
-    );
-    let (sw_party, sw_party_cap) = test_helpers::individual(scenario.ctx());
-    comp.add_credit(
-        &comp_cap,
-        &sw_party,
-        credit::new(
-            b"Songwriter".to_string(),
-            vector[composition_party_role::new_composer_role()],
-        ),
     );
     let clock = sui::clock::create_for_testing(scenario.ctx());
     comp.publish(&comp_cap, &clock); // shares the composition
     clock.destroy_for_testing();
     destroy(comp_cap);
-    destroy(sw_party);
-    destroy(sw_party_cap);
 
     // === Tx 2 (ARTIST): create and publish a recording of it ===
     scenario.next_tx(ARTIST);
     let comp = scenario.take_shared<Composition<CompositionShare>>();
-    let (mut rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
+    let (rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
         b"Song".to_string(),
-        test_helpers::cover_art(),
         scenario.ctx(),
     );
-    let (artist_party, artist_party_cap) = test_helpers::individual(scenario.ctx());
-    rec.add_credit(
-        &rec_cap,
-        &artist_party,
-        credit::new(
-            b"Artist".to_string(),
-            vector[recording_party_role::new_vocalist_role(option::none())],
-        ),
-    );
-    rec.add_primary_artist(&rec_cap, &artist_party);
     let clock = sui::clock::create_for_testing(scenario.ctx());
     rec.publish(&rec_cap, &clock); // shares the recording
     clock.destroy_for_testing();
     test_scenario::return_shared(comp);
-    destroy(artist_party);
-    destroy(artist_party_cap);
 
     // === Tx 3 (ARTIST): strike a deal bound to the predicted release id ===
     scenario.next_tx(ARTIST);
@@ -123,7 +95,6 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
     let mut registry = scenario.take_shared<ReleaseRegistry>();
     let (mut rel, rel_cap) = release::new(
         b"Single".to_string(),
-        test_helpers::cover_art(),
         vector[disc::new(vector[t], option::none())],
         NONCE,
         &mut registry,
@@ -131,15 +102,6 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
     // The claimed UID must equal the prediction the deal was bound to.
     assert_eq!(rel.id(), predicted_release_id);
     rel.set_subtitle(&rel_cap, b"Deluxe Edition".to_string());
-    let (label_party, label_party_cap) = test_helpers::individual(scenario.ctx());
-    rel.add_credit(
-        &rel_cap,
-        &label_party,
-        credit::new(
-            b"Artist".to_string(),
-            vector[release_party_role::new_primary_role()],
-        ),
-    );
     let clock = sui::clock::create_for_testing(scenario.ctx());
     rel.publish(&rel_cap, &clock); // verifies track assignment, shares
     clock.destroy_for_testing();
@@ -147,8 +109,6 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
     assert_eq!(sui::event::events_by_type<deal::DealAcceptedEvent<RecordingShare, CompositionShare>>().length(), 1);
     assert_eq!(sui::event::events_by_type<deal::DealRejectedEvent<RecordingShare, CompositionShare>>().length(), 0);
     test_scenario::return_shared(registry);
-    destroy(label_party);
-    destroy(label_party_cap);
     destroy(rel_cap);
 
     // === Tx 5 (READER): the published release is publicly consistent ===
@@ -185,7 +145,6 @@ fun publish_aborts_when_track_targets_a_different_release() {
     );
     let (rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
         b"Song".to_string(),
-        test_helpers::cover_art(),
         scenario.ctx(),
     );
 
@@ -207,14 +166,12 @@ fun publish_aborts_when_track_targets_a_different_release() {
     );
     // ...but the release is created with nonce 2: different derived id.
     let t = track::new(d);
-    let (mut rel, rel_cap) = release::new(
+    let (rel, rel_cap) = release::new(
         b"Single".to_string(),
-        test_helpers::cover_art(),
         vector[disc::new(vector[t], option::none())],
         2,
         &mut registry,
     );
-    rel.prefill_credits_for_testing(1, scenario.ctx());
     let clock = sui::clock::create_for_testing(scenario.ctx());
     rel.publish(&rel_cap, &clock); // aborts: track targets a different release
 

@@ -14,11 +14,10 @@ import { deriveObjectID } from "@mysten/sui/utils";
 import { Composition as CompositionBcs } from "./contracts/musicos/composition.ts";
 import { Recording as RecordingBcs } from "./contracts/musicos/recording.ts";
 import { Release as ReleaseBcs } from "./contracts/musicos/release.ts";
-import { mapComposition, mapRecording, mapRelease, mapParty } from "./internal.ts";
+import { mapComposition, mapRecording, mapRelease } from "./internal.ts";
 import type {
   Composition,
   CompositionAdminCap,
-  Party,
   Recording,
   RecordingAdminCap,
   Release,
@@ -281,14 +280,8 @@ export function deriveReleaseAdminCapId(releaseId: string, musicOsPackageId: str
 }
 
 // ============================================================================
-// Party & Share Currency
+// Share Currency
 // ============================================================================
-
-export async function getParty(client: ClientWithCoreApi, partyId: string): Promise<Party> {
-  const { object } = await client.core.getObject({ objectId: partyId, include: { json: true } });
-  if (!object.json) throw new Error(`Party not found: ${partyId}`);
-  return mapParty(partyId, object.json);
-}
 
 /** Extracts the share type `T` from a `Currency<T>` object. */
 export async function getShareCurrencyType(client: ClientWithCoreApi, shareCurrencyId: string): Promise<string> {

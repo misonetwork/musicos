@@ -9,12 +9,9 @@
 module musicos::post_publish_tests;
 
 use musicos::composition::{Self, Composition};
-use musicos::composition_party_role;
 use musicos::recording::{Self, Recording};
-use musicos::recording_party_role;
 use musicos::release::{Self, Release};
 use musicos::test_helpers::{Self, CompositionShare, RecordingShare};
-use partyos::credit;
 use std::unit_test::destroy;
 use sui::dynamic_field;
 use sui::test_scenario;
@@ -31,17 +28,9 @@ fun publish_composition(
     let ctx = scenario.ctx();
     let (mut comp, cap) =
         composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
-    let (party, party_cap) = test_helpers::individual(ctx);
-    comp.add_credit(
-        &cap,
-        &party,
-        credit::new(b"W".to_string(), vector[composition_party_role::new_composer_role()]),
-    );
     let clock = sui::clock::create_for_testing(ctx);
     comp.publish(&cap, &clock);
     clock.destroy_for_testing();
-    destroy(party);
-    destroy(party_cap);
     cap
 }
 
@@ -50,35 +39,21 @@ fun publish_recording(
     scenario: &mut test_scenario::Scenario,
 ): recording::RecordingAdminCap<RecordingShare> {
     let ctx = scenario.ctx();
-    let (mut rec, cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
+    let (rec, cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
         b"Song".to_string(),
-        test_helpers::cover_art(),
         ctx,
     );
-    let (party, party_cap) = test_helpers::individual(ctx);
-    rec.add_credit(
-        &cap,
-        &party,
-        credit::new(
-            b"A".to_string(),
-            vector[recording_party_role::new_vocalist_role(option::none())],
-        ),
-    );
-    rec.add_primary_artist(&cap, &party);
     let clock = sui::clock::create_for_testing(ctx);
     rec.publish(&cap, &clock);
     clock.destroy_for_testing();
-    destroy(party);
-    destroy(party_cap);
     cap
 }
 
 /// Publishes a minimal release and returns its admin cap (object is shared).
 fun publish_release(scenario: &mut test_scenario::Scenario): release::ReleaseAdminCap {
     let ctx = scenario.ctx();
-    let (mut rel, cap) = release::new_for_testing(
+    let (rel, cap) = release::new_for_testing(
         b"Album".to_string(),
-        test_helpers::cover_art(),
         vector[musicos::disc::new(
             vector[musicos::track::new_for_testing(
                 test_helpers::fake_id(ctx),
@@ -89,7 +64,6 @@ fun publish_release(scenario: &mut test_scenario::Scenario): release::ReleaseAdm
         )],
         ctx,
     );
-    rel.prefill_credits_for_testing(1, ctx);
     let clock = sui::clock::create_for_testing(ctx);
     rel.publish(&cap, &clock);
     clock.destroy_for_testing();
@@ -97,27 +71,6 @@ fun publish_release(scenario: &mut test_scenario::Scenario): release::ReleaseAdm
 }
 
 // === Composition ===
-
-#[test, expected_failure(abort_code = ENotInitializedState, location = musicos::composition)]
-fun composition_add_credit_after_publish_aborts() {
-    let mut scenario = test_scenario::begin(OWNER);
-    let cap = publish_composition(&mut scenario);
-
-    scenario.next_tx(OWNER);
-    let mut comp = scenario.take_shared<Composition<CompositionShare>>();
-    let (party, party_cap) = test_helpers::individual(scenario.ctx());
-    comp.add_credit(
-        &cap,
-        &party,
-        credit::new(b"L".to_string(), vector[composition_party_role::new_lyricist_role()]),
-    );
-
-    destroy(comp);
-    destroy(cap);
-    destroy(party);
-    destroy(party_cap);
-    abort
-}
 
 #[test, expected_failure(abort_code = ENotInitializedState, location = musicos::composition)]
 fun composition_publish_twice_aborts() {
@@ -171,30 +124,6 @@ fun recording_set_title_version_after_publish_aborts() {
     abort
 }
 
-#[test, expected_failure(abort_code = ENotInitializedState, location = musicos::recording)]
-fun recording_add_credit_after_publish_aborts() {
-    let mut scenario = test_scenario::begin(OWNER);
-    let cap = publish_recording(&mut scenario);
-
-    scenario.next_tx(OWNER);
-    let mut rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
-    let (party, party_cap) = test_helpers::individual(scenario.ctx());
-    rec.add_credit(
-        &cap,
-        &party,
-        credit::new(
-            b"B".to_string(),
-            vector[recording_party_role::new_producer_role(option::none())],
-        ),
-    );
-
-    destroy(rec);
-    destroy(cap);
-    destroy(party);
-    destroy(party_cap);
-    abort
-}
-
 // === Release ===
 
 #[test, expected_failure(abort_code = ENotInitializedState, location = musicos::release)]
@@ -211,30 +140,6 @@ fun release_set_subtitle_after_publish_aborts() {
     abort
 }
 
-#[test, expected_failure(abort_code = ENotInitializedState, location = musicos::release)]
-fun release_add_credit_after_publish_aborts() {
-    let mut scenario = test_scenario::begin(OWNER);
-    let cap = publish_release(&mut scenario);
-
-    scenario.next_tx(OWNER);
-    let mut rel = scenario.take_shared<Release>();
-    let (party, party_cap) = test_helpers::individual(scenario.ctx());
-    rel.add_credit(
-        &cap,
-        &party,
-        credit::new(
-            b"G".to_string(),
-            vector[musicos::release_party_role::new_featured_role()],
-        ),
-    );
-
-    destroy(rel);
-    destroy(cap);
-    destroy(party);
-    destroy(party_cap);
-    abort
-}
-
 #[test, expected_failure(abort_code = ENotInitializedState, location = musicos::recording)]
 fun recording_set_subtitle_after_publish_aborts() {
     let mut scenario = test_scenario::begin(OWNER);
@@ -246,40 +151,6 @@ fun recording_set_subtitle_after_publish_aborts() {
 
     destroy(rec);
     destroy(cap);
-    abort
-}
-
-#[test, expected_failure(abort_code = ENotInitializedState, location = musicos::recording)]
-fun recording_add_primary_artist_after_publish_aborts() {
-    let mut scenario = test_scenario::begin(OWNER);
-    let cap = publish_recording(&mut scenario);
-
-    scenario.next_tx(OWNER);
-    let mut rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
-    let (party, party_cap) = test_helpers::individual(scenario.ctx());
-    rec.add_primary_artist(&cap, &party);
-
-    destroy(rec);
-    destroy(cap);
-    destroy(party);
-    destroy(party_cap);
-    abort
-}
-
-#[test, expected_failure(abort_code = ENotInitializedState, location = musicos::recording)]
-fun recording_add_featured_artist_after_publish_aborts() {
-    let mut scenario = test_scenario::begin(OWNER);
-    let cap = publish_recording(&mut scenario);
-
-    scenario.next_tx(OWNER);
-    let mut rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
-    let (party, party_cap) = test_helpers::individual(scenario.ctx());
-    rec.add_featured_artist(&cap, &party);
-
-    destroy(rec);
-    destroy(cap);
-    destroy(party);
-    destroy(party_cap);
     abort
 }
 
@@ -343,7 +214,6 @@ fun release_uid_mut_works_after_publish() {
     assert!(rel.is_published_state());
     assert!(!rel.is_initialized_state());
     let _state = rel.state();
-    let _art = rel.cover_art();
     dynamic_field::add(rel.uid_mut(&cap), b"metadata", 9u64);
     assert!(dynamic_field::exists_(rel.uid(), b"metadata"));
     test_scenario::return_shared(rel);

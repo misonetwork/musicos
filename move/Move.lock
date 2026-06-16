@@ -25,20 +25,8 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.testnet.musicos]
 source = { root = true }
 use_environment = "testnet"
-manifest_digest = "53DE2DD3B0F1481FF4B107D68DC19B95F843589C578E3A4D905B4160C7DDC46F"
-deps = { bps = "bps", ori = "ori", partyos = "partyos", share = "share", std = "MoveStdlib", sui = "Sui" }
-
-[pinned.testnet.ori]
-source = { git = "https://github.com/unconfirmedlabs/ori.git", subdir = "move", rev = "84d5da270e5860b144961dd4665690238b49560c" }
-use_environment = "testnet"
-manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
-deps = { std = "MoveStdlib", sui = "Sui" }
-
-[pinned.testnet.partyos]
-source = { git = "https://github.com/misonetwork/partyos.git", subdir = ".", rev = "3a0ad41137169dd8c3d633520058539e27fbf6c8" }
-use_environment = "testnet"
-manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
-deps = { std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "3194F6DA5A85935E6E5DC5C094D276BA57A3CE399B8255A2E2C6ADD86CDB2518"
+deps = { bps = "bps", share = "share", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.testnet.share]
 source = { git = "https://github.com/misonetwork/share.git", subdir = ".", rev = "ca342adcbb61645d6d3f3d71bf39830c24ad998d" }
