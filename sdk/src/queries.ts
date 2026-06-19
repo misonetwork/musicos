@@ -11,9 +11,9 @@ import type { SuiGraphQLClient } from "@mysten/sui/graphql";
 import { graphql } from "@mysten/sui/graphql/schema";
 import { deriveObjectID } from "@mysten/sui/utils";
 
-import { Composition as CompositionBcs } from "./contracts/musicos/composition.ts";
-import { Recording as RecordingBcs } from "./contracts/musicos/recording.ts";
-import { Release as ReleaseBcs } from "./contracts/musicos/release.ts";
+import { Composition as CompositionBcs } from "./contracts/miso/composition.ts";
+import { Recording as RecordingBcs } from "./contracts/miso/recording.ts";
+import { Release as ReleaseBcs } from "./contracts/miso/release.ts";
 import { mapComposition, mapRecording, mapRelease } from "./internal.ts";
 import type {
   Composition,
@@ -94,9 +94,9 @@ export async function getCompositionByShareType(
   client: ClientWithCoreApi,
   graphqlClient: SuiGraphQLClient,
   shareType: string,
-  musicOsPackageId: string,
+  misoPackageId: string,
 ): Promise<Composition> {
-  const type = `${musicOsPackageId}::composition::Composition<${shareType}>`;
+  const type = `${misoPackageId}::composition::Composition<${shareType}>`;
   const address = await firstAddressOfType(graphqlClient, type);
   if (!address) throw new Error(`Composition not found for share type: ${shareType}`);
   return getCompositionById(client, address);
@@ -113,9 +113,9 @@ export async function getCompositionAdminCapById(
 export async function getOwnedCompositionAdminCaps(
   client: SuiGraphQLClient,
   owner: string,
-  musicOsPackageId: string,
+  misoPackageId: string,
 ): Promise<CompositionAdminCap[]> {
-  const capType = `${musicOsPackageId}::composition::CompositionAdminCap`;
+  const capType = `${misoPackageId}::composition::CompositionAdminCap`;
   const result = await client.listOwnedObjects({ owner, type: capType });
   const caps: CompositionAdminCap[] = [];
   for (const obj of result.objects) {
@@ -125,8 +125,8 @@ export async function getOwnedCompositionAdminCaps(
   return caps;
 }
 
-export function deriveCompositionAdminCapId(compositionId: string, musicOsPackageId: string): string {
-  return deriveObjectID(compositionId, `${musicOsPackageId}::composition::CompositionAdminCapKey`, UNIT_STRUCT_KEY_BYTES);
+export function deriveCompositionAdminCapId(compositionId: string, misoPackageId: string): string {
+  return deriveObjectID(compositionId, `${misoPackageId}::composition::CompositionAdminCapKey`, UNIT_STRUCT_KEY_BYTES);
 }
 
 // ============================================================================
@@ -162,9 +162,9 @@ export async function getRecordingByShareType(
   client: ClientWithCoreApi,
   graphqlClient: SuiGraphQLClient,
   shareType: string,
-  musicOsPackageId: string,
+  misoPackageId: string,
 ): Promise<Recording> {
-  const type = `${musicOsPackageId}::recording::Recording<${shareType}>`;
+  const type = `${misoPackageId}::recording::Recording<${shareType}>`;
   const address = await firstAddressOfType(graphqlClient, type);
   if (!address) throw new Error(`Recording not found for share type: ${shareType}`);
   return getRecordingById(client, address);
@@ -181,9 +181,9 @@ export async function getRecordingAdminCapById(
 export async function getOwnedRecordingAdminCaps(
   client: SuiGraphQLClient,
   owner: string,
-  musicOsPackageId: string,
+  misoPackageId: string,
 ): Promise<RecordingAdminCap[]> {
-  const capType = `${musicOsPackageId}::recording::RecordingAdminCap`;
+  const capType = `${misoPackageId}::recording::RecordingAdminCap`;
   const result = await client.listOwnedObjects({ owner, type: capType });
   const caps: RecordingAdminCap[] = [];
   for (const obj of result.objects) {
@@ -193,8 +193,8 @@ export async function getOwnedRecordingAdminCaps(
   return caps;
 }
 
-export function deriveRecordingAdminCapId(recordingId: string, musicOsPackageId: string): string {
-  return deriveObjectID(recordingId, `${musicOsPackageId}::recording::RecordingAdminCapKey`, UNIT_STRUCT_KEY_BYTES);
+export function deriveRecordingAdminCapId(recordingId: string, misoPackageId: string): string {
+  return deriveObjectID(recordingId, `${misoPackageId}::recording::RecordingAdminCapKey`, UNIT_STRUCT_KEY_BYTES);
 }
 
 /** Recordings administered by `owner` (admin-cap discovery -> Core read). */
@@ -202,12 +202,12 @@ export async function getAdministeredRecordings(
   client: ClientWithCoreApi,
   graphqlClient: SuiGraphQLClient,
   owner: string,
-  musicOsPackageId: string,
+  misoPackageId: string,
 ): Promise<Recording[]> {
-  const caps = await getOwnedRecordingAdminCaps(graphqlClient, owner, musicOsPackageId);
+  const caps = await getOwnedRecordingAdminCaps(graphqlClient, owner, misoPackageId);
   const recordings: Recording[] = [];
   for (const cap of caps) {
-    const type = `${musicOsPackageId}::recording::Recording<${cap.shareType}>`;
+    const type = `${misoPackageId}::recording::Recording<${cap.shareType}>`;
     const address = await firstAddressOfType(graphqlClient, type);
     if (address) recordings.push(await getRecordingById(client, address));
   }
@@ -238,8 +238,8 @@ export async function getReleaseById(client: ClientWithCoreApi, releaseId: strin
   return mapRelease(releaseId, ReleaseBcs.parse(content));
 }
 
-export async function getReleaseRegistry(client: SuiGraphQLClient, musicOsPackageId: string): Promise<string> {
-  const address = await firstAddressOfType(client, `${musicOsPackageId}::release::ReleaseRegistry`);
+export async function getReleaseRegistry(client: SuiGraphQLClient, misoPackageId: string): Promise<string> {
+  const address = await firstAddressOfType(client, `${misoPackageId}::release::ReleaseRegistry`);
   if (!address) throw new Error("ReleaseRegistry not found");
   return address;
 }
@@ -257,9 +257,9 @@ export async function getReleaseAdminCapById(
 export async function getOwnedReleaseAdminCaps(
   client: ClientWithCoreApi,
   owner: string,
-  musicOsPackageId: string,
+  misoPackageId: string,
 ): Promise<ReleaseAdminCap[]> {
-  const capType = `${musicOsPackageId}::release::ReleaseAdminCap`;
+  const capType = `${misoPackageId}::release::ReleaseAdminCap`;
   const { objects } = await client.core.listOwnedObjects({ owner, type: capType });
   if (objects.length === 0) return [];
   const { objects: details } = await client.core.getObjects({
@@ -275,8 +275,8 @@ export async function getOwnedReleaseAdminCaps(
   return caps;
 }
 
-export function deriveReleaseAdminCapId(releaseId: string, musicOsPackageId: string): string {
-  return deriveObjectID(releaseId, `${musicOsPackageId}::release::ReleaseAdminCapKey`, UNIT_STRUCT_KEY_BYTES);
+export function deriveReleaseAdminCapId(releaseId: string, misoPackageId: string): string {
+  return deriveObjectID(releaseId, `${misoPackageId}::release::ReleaseAdminCapKey`, UNIT_STRUCT_KEY_BYTES);
 }
 
 // ============================================================================

@@ -1,0 +1,10 @@
+[package]
+name = "recording_royalty_pool"
+edition = "2024"
+license = "Apache 2.0"
+authors = ["Miso Labs, Inc. (os@unconfirmed.com)"]
+
+[dependencies]
+miso = { local = "../../core" }
+hikida = { git = "https://github.com/unconfirmedlabs/hikida.git", rev = "main" }
+royalty_pool = { git = "https://github.com/unconfirmedlabs/royalty-pool.git", subdir = "move", rev = "main" }

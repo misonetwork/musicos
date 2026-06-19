@@ -9,51 +9,51 @@ import * as transactions from "./transactions.ts";
 import type { Composition, CompositionAdminCap, Recording, RecordingAdminCap, Release, ReleaseAdminCap } from "./types.ts";
 
 // Generated call modules (type-safe Move calls) and BCS structs.
-import * as composition from "./contracts/musicos/composition.ts";
-import * as recording from "./contracts/musicos/recording.ts";
-import * as release from "./contracts/musicos/release.ts";
-import * as deal from "./contracts/musicos/deal.ts";
-import * as track from "./contracts/musicos/track.ts";
-import * as disc from "./contracts/musicos/disc.ts";
+import * as composition from "./contracts/miso/composition.ts";
+import * as recording from "./contracts/miso/recording.ts";
+import * as release from "./contracts/miso/release.ts";
+import * as deal from "./contracts/miso/deal.ts";
+import * as track from "./contracts/miso/track.ts";
+import * as disc from "./contracts/miso/disc.ts";
 
-export interface MusicOSOptions<Name extends string = "musicos"> {
-  /** Name for the client extension. Defaults to "musicos". */
+export interface MisoOptions<Name extends string = "miso"> {
+  /** Name for the client extension. Defaults to "miso". */
   name?: Name;
-  /** The MusicOS package ID. Required for type-based queries and derivation. */
-  musicOsPackageId: string;
+  /** The Miso package ID. Required for type-based queries and derivation. */
+  misoPackageId: string;
   /** Optional GraphQL client for type-based queries (getByShareType, getOwned*, etc.). */
   graphqlClient?: SuiGraphQLClient;
 }
 
 /**
- * Creates a MusicOS client extension for use with `$extend()`.
+ * Creates a Miso client extension for use with `$extend()`.
  *
  * @example
  * ```ts
  * const client = new SuiGrpcClient({ network: 'testnet' })
- *   .$extend(musicos({ musicOsPackageId: '0x...' }));
- * const composition = await client.musicos.getCompositionById('0x...');
+ *   .$extend(miso({ misoPackageId: '0x...' }));
+ * const composition = await client.miso.getCompositionById('0x...');
  * ```
  */
-export function musicos<const Name extends string = "musicos">(
-  options: MusicOSOptions<Name>,
-): SuiClientRegistration<ClientWithCoreApi, Name, MusicOSClient> {
-  const name = (options.name ?? "musicos") as Name;
+export function miso<const Name extends string = "miso">(
+  options: MisoOptions<Name>,
+): SuiClientRegistration<ClientWithCoreApi, Name, MisoClient> {
+  const name = (options.name ?? "miso") as Name;
   return {
     name,
-    register: (client) => new MusicOSClient(client, options),
+    register: (client) => new MisoClient(client, options),
   };
 }
 
-export class MusicOSClient {
+export class MisoClient {
   #client: ClientWithCoreApi;
   #graphqlClient?: SuiGraphQLClient;
-  #musicOsPackageId: string;
+  #misoPackageId: string;
 
-  constructor(client: ClientWithCoreApi, options: Omit<MusicOSOptions, "name">) {
+  constructor(client: ClientWithCoreApi, options: Omit<MisoOptions, "name">) {
     this.#client = client;
     this.#graphqlClient = options.graphqlClient;
-    this.#musicOsPackageId = options.musicOsPackageId;
+    this.#misoPackageId = options.misoPackageId;
   }
 
   // === Composition ===
@@ -68,16 +68,16 @@ export class MusicOSClient {
     return queries.getCompositionShareType(this.#client, compositionId);
   }
   async getCompositionByShareType(shareType: string): Promise<Composition> {
-    return queries.getCompositionByShareType(this.#client, this.#requireGraphQL(), shareType, this.#musicOsPackageId);
+    return queries.getCompositionByShareType(this.#client, this.#requireGraphQL(), shareType, this.#misoPackageId);
   }
   async getCompositionAdminCapById(adminCapId: string): Promise<CompositionAdminCap> {
     return queries.getCompositionAdminCapById(this.#client, adminCapId);
   }
   async getOwnedCompositionAdminCaps(owner: string): Promise<CompositionAdminCap[]> {
-    return queries.getOwnedCompositionAdminCaps(this.#requireGraphQL(), owner, this.#musicOsPackageId);
+    return queries.getOwnedCompositionAdminCaps(this.#requireGraphQL(), owner, this.#misoPackageId);
   }
   deriveCompositionAdminCapId(compositionId: string): string {
-    return queries.deriveCompositionAdminCapId(compositionId, this.#musicOsPackageId);
+    return queries.deriveCompositionAdminCapId(compositionId, this.#misoPackageId);
   }
 
   // === Recording ===
@@ -92,19 +92,19 @@ export class MusicOSClient {
     return queries.getRecordingShareType(this.#client, recordingId);
   }
   async getRecordingByShareType(shareType: string): Promise<Recording> {
-    return queries.getRecordingByShareType(this.#client, this.#requireGraphQL(), shareType, this.#musicOsPackageId);
+    return queries.getRecordingByShareType(this.#client, this.#requireGraphQL(), shareType, this.#misoPackageId);
   }
   async getRecordingAdminCapById(adminCapId: string): Promise<RecordingAdminCap> {
     return queries.getRecordingAdminCapById(this.#client, adminCapId);
   }
   async getOwnedRecordingAdminCaps(owner: string): Promise<RecordingAdminCap[]> {
-    return queries.getOwnedRecordingAdminCaps(this.#requireGraphQL(), owner, this.#musicOsPackageId);
+    return queries.getOwnedRecordingAdminCaps(this.#requireGraphQL(), owner, this.#misoPackageId);
   }
   deriveRecordingAdminCapId(recordingId: string): string {
-    return queries.deriveRecordingAdminCapId(recordingId, this.#musicOsPackageId);
+    return queries.deriveRecordingAdminCapId(recordingId, this.#misoPackageId);
   }
   async getAdministeredRecordings(owner: string): Promise<Recording[]> {
-    return queries.getAdministeredRecordings(this.#client, this.#requireGraphQL(), owner, this.#musicOsPackageId);
+    return queries.getAdministeredRecordings(this.#client, this.#requireGraphQL(), owner, this.#misoPackageId);
   }
 
   // === Release ===
@@ -119,13 +119,13 @@ export class MusicOSClient {
     return queries.getReleaseAdminCapById(this.#client, adminCapId);
   }
   deriveReleaseAdminCapId(releaseId: string): string {
-    return queries.deriveReleaseAdminCapId(releaseId, this.#musicOsPackageId);
+    return queries.deriveReleaseAdminCapId(releaseId, this.#misoPackageId);
   }
   async getOwnedReleaseAdminCaps(owner: string): Promise<ReleaseAdminCap[]> {
-    return queries.getOwnedReleaseAdminCaps(this.#client, owner, this.#musicOsPackageId);
+    return queries.getOwnedReleaseAdminCaps(this.#client, owner, this.#misoPackageId);
   }
   async getReleaseRegistry(): Promise<string> {
-    return queries.getReleaseRegistry(this.#requireGraphQL(), this.#musicOsPackageId);
+    return queries.getReleaseRegistry(this.#requireGraphQL(), this.#misoPackageId);
   }
 
   // === Share Currency ===
@@ -197,7 +197,7 @@ export class MusicOSClient {
 
   #requireGraphQL(): SuiGraphQLClient {
     if (!this.#graphqlClient) {
-      throw new Error("GraphQL client required. Pass graphqlClient to musicos() options.");
+      throw new Error("GraphQL client required. Pass graphqlClient to miso() options.");
     }
     return this.#graphqlClient;
   }

@@ -1,0 +1,9 @@
+[package]
+name = "recording_attribution"
+edition = "2024"
+license = "Apache 2.0"
+authors = ["Miso Labs, Inc. (os@unconfirmed.com)"]
+
+[dependencies]
+miso = { local = "../../core" }
+royalty_pool = { git = "https://github.com/unconfirmedlabs/royalty-pool.git", subdir = "move", rev = "main" }

@@ -1,7 +1,7 @@
 {
-  "name": "@misonetwork/musicos",
+  "name": "@misonetwork/miso",
   "version": "0.1.0",
-  "description": "Typed query helpers and transaction builders for MusicOS on Sui.",
+  "description": "Typed query helpers and transaction builders for Miso and its first-party extensions (credits, cover art, genre) on Sui.",
   "license": "Apache-2.0",
   "module": "src/index.ts",
   "types": "src/index.ts",
@@ -20,7 +20,10 @@
     "./transactions": "./src/transactions.ts",
     "./types": "./src/types.ts",
     "./schemas": "./src/schemas.ts",
-    "./parsers": "./src/parsers.ts"
+    "./parsers": "./src/parsers.ts",
+    "./credits": "./src/credits/index.ts",
+    "./cover-art": "./src/cover-art/index.ts",
+    "./genre": "./src/genre/index.ts"
   },
   "files": [
     "src",
