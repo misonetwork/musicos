@@ -8,14 +8,14 @@
 import {
   CompositionPublishedEvent as CompositionPublishedEventBcs,
   CompositionRoyaltySetEvent as CompositionRoyaltySetEventBcs,
-} from "./contracts/musicos/composition.ts";
-import { RecordingPublishedEvent as RecordingPublishedEventBcs } from "./contracts/musicos/recording.ts";
-import { ReleasePublishedEvent as ReleasePublishedEventBcs } from "./contracts/musicos/release.ts";
+} from "./contracts/miso/composition.ts";
+import { RecordingPublishedEvent as RecordingPublishedEventBcs } from "./contracts/miso/recording.ts";
+import { ReleasePublishedEvent as ReleasePublishedEventBcs } from "./contracts/miso/release.ts";
 import {
   DealCreatedEvent as DealCreatedEventBcs,
   DealAcceptedEvent as DealAcceptedEventBcs,
   DealRejectedEvent as DealRejectedEventBcs,
-} from "./contracts/musicos/deal.ts";
+} from "./contracts/miso/deal.ts";
 import type {
   CompositionPublishedEvent,
   CompositionRoyaltySetEvent,

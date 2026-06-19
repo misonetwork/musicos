@@ -8,7 +8,7 @@
 
 import { test, expect } from "bun:test";
 
-import { Composition } from "../src/contracts/musicos/composition.ts";
+import { Composition } from "../src/contracts/miso/composition.ts";
 import { mapComposition, mapBps } from "../src/internal.ts";
 
 const ADDR = "0x" + "ab".repeat(32);

@@ -3,7 +3,7 @@
 
 // Transaction builders, following the Sui SDK thunk pattern: each builder
 // returns a `(tx: Transaction) => …` thunk that adds commands to a caller-owned
-// `Transaction`, so flows compose. MusicOS calls go through the codegen-
+// `Transaction`, so flows compose. Miso calls go through the codegen-
 // generated, type-safe call functions; calls into external packages (share,
 // minato, framework) use raw `moveCall`.
 
@@ -13,12 +13,12 @@ import { bcs } from "@mysten/sui/bcs";
 import { deriveObjectID } from "@mysten/sui/utils";
 import { getShareCurrencyType, getShareCurrencyTreasuryCap } from "./queries.ts";
 
-import * as composition from "./contracts/musicos/composition.ts";
-import * as recording from "./contracts/musicos/recording.ts";
-import * as release from "./contracts/musicos/release.ts";
-import * as deal from "./contracts/musicos/deal.ts";
-import * as track from "./contracts/musicos/track.ts";
-import * as disc from "./contracts/musicos/disc.ts";
+import * as composition from "./contracts/miso/composition.ts";
+import * as recording from "./contracts/miso/recording.ts";
+import * as release from "./contracts/miso/release.ts";
+import * as deal from "./contracts/miso/deal.ts";
+import * as track from "./contracts/miso/track.ts";
+import * as disc from "./contracts/miso/disc.ts";
 
 /** A thunk that adds commands to a transaction. May be async (resolves at build time). */
 export type TxThunk = (tx: Transaction) => void | Promise<void>;
@@ -105,19 +105,19 @@ export interface PublishCompositionParams {
   royaltyRateBps: number;
   shareRecipients: ShareRecipient[];
   adminAddress: string;
-  musicOsPackageId: string;
+  misoPackageId: string;
   minatoPackageId: string;
 }
 
 export function publishComposition(params: PublishCompositionParams): TxThunk {
   return async (tx) => {
-    const { client, musicOsPackageId, minatoPackageId } = params;
+    const { client, misoPackageId, minatoPackageId } = params;
     const shareType = await getShareCurrencyType(client, params.shareCurrencyId);
     const treasuryCapId = await getShareCurrencyTreasuryCap(client, params.shareCurrencyId, params.treasuryCapOwner);
 
     const result = tx.add(
       composition._new({
-        package: musicOsPackageId,
+        package: misoPackageId,
         typeArguments: [shareType],
         arguments: [tx.pure.string(params.title), tx.pure.u16(params.royaltyRateBps), tx.object(params.shareCurrencyId), tx.object(treasuryCapId)],
       }),
@@ -127,7 +127,7 @@ export function publishComposition(params: PublishCompositionParams): TxThunk {
     const balance = result[2]!;
 
     disperseShares(tx, minatoPackageId, shareType, balance, params.shareRecipients);
-    tx.add(composition.publish({ package: musicOsPackageId, typeArguments: [shareType], arguments: [comp, adminCap] }));
+    tx.add(composition.publish({ package: misoPackageId, typeArguments: [shareType], arguments: [comp, adminCap] }));
     tx.transferObjects([adminCap], params.adminAddress);
   };
 }
@@ -140,8 +140,8 @@ export function publishComposition(params: PublishCompositionParams): TxThunk {
  * Derives a recording's object id: the `idx`-th recording under a composition.
  * Mirrors `recording::RecordingKey(idx)` claimed off the composition's UID.
  */
-export function deriveRecordingId(compositionId: string, idx: number | bigint, musicOsPackageId: string): string {
-  const keyType = `${musicOsPackageId}::recording::RecordingKey`;
+export function deriveRecordingId(compositionId: string, idx: number | bigint, misoPackageId: string): string {
+  const keyType = `${misoPackageId}::recording::RecordingKey`;
   const keyBytes = bcs.u64().serialize(BigInt(idx)).toBytes();
   return deriveObjectID(compositionId, keyType, keyBytes);
 }
@@ -165,10 +165,10 @@ async function objectExists(client: ClientWithCoreApi, objectId: string): Promis
 export async function nextRecordingIndex(
   client: ClientWithCoreApi,
   compositionId: string,
-  musicOsPackageId: string,
+  misoPackageId: string,
 ): Promise<number> {
   let idx = 0;
-  while (await objectExists(client, deriveRecordingId(compositionId, idx, musicOsPackageId))) idx++;
+  while (await objectExists(client, deriveRecordingId(compositionId, idx, misoPackageId))) idx++;
   return idx;
 }
 
@@ -185,22 +185,22 @@ export interface PublishRecordingParams {
   adminAddress: string;
   titleVersion?: string;
   subtitle?: string;
-  musicOsPackageId: string;
+  misoPackageId: string;
   minatoPackageId: string;
 }
 
 export function publishRecording(params: PublishRecordingParams): TxThunk {
   return async (tx) => {
-    const { client, musicOsPackageId } = params;
+    const { client, misoPackageId } = params;
     const shareType = await getShareCurrencyType(client, params.shareCurrencyId);
     const treasuryCapId = await getShareCurrencyTreasuryCap(client, params.shareCurrencyId, params.treasuryCapOwner);
     const typeArguments: [string, string] = [shareType, params.compositionShareType];
 
-    const idx = params.recordingIndex ?? (await nextRecordingIndex(client, params.compositionId, musicOsPackageId));
+    const idx = params.recordingIndex ?? (await nextRecordingIndex(client, params.compositionId, misoPackageId));
 
     const result = tx.add(
       recording._new({
-        package: musicOsPackageId,
+        package: misoPackageId,
         typeArguments,
         arguments: [tx.object(params.compositionId), tx.pure.u64(idx), tx.object(params.shareCurrencyId), tx.object(treasuryCapId)],
       }),
@@ -210,11 +210,11 @@ export function publishRecording(params: PublishRecordingParams): TxThunk {
     const balance = result[2]!;
 
     if (params.titleVersion !== undefined)
-      tx.add(recording.setTitleVersion({ package: musicOsPackageId, typeArguments, arguments: [rec, adminCap, tx.pure.string(params.titleVersion)] }));
+      tx.add(recording.setTitleVersion({ package: misoPackageId, typeArguments, arguments: [rec, adminCap, tx.pure.string(params.titleVersion)] }));
     if (params.subtitle !== undefined)
-      tx.add(recording.setSubtitle({ package: musicOsPackageId, typeArguments, arguments: [rec, adminCap, tx.pure.string(params.subtitle)] }));
+      tx.add(recording.setSubtitle({ package: misoPackageId, typeArguments, arguments: [rec, adminCap, tx.pure.string(params.subtitle)] }));
 
-    tx.add(recording.publish({ package: musicOsPackageId, typeArguments, arguments: [rec, adminCap] }));
+    tx.add(recording.publish({ package: misoPackageId, typeArguments, arguments: [rec, adminCap] }));
     disperseShares(tx, params.minatoPackageId, shareType, balance, params.shareRecipients);
     tx.transferObjects([adminCap], params.adminAddress);
   };
@@ -235,7 +235,7 @@ export interface CreateDealParams {
   releaseId: string;
   trackSplitBps: number;
   recipientAddress: string;
-  musicOsPackageId: string;
+  misoPackageId: string;
 }
 
 function buildTitleOption(tx: Transaction, title?: string) {
@@ -249,7 +249,7 @@ export function createDeal(params: CreateDealParams): TxThunk {
     const adminCapArg = params.recordingAdminCap ?? tx.object(params.recordingAdminCapId!);
     const dealArg = tx.add(
       deal._new({
-        package: params.musicOsPackageId,
+        package: params.misoPackageId,
         typeArguments: [params.recordingShareType, params.compositionShareType],
         arguments: [
           adminCapArg,
@@ -269,14 +269,14 @@ export interface RejectDealParams {
   recordingShareType: string;
   /** Share type of the parent composition (the deal's `CompositionShare` phantom). */
   compositionShareType: string;
-  musicOsPackageId: string;
+  misoPackageId: string;
 }
 
 /** Rejects (destroys) a deal without including it in a release. Emits `DealRejectedEvent`. */
 export function rejectDeal(params: RejectDealParams): TxThunk {
   return (tx) => {
     tx.add(deal.reject({
-      package: params.musicOsPackageId,
+      package: params.misoPackageId,
       typeArguments: [params.recordingShareType, params.compositionShareType],
       arguments: [tx.object(params.dealId)],
     }));
@@ -310,51 +310,51 @@ export interface PublishReleaseParams {
   releaseRegistryId: string;
   releaseId: string;
   releaseNonce: string;
-  musicOsPackageId: string;
+  misoPackageId: string;
   adminAddress: string;
 }
 
 function buildDiscVec(
   tx: Transaction,
-  musicOsPackageId: string,
+  misoPackageId: string,
   trackArgsByDisc: { title?: string; trackArgs: TransactionObjectArgument[] }[],
 ) {
   const discArgs = trackArgsByDisc.map(({ title, trackArgs }) => {
-    const trackVec = tx.makeMoveVec({ type: `${musicOsPackageId}::track::Track`, elements: trackArgs });
-    return tx.add(disc._new({ package: musicOsPackageId, arguments: [trackVec, buildTitleOption(tx, title)] }));
+    const trackVec = tx.makeMoveVec({ type: `${misoPackageId}::track::Track`, elements: trackArgs });
+    return tx.add(disc._new({ package: misoPackageId, arguments: [trackVec, buildTitleOption(tx, title)] }));
   });
-  return tx.makeMoveVec({ type: `${musicOsPackageId}::disc::Disc`, elements: discArgs });
+  return tx.makeMoveVec({ type: `${misoPackageId}::disc::Disc`, elements: discArgs });
 }
 
 export function publishRelease(params: PublishReleaseParams): TxThunk {
   return (tx) => {
-    const { musicOsPackageId } = params;
+    const { misoPackageId } = params;
     const byDisc = params.discs.map((d) => ({
       title: d.title,
       trackArgs: d.tracks.map((t) => {
         const typeArguments: [string, string] = [t.recordingShareType, t.compositionShareType];
         const dealArg = tx.add(
           deal._new({
-            package: musicOsPackageId,
+            package: misoPackageId,
             typeArguments,
             arguments: [tx.object(t.recordingAdminCapId), tx.object(t.recordingId), tx.pure.id(params.releaseId), tx.pure.u16(t.splitBps)],
           }),
         );
-        return tx.add(track._new({ package: musicOsPackageId, typeArguments, arguments: [dealArg] }));
+        return tx.add(track._new({ package: misoPackageId, typeArguments, arguments: [dealArg] }));
       }),
     }));
-    const discVec = buildDiscVec(tx, musicOsPackageId, byDisc);
+    const discVec = buildDiscVec(tx, misoPackageId, byDisc);
     const result = tx.add(
       release._new({
-        package: musicOsPackageId,
+        package: misoPackageId,
         arguments: [tx.pure.string(params.title), discVec, tx.pure.u256(BigInt(params.releaseNonce)), tx.object(params.releaseRegistryId)],
       }),
     );
     const releaseArg = result[0]!;
     const adminCap = result[1]!;
     if (params.subtitle !== undefined)
-      tx.add(release.setSubtitle({ package: musicOsPackageId, arguments: [releaseArg, adminCap, tx.pure.string(params.subtitle)] }));
-    tx.add(release.publish({ package: musicOsPackageId, arguments: [releaseArg, adminCap] }));
+      tx.add(release.setSubtitle({ package: misoPackageId, arguments: [releaseArg, adminCap, tx.pure.string(params.subtitle)] }));
+    tx.add(release.publish({ package: misoPackageId, arguments: [releaseArg, adminCap] }));
     tx.transferObjects([adminCap], tx.pure.address(params.adminAddress));
   };
 }
@@ -379,35 +379,35 @@ export interface PublishReleaseFromDealsParams {
   discs: DiscFromDealsInput[];
   releaseRegistryId: string;
   releaseNonce: string;
-  musicOsPackageId: string;
+  misoPackageId: string;
   adminAddress: string;
 }
 
 export function publishReleaseFromDeals(params: PublishReleaseFromDealsParams): TxThunk {
   return (tx) => {
-    const { musicOsPackageId } = params;
+    const { misoPackageId } = params;
     const byDisc = params.discs.map((d) => ({
       title: d.title,
       trackArgs: d.deals.map((dl) =>
         tx.add(track._new({
-          package: musicOsPackageId,
+          package: misoPackageId,
           typeArguments: [dl.recordingShareType, dl.compositionShareType],
           arguments: [tx.object(dl.dealId)],
         })),
       ),
     }));
-    const discVec = buildDiscVec(tx, musicOsPackageId, byDisc);
+    const discVec = buildDiscVec(tx, misoPackageId, byDisc);
     const result = tx.add(
       release._new({
-        package: musicOsPackageId,
+        package: misoPackageId,
         arguments: [tx.pure.string(params.title), discVec, tx.pure.u256(BigInt(params.releaseNonce)), tx.object(params.releaseRegistryId)],
       }),
     );
     const releaseArg = result[0]!;
     const adminCap = result[1]!;
     if (params.subtitle !== undefined)
-      tx.add(release.setSubtitle({ package: musicOsPackageId, arguments: [releaseArg, adminCap, tx.pure.string(params.subtitle)] }));
-    tx.add(release.publish({ package: musicOsPackageId, arguments: [releaseArg, adminCap] }));
+      tx.add(release.setSubtitle({ package: misoPackageId, arguments: [releaseArg, adminCap, tx.pure.string(params.subtitle)] }));
+    tx.add(release.publish({ package: misoPackageId, arguments: [releaseArg, adminCap] }));
     tx.transferObjects([adminCap], tx.pure.address(params.adminAddress));
   };
 }

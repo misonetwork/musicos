@@ -1,22 +1,23 @@
-# MusicOS
+# Miso
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Move](https://img.shields.io/badge/Move-2024-black.svg)](https://docs.sui.io/concepts/sui-move-concepts)
 
 > A permissionless music protocol on [Sui](https://sui.io), written in Move.
 
-MusicOS models the core objects of recorded music — **compositions**, **recordings**, and **releases** — as on-chain objects whose ownership is expressed through per-object share tokens. Anyone can register a work; no gatekeeper, allowlist, or central registry of artists.
+Miso models the core objects of recorded music — **compositions**, **recordings**, and **releases** — as on-chain objects whose ownership is expressed through per-object share tokens. Anyone can register a work; no gatekeeper, allowlist, or central registry of artists.
 
 ## Repository layout
 
-This repository is a monorepo containing the protocol and its first-party TypeScript SDK:
+This repository is a monorepo containing the protocol, its first-party extensions, and the shared TypeScript SDK:
 
 | Path | Package | Description |
 |------|---------|-------------|
-| [`move/`](./move) | `musicos` (Move 2024) | The on-chain protocol package. Build/test with `sui move` from this directory. |
-| [`sdk/`](./sdk) | [`@misonetwork/musicos`](./sdk) (TypeScript) | Typed queries, transaction builders, and BCS event parsers that mirror the Move ABI. |
+| [`move/core/`](./move/core) | `miso` (Move 2024) | The on-chain core protocol package. Build/test with `sui move` from this directory. |
+| [`move/extensions/`](./move/extensions) | one Move package each | First-party extensions (credits, cover art, genre, royalty pools, revenue distributor, attribution, …) that attach to core objects via cap-gated `&mut UID` access. Each builds independently and depends on `miso` via a local path. |
+| [`sdk/`](./sdk) | [`@misonetwork/miso`](./sdk) (TypeScript) | Typed queries, transaction builders, and BCS event parsers that mirror the Move ABI for both core and the extensions (exposed under subpath exports `./credits`, `./cover-art`, `./genre`). |
 
-Keeping the SDK alongside the Move package lets ABI changes (struct fields, event layouts, entry-function arguments) and their TypeScript counterparts move in a single change set.
+Keeping the SDK alongside the Move packages lets ABI changes (struct fields, event layouts, entry-function arguments) and their TypeScript counterparts move in a single change set.
 
 ## Data model
 
@@ -70,13 +71,15 @@ cover_art
 
 ## Build & test
 
-The Move package lives in [`move/`](./move):
+The core Move package lives in [`move/core/`](./move/core):
 
 ```sh
-cd move
+cd move/core
 sui move build
 sui move test
 ```
+
+Each extension under [`move/extensions/`](./move/extensions) is its own package and builds the same way, e.g. `cd move/extensions/genre && sui move test`.
 
 The TypeScript SDK lives in [`sdk/`](./sdk):
 
@@ -92,7 +95,7 @@ bun run typecheck
 |---------|------------|
 | testnet | `0x440c9032781ead7ba93402f615aed165dd3f6f5c159d16b22c0c1b6b83a1a87c` |
 
-See [`move/Published.toml`](./move/Published.toml) for the current published metadata.
+See [`move/core/Published.toml`](./move/core/Published.toml) for the current published metadata. Each extension keeps its own `Published.toml`.
 
 ## Contributing
 

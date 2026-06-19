@@ -46,7 +46,7 @@ test("createDeal wires deal::new (4 args, both share types) and transfers the de
     releaseId: A,
     trackSplitBps: 5000,
     recipientAddress: A,
-    musicOsPackageId: PKG,
+    misoPackageId: PKG,
   })(tx);
 
   const dealNew = moveCalls(tx).find((c) => c.module === "deal" && c.function === "new");
@@ -73,7 +73,7 @@ test("publishRelease wires deal -> track -> disc -> release::new -> set_subtitle
     releaseRegistryId: A,
     releaseId: A,
     releaseNonce: "0",
-    musicOsPackageId: PKG,
+    misoPackageId: PKG,
     adminAddress: A,
   })(tx);
 

@@ -11,10 +11,10 @@ import { test, expect } from "bun:test";
 import {
   CompositionPublishedEvent,
   CompositionRoyaltySetEvent,
-} from "../src/contracts/musicos/composition.ts";
-import { RecordingPublishedEvent } from "../src/contracts/musicos/recording.ts";
-import { ReleasePublishedEvent } from "../src/contracts/musicos/release.ts";
-import { DealCreatedEvent, DealAcceptedEvent, DealRejectedEvent } from "../src/contracts/musicos/deal.ts";
+} from "../src/contracts/miso/composition.ts";
+import { RecordingPublishedEvent } from "../src/contracts/miso/recording.ts";
+import { ReleasePublishedEvent } from "../src/contracts/miso/release.ts";
+import { DealCreatedEvent, DealAcceptedEvent, DealRejectedEvent } from "../src/contracts/miso/deal.ts";
 import * as parse from "../src/parsers.ts";
 
 const A1 = "0x" + "11".repeat(32);
