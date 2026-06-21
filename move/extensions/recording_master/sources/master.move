@@ -5,9 +5,9 @@
 ///
 /// A master is any `store` value: Miso's `audio::Audio`, a future video or
 /// immersive type, anything an ingester produces. This module is deliberately
-/// **media-agnostic** and **miso-agnostic** — it operates on a bare
-/// `&mut UID` and never references `Recording` or any concrete master type, so
-/// it adds no dependency and blesses no ingester.
+/// **media-agnostic** — it never references a concrete master type and blesses
+/// no ingester. It operates directly on a `Recording`, attaching masters as
+/// dynamic fields on the recording's UID.
 ///
 /// ### Trust model
 ///
@@ -17,11 +17,13 @@
 /// write under `W`'s namespace. A consumer reads the masters from the ingester
 /// type(s) it trusts and ignores the rest; trust is a key lookup, not a registry.
 ///
-/// Obtaining the `&mut UID` already requires the recording's admin cap (via
-/// `recording::uid_mut`), so attachment is doubly gated: the rights holder
-/// authorizes the mutation, the ingester authorizes the namespace.
+/// Attachment is doubly gated: the `RecordingAdminCap` authorizes the mutation
+/// (the rights holder consents to writing the recording), and the ingester
+/// witness authorizes the namespace. Detaching and reads require only the
+/// recording, since removing or inspecting a master cannot forge trust.
 module recording_master::master;
 
+use miso::recording::{Recording, RecordingAdminCap};
 use std::type_name::{Self, TypeName};
 use sui::dynamic_field as df;
 
@@ -43,41 +45,56 @@ public struct MasterKey has copy, drop, store {
 // === Mutation ===
 
 /// Adds `master` under ingester `W`'s namespace, discriminated by
-/// `content_digest`. Requires the witness `W` (proves ingester authority) and a
-/// `&mut UID` (the caller already needs the recording's admin cap to obtain it).
+/// `content_digest`. Requires the witness `W` (proves ingester authority) and
+/// the recording's `RecordingAdminCap` (proves the rights holder consents).
 /// Aborts if a master is already present under this exact `(ingester, digest)`.
-public fun add<W: drop, M: store>(
-    uid: &mut UID,
+public fun add<RecordingShare, CompositionShare, W: drop, M: store>(
+    self: &mut Recording<RecordingShare, CompositionShare>,
+    cap: &RecordingAdminCap<RecordingShare>,
     _witness: W,
     content_digest: vector<u8>,
     master: M,
 ) {
     df::add(
-        uid,
+        self.uid_mut(cap),
         MasterKey { ingester: type_name::with_defining_ids<W>(), content_digest },
         master,
     );
 }
 
-/// Detaches and returns a master. Gated only by `&mut UID` — the recording owner
-/// may remove any attached master; no witness is needed because detaching cannot
-/// forge trust (only *writing* a namespace requires the witness). `M` must match
-/// the stored value's type. Useful for key rotation: remove the old encrypted
-/// master, add a freshly re-keyed one under the same digest.
-public fun remove<M: store>(uid: &mut UID, ingester: TypeName, content_digest: vector<u8>): M {
-    df::remove(uid, MasterKey { ingester, content_digest })
+/// Detaches and returns a master. Gated only by the `RecordingAdminCap` — the
+/// recording owner may remove any attached master; no witness is needed because
+/// detaching cannot forge trust (only *writing* a namespace requires the
+/// witness). `M` must match the stored value's type. Useful for key rotation:
+/// remove the old encrypted master, add a freshly re-keyed one under the same
+/// digest.
+public fun remove<RecordingShare, CompositionShare, M: store>(
+    self: &mut Recording<RecordingShare, CompositionShare>,
+    cap: &RecordingAdminCap<RecordingShare>,
+    ingester: TypeName,
+    content_digest: vector<u8>,
+): M {
+    df::remove(self.uid_mut(cap), MasterKey { ingester, content_digest })
 }
 
 // === Reads ===
 
 /// Borrows the master attached under `(ingester, content_digest)`.
-public fun borrow<M: store>(uid: &UID, ingester: TypeName, content_digest: vector<u8>): &M {
-    df::borrow(uid, MasterKey { ingester, content_digest })
+public fun borrow<RecordingShare, CompositionShare, M: store>(
+    self: &Recording<RecordingShare, CompositionShare>,
+    ingester: TypeName,
+    content_digest: vector<u8>,
+): &M {
+    df::borrow(self.uid(), MasterKey { ingester, content_digest })
 }
 
 /// Whether a master is attached under `(ingester, content_digest)`.
-public fun exists_(uid: &UID, ingester: TypeName, content_digest: vector<u8>): bool {
-    df::exists(uid, MasterKey { ingester, content_digest })
+public fun exists_<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+    ingester: TypeName,
+    content_digest: vector<u8>,
+): bool {
+    df::exists(self.uid(), MasterKey { ingester, content_digest })
 }
 
 // === Key helpers ===

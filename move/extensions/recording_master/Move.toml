@@ -4,8 +4,9 @@ edition = "2024"
 license = "Apache 2.0"
 authors = ["Miso Labs, Inc. (os@miso.network)"]
 
-# Intentionally media-agnostic: this extension operates on a bare `&mut UID` and
-# never references miso, audio, or any concrete master type. Trust is carried
-# by the ingester witness, not by a dependency. Only the Sui framework (implicit)
-# is needed.
+# Media-agnostic: this extension never references audio or any concrete master
+# type — trust in *what* is attached is carried by the ingester witness, not by a
+# dependency. It does depend on miso core to operate on `Recording` directly
+# (cap-gated `uid_mut`), since a `&mut UID` cannot be threaded through a PTB.
 [dependencies]
+miso = { local = "../../core" }
