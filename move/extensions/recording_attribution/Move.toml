@@ -6,4 +6,4 @@ authors = ["Miso Labs, Inc. (os@unconfirmed.com)"]
 
 [dependencies]
 miso = { local = "../../core" }
-royalty_pool = { git = "https://github.com/unconfirmedlabs/royalty-pool.git", subdir = "move", rev = "main" }
+royalty_pool = { local = "../../lib/royalty_pool" }

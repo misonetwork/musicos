@@ -6,4 +6,4 @@ authors = ["Miso Labs, Inc. (os@miso.network)"]
 
 [dependencies]
 bps = { git = "https://github.com/unconfirmedlabs/bps.git", rev = "main" }
-share = { git = "https://github.com/misonetwork/share.git", rev = "main" }
+share = { local = "../lib/share" }
