@@ -1,80 +1,74 @@
 // Copyright (c) Miso Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Release cover art, mapped to the release's disc structure: a release-level
-/// cover plus optional per-disc cover art keyed by disc index. Stored as a dynamic
-/// field on the release's UID, set/cleared via the release's cap-gated `uid_mut`.
+/// Release cover art: an album-level cover plus optional per-track cover
+/// overrides. Stored as a dynamic field on the release's UID, set/cleared via
+/// the release's cap-gated `uid_mut`.
 ///
-/// Disc indices are validated against the release's actual disc count, so disc
-/// cover art can only target a disc that exists. Discs are fixed at release
-/// creation, so an index that is valid stays valid.
+/// Cover art is presentation, not objective recording data, so it lives on the
+/// release (the consumer object) rather than the recording. A track's effective
+/// cover resolves as: its per-track override if set, else the album cover. The
+/// overrides are a `PerTrack<Option<CoverArt>>` — one slot per track, aligned to
+/// the release's tracklist by construction (sized from `total_tracks()`).
 module cover_art::release_cover_art;
 
 use cover_art::cover_art::CoverArt;
 use miso::release::{Release, ReleaseAdminCap};
+use per_track::per_track::{Self, PerTrack};
 use sui::dynamic_field as df;
-use sui::vec_map::{Self, VecMap};
 
 // === Errors ===
 
 /// No cover art record is attached to this release.
 const ENoCoverArt: u64 = 1;
-/// Disc index is out of bounds for this release's disc count.
-const EDiscIndexOutOfBounds: u64 = 2;
-/// No cover art is attached for the requested disc.
-const ENoDiscCoverArt: u64 = 3;
+/// Track index is out of bounds for this release's track count.
+const ETrackIndexOutOfBounds: u64 = 2;
 
 // === Dynamic field key + value ===
 
 /// Dynamic-field key — one cover art record per release.
 public struct CoverArtKey() has copy, drop, store;
 
-/// The release's cover art: a release-level cover and per-disc cover art keyed by
-/// disc index (sparse — only discs that have art appear).
+/// The release's cover art: an album-level cover and per-track overrides. A
+/// track with no override inherits the album cover.
 public struct ReleaseCoverArt has store {
     cover: Option<CoverArt>,
-    disc_cover_art: VecMap<u64, CoverArt>,
+    track_covers: PerTrack<Option<CoverArt>>,
 }
 
 // === Write API ===
 
-/// Sets (or replaces) the release-level cover.
+/// Sets (or replaces) the album-level cover.
 public fun set_cover(self: &mut Release, cap: &ReleaseAdminCap, art: CoverArt) {
-    let ra = borrow_mut_or_init(self.uid_mut(cap));
-    ra.cover.swap_or_fill(art);
+    borrow_mut_or_init(self, cap).cover.swap_or_fill(art);
 }
 
-/// Removes the release-level cover, if any.
+/// Removes the album-level cover, if any. Per-track overrides are untouched.
 public fun unset_cover(self: &mut Release, cap: &ReleaseAdminCap) {
     if (has_cover_art(self)) {
-        let ra = borrow_mut(self.uid_mut(cap));
-        ra.cover = option::none();
+        borrow_mut(self.uid_mut(cap)).cover = option::none();
     }
 }
 
-/// Sets (or replaces) the cover art for a specific disc. The disc index must be
-/// within the release's disc count.
-public fun set_disc_cover_art(
+/// Sets (or replaces) the cover override for a specific track (by tracklist
+/// index). Aborts if the index is out of range for the release.
+public fun set_track_cover(
     self: &mut Release,
     cap: &ReleaseAdminCap,
-    disc_index: u64,
+    track_index: u64,
     art: CoverArt,
 ) {
-    let disc_count = self.discs().length();
-    assert!(disc_index < disc_count, EDiscIndexOutOfBounds);
-    let ra = borrow_mut_or_init(self.uid_mut(cap));
-    if (ra.disc_cover_art.contains(&disc_index)) {
-        let (_, _) = ra.disc_cover_art.remove(&disc_index);
-    };
-    ra.disc_cover_art.insert(disc_index, art);
+    assert!(track_index < self.total_tracks(), ETrackIndexOutOfBounds);
+    borrow_mut_or_init(self, cap).track_covers.borrow_mut(track_index).swap_or_fill(art);
 }
 
-/// Removes the cover art for a specific disc, if any.
-public fun unset_disc_cover_art(self: &mut Release, cap: &ReleaseAdminCap, disc_index: u64) {
-    let ra = borrow_mut(self.uid_mut(cap));
-    if (ra.disc_cover_art.contains(&disc_index)) {
-        let (_, _) = ra.disc_cover_art.remove(&disc_index);
-    };
+/// Removes the cover override for a specific track, if any — the track then
+/// falls back to the album cover.
+public fun unset_track_cover(self: &mut Release, cap: &ReleaseAdminCap, track_index: u64) {
+    if (has_cover_art(self)) {
+        assert!(track_index < self.total_tracks(), ETrackIndexOutOfBounds);
+        *borrow_mut(self.uid_mut(cap)).track_covers.borrow_mut(track_index) = option::none();
+    }
 }
 
 // === Public View Functions ===
@@ -84,23 +78,20 @@ public fun has_cover_art(self: &Release): bool {
     df::exists(self.uid(), CoverArtKey())
 }
 
-/// Returns the release-level cover (none if unset). Aborts if no cover art record
+/// Returns the album-level cover (none if unset). Aborts if no cover art record
 /// is attached at all.
 public fun cover(self: &Release): &Option<CoverArt> {
     &borrow(self.uid()).cover
 }
 
-/// Returns whether the given disc has cover art.
-public fun has_disc_cover_art(self: &Release, disc_index: u64): bool {
-    has_cover_art(self) && borrow(self.uid()).disc_cover_art.contains(&disc_index)
-}
-
-/// Returns the cover art for a specific disc (by value — `CoverArt` is `copy`).
-/// Aborts if none is attached.
-public fun disc_cover_art(self: &Release, disc_index: u64): CoverArt {
-    let ra = borrow(self.uid());
-    assert!(ra.disc_cover_art.contains(&disc_index), ENoDiscCoverArt);
-    *ra.disc_cover_art.get(&disc_index)
+/// Returns a track's effective cover: its per-track override if set, otherwise
+/// the album cover (which may itself be none). Aborts if no cover art record is
+/// attached, or if the track index is out of range.
+public fun track_cover(self: &Release, track_index: u64): Option<CoverArt> {
+    assert!(track_index < self.total_tracks(), ETrackIndexOutOfBounds);
+    let record = borrow(self.uid());
+    let override = record.track_covers.borrow(track_index);
+    if (override.is_some()) *override else record.cover
 }
 
 // === Private Functions ===
@@ -115,13 +106,16 @@ fun borrow_mut(uid: &mut UID): &mut ReleaseCoverArt {
     df::borrow_mut(uid, CoverArtKey())
 }
 
-fun borrow_mut_or_init(uid: &mut UID): &mut ReleaseCoverArt {
-    if (!df::exists(uid, CoverArtKey())) {
+fun borrow_mut_or_init(self: &mut Release, cap: &ReleaseAdminCap): &mut ReleaseCoverArt {
+    if (!df::exists(self.uid(), CoverArtKey())) {
+        // Size the per-track overrides to the tracklist up front (all empty);
+        // the release's track count is fixed at creation, so this stays valid.
+        let track_covers = per_track::filled(self, option::none<CoverArt>());
         df::add(
-            uid,
+            self.uid_mut(cap),
             CoverArtKey(),
-            ReleaseCoverArt { cover: option::none(), disc_cover_art: vec_map::empty() },
+            ReleaseCoverArt { cover: option::none(), track_covers },
         );
     };
-    df::borrow_mut(uid, CoverArtKey())
+    borrow_mut(self.uid_mut(cap))
 }

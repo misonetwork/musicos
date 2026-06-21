@@ -25,14 +25,20 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.genre]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "074A251BB8A868900D2BFFAD309B2E7F3CEEBAA7EEB1A995310370A883F04015"
-deps = { miso = "miso", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "B2E1EC6150059D7BA8454724899E32AB37FF9ECB4563D0B887654F09209AC6CB"
+deps = { miso = "miso", per_track = "per_track", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.miso]
 source = { local = "../../core" }
 use_environment = "mainnet"
 manifest_digest = "85DDD914DEA329A79BBFBAF8BE2398C03F4E86182BC44BE7B0430C2F3BB5E282"
 deps = { bps = "bps", share = "share", std = "MoveStdlib", sui = "Sui" }
+
+[pinned.mainnet.per_track]
+source = { local = "../../lib/per_track" }
+use_environment = "mainnet"
+manifest_digest = "074A251BB8A868900D2BFFAD309B2E7F3CEEBAA7EEB1A995310370A883F04015"
+deps = { miso = "miso", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.share]
 source = { git = "https://github.com/misonetwork/share.git", subdir = ".", rev = "ca342adcbb61645d6d3f3d71bf39830c24ad998d" }

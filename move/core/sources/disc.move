@@ -11,8 +11,8 @@
 ///
 /// Artwork is intentionally NOT part of core: it is display metadata whose
 /// format evolves over time (static → animated → future formats), so it lives
-/// in the `artwork` extension (keyed by disc index on the release) rather than
-/// frozen in an immutable struct here.
+/// in the `cover_art` extension on the release (an album-level cover plus
+/// per-track overrides) rather than frozen in an immutable struct here.
 module miso::disc;
 
 use miso::track::Track;
