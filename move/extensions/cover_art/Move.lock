@@ -25,13 +25,13 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.cover_art]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "1A723BDBA7F3BB6FBB67A0B86DCA0FF656931DAC0C322FD0B5A90CA707A98BD1"
-deps = { miso = "miso", ori = "ori", std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "12A8B77B2037A6B8C195DA2A39E6EEFA629837436709D269B93907FCC31F14BE"
+deps = { miso = "miso", ori = "ori", per_track = "per_track", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.miso]
 source = { local = "../../core" }
 use_environment = "mainnet"
-manifest_digest = "85DDD914DEA329A79BBFBAF8BE2398C03F4E86182BC44BE7B0430C2F3BB5E282"
+manifest_digest = "931E488D4C6A6C9557E2223361938CA3E1FBEB5EDB7E81ADD9EBB3404535B4CA"
 deps = { bps = "bps", share = "share", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.ori]
@@ -40,8 +40,14 @@ use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
+[pinned.mainnet.per_track]
+source = { local = "../../lib/per_track" }
+use_environment = "mainnet"
+manifest_digest = "074A251BB8A868900D2BFFAD309B2E7F3CEEBAA7EEB1A995310370A883F04015"
+deps = { miso = "miso", std = "MoveStdlib", sui = "Sui" }
+
 [pinned.mainnet.share]
-source = { git = "https://github.com/misonetwork/share.git", subdir = ".", rev = "ca342adcbb61645d6d3f3d71bf39830c24ad998d" }
+source = { local = "../../lib/share" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }

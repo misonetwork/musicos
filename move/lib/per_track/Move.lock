@@ -22,23 +22,17 @@ use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
 
-[pinned.mainnet.composition_credits]
-source = { root = true }
-use_environment = "mainnet"
-manifest_digest = "D5C9133FD67853D414009D40EE79B466DE4B3DFE363773AD6448CF6B7935C410"
-deps = { miso = "miso", partyos = "partyos", std = "MoveStdlib", sui = "Sui" }
-
 [pinned.mainnet.miso]
 source = { local = "../../core" }
 use_environment = "mainnet"
 manifest_digest = "931E488D4C6A6C9557E2223361938CA3E1FBEB5EDB7E81ADD9EBB3404535B4CA"
 deps = { bps = "bps", share = "share", std = "MoveStdlib", sui = "Sui" }
 
-[pinned.mainnet.partyos]
-source = { git = "https://github.com/misonetwork/partyos.git", subdir = ".", rev = "3a0ad41137169dd8c3d633520058539e27fbf6c8" }
+[pinned.mainnet.per_track]
+source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
-deps = { std = "MoveStdlib", sui = "Sui" }
+manifest_digest = "074A251BB8A868900D2BFFAD309B2E7F3CEEBAA7EEB1A995310370A883F04015"
+deps = { miso = "miso", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.share]
 source = { local = "../../lib/share" }

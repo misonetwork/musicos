@@ -25,7 +25,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.composition_recording_stake]
 source = { root = true }
 use_environment = "mainnet"
-manifest_digest = "918A95DF23EFBE45059B58D16A2BA929B439E2E36C2A651CEBB747DBAE9B8090"
+manifest_digest = "C4167054AE470BEF70C89CBF6074E21ABF100DC456A58ACE93E20639056A24CE"
 deps = { hikida = "hikida", miso = "miso", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.hikida]
@@ -37,17 +37,17 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.miso]
 source = { local = "../../core" }
 use_environment = "mainnet"
-manifest_digest = "85DDD914DEA329A79BBFBAF8BE2398C03F4E86182BC44BE7B0430C2F3BB5E282"
+manifest_digest = "931E488D4C6A6C9557E2223361938CA3E1FBEB5EDB7E81ADD9EBB3404535B4CA"
 deps = { bps = "bps", share = "share", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.royalty_pool]
-source = { git = "https://github.com/unconfirmedlabs/royalty-pool.git", subdir = "move", rev = "a3f8172e06ab161b31f49db7e94c0619b2ac0385" }
+source = { local = "../../lib/royalty_pool" }
 use_environment = "mainnet"
 manifest_digest = "76ABCDCB65A072C5413E29814C9145BA96864E01F54F95168B64A95FF539845C"
 deps = { hikida = "hikida", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.share]
-source = { git = "https://github.com/misonetwork/share.git", subdir = ".", rev = "ca342adcbb61645d6d3f3d71bf39830c24ad998d" }
+source = { local = "../../lib/share" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }

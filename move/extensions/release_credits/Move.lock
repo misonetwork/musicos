@@ -25,7 +25,7 @@ deps = { std = "MoveStdlib", sui = "Sui" }
 [pinned.mainnet.miso]
 source = { local = "../../core" }
 use_environment = "mainnet"
-manifest_digest = "85DDD914DEA329A79BBFBAF8BE2398C03F4E86182BC44BE7B0430C2F3BB5E282"
+manifest_digest = "931E488D4C6A6C9557E2223361938CA3E1FBEB5EDB7E81ADD9EBB3404535B4CA"
 deps = { bps = "bps", share = "share", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.partyos]
@@ -41,7 +41,7 @@ manifest_digest = "D5C9133FD67853D414009D40EE79B466DE4B3DFE363773AD6448CF6B7935C
 deps = { miso = "miso", partyos = "partyos", std = "MoveStdlib", sui = "Sui" }
 
 [pinned.mainnet.share]
-source = { git = "https://github.com/misonetwork/share.git", subdir = ".", rev = "ca342adcbb61645d6d3f3d71bf39830c24ad998d" }
+source = { local = "../../lib/share" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
