@@ -41,7 +41,6 @@ fun test_new_with_defaults() {
     );
 
     assert_eq!(d.release_id(), release_id);
-    assert_eq!(d.recording_id(), rec.id());
     assert_eq!(d.track_split_bps().value(), 10000);
 
     d.reject();
@@ -91,7 +90,7 @@ fun test_accept_via_track_new_emits_accepted_event() {
     );
 
     // Accepting = consuming the deal into a track via the production constructor.
-    let t = track::new(d);
+    let t = track::new(d, &rec);
     assert_eq!(t.recording_id(), rec.id());
     assert_eq!(t.split_bps().value(), 10000);
     assert!(t.is_unassigned_state());

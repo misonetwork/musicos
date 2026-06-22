@@ -91,7 +91,11 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
     // === Tx 4 (LABEL): accept the deal into a track, create and publish ===
     scenario.next_tx(LABEL);
     let d = scenario.take_from_sender<Deal<RecordingShare, CompositionShare>>();
-    let t = track::new(d); // accepts the deal, emits DealAcceptedEvent
+    // The builder holds only the deal; it takes the (shared) recording to read
+    // its address when constructing the track.
+    let rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
+    let t = track::new(d, &rec); // accepts the deal, emits DealAcceptedEvent
+    test_scenario::return_shared(rec);
     let mut registry = scenario.take_shared<ReleaseRegistry>();
     let (mut rel, rel_cap) = release::new(
         b"Single".to_string(),
@@ -165,7 +169,7 @@ fun publish_aborts_when_track_targets_a_different_release() {
         scenario.ctx(),
     );
     // ...but the release is created with nonce 2: different derived id.
-    let t = track::new(d);
+    let t = track::new(d, &rec);
     let (rel, rel_cap) = release::new(
         b"Single".to_string(),
         vector[disc::new(vector[t], option::none())],

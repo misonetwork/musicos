@@ -21,10 +21,12 @@
 /// `Recording<RecordingShare, CompositionShare>` argument — no ID is stored and
 /// no runtime assert is needed.
 ///
-/// A deal carries only what is genuinely release-specific and non-derivable:
-/// the target `release_id`, the `recording_id` (the revenue routing target),
-/// and the `track_split_bps`. Display metadata (title, cover art) is *not*
-/// duplicated here — it is derived from the recording.
+/// A deal stores only what is genuinely release-specific and not carried by the
+/// type parameters: the target `release_id` and the `track_split_bps`. The
+/// recording is identified by the phantom, so no `recording_id` is stored —
+/// `track::new` reads the recording's address from the matching `Recording` it
+/// is handed (the phantoms force it to be the right one). Display metadata
+/// (title, cover art) is *not* duplicated here — it is derived from the recording.
 module miso::deal;
 
 use bps::bps::{Self, BPS};
@@ -39,9 +41,6 @@ public struct Deal<phantom RecordingShare, phantom CompositionShare> has key, st
     id: UID,
     /// ID of the target release this deal authorizes.
     release_id: ID,
-    /// ID of the recording being authorized. Kept as an `ID` (not a type) because
-    /// revenue routing needs the recording's address, which a type can't provide.
-    recording_id: ID,
     /// Revenue split allocated to this track in basis points.
     track_split_bps: BPS,
 }
@@ -69,8 +68,6 @@ public struct DealAcceptedEvent<phantom RecordingShare, phantom CompositionShare
     deal_id: ID,
     /// ID of the target release.
     release_id: ID,
-    /// ID of the recording.
-    recording_id: ID,
 }
 
 /// Emitted when a deal is rejected: destroyed without being included in a
@@ -81,8 +78,6 @@ public struct DealRejectedEvent<phantom RecordingShare, phantom CompositionShare
     deal_id: ID,
     /// ID of the target release.
     release_id: ID,
-    /// ID of the recording.
-    recording_id: ID,
 }
 
 // === Public Functions ===
@@ -100,19 +95,20 @@ public fun new<RecordingShare, CompositionShare>(
     track_split_bps_value: u16,
     ctx: &mut TxContext,
 ): Deal<RecordingShare, CompositionShare> {
-    let recording_id = recording.id();
-
     let deal = Deal<RecordingShare, CompositionShare> {
         id: object::new(ctx),
         release_id,
-        recording_id,
         track_split_bps: bps::new(track_split_bps_value),
     };
 
+    // The recording's id is emitted in the creation event for indexers (the
+    // recording is in hand here); it is not stored — identity rides on the
+    // `RecordingShare`/`CompositionShare` phantoms, and the routing address is
+    // read from the `Recording` again at `track::new`.
     emit(DealCreatedEvent<RecordingShare, CompositionShare> {
         deal_id: deal.id(),
         release_id,
-        recording_id,
+        recording_id: recording.id(),
         track_split_bps_value,
     });
 
@@ -127,7 +123,6 @@ public(package) fun accept<RecordingShare, CompositionShare>(
     emit(DealAcceptedEvent<RecordingShare, CompositionShare> {
         deal_id: self.id(),
         release_id: self.release_id,
-        recording_id: self.recording_id,
     });
 
     self.destroy_internal();
@@ -142,7 +137,6 @@ public fun reject<RecordingShare, CompositionShare>(
     emit(DealRejectedEvent<RecordingShare, CompositionShare> {
         deal_id: self.id(),
         release_id: self.release_id,
-        recording_id: self.recording_id,
     });
 
     self.destroy_internal();
@@ -172,13 +166,6 @@ public fun release_id<RecordingShare, CompositionShare>(
     self: &Deal<RecordingShare, CompositionShare>,
 ): ID {
     self.release_id
-}
-
-/// Returns the ID of the recording being authorized.
-public fun recording_id<RecordingShare, CompositionShare>(
-    self: &Deal<RecordingShare, CompositionShare>,
-): ID {
-    self.recording_id
 }
 
 /// Returns the track's revenue split in basis points.

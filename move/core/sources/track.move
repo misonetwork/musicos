@@ -23,6 +23,7 @@ use bps::bps::BPS;
 #[test_only]
 use bps::bps;
 use miso::deal::Deal;
+use miso::recording::Recording;
 
 // === Structs ===
 
@@ -66,19 +67,24 @@ const EAlreadyAssigned: u64 = 1;
 
 // === Public Functions ===
 
-/// Creates a new track by accepting a deal. The deal itself is the
-/// authorization — it was created by the recording's admin and carries the
-/// recording's identity and the agreed split. Emits a `DealAcceptedEvent`.
+/// Creates a new track by accepting a deal. The deal is the authorization —
+/// created by the recording's admin, carrying the target release and the agreed
+/// split. Emits a `DealAcceptedEvent`.
 ///
 /// The deal's `RecordingShare`/`CompositionShare` phantoms are erased here: a
 /// `Track` is monomorphic so it can live in a release's heterogeneous
-/// `vector<Track>`. The recording remains reachable via `recording_id`.
+/// `vector<Track>`. Identity rides on those phantoms up to this point, but the
+/// monomorphic `Track` must store the recording's *address* for revenue routing
+/// — and an address can't come from a phantom. So the matching `Recording` is
+/// passed in (the deal's phantoms force it to be the right one) purely to read
+/// its id; the deal no longer stores it.
 public fun new<RecordingShare, CompositionShare>(
     deal: Deal<RecordingShare, CompositionShare>,
+    recording: &Recording<RecordingShare, CompositionShare>,
 ): Track {
     let track = Track {
         state: TrackState::Unassigned(deal.release_id()),
-        recording_id: deal.recording_id(),
+        recording_id: recording.id(),
         split_bps: deal.track_split_bps(),
     };
 
