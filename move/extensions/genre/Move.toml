@@ -2,7 +2,7 @@
 name = "genre"
 edition = "2024"
 license = "Apache 2.0"
-authors = ["Miso Labs, Inc. (os@miso.network)"]
+authors = ["Miso Labs, Inc. (build@miso.network)"]
 
 [dependencies]
 miso = { local = "../../core" }
