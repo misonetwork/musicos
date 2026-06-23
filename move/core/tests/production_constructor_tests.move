@@ -3,8 +3,8 @@
 
 /// Tests for the production `composition::new` and `recording::new`
 /// constructors — the real entry points that wire `share::initialize`
-/// (fixed 10M supply, consumed treasury cap) and, for recordings, the
-/// `RecordingKey` derived-object claim on the parent composition.
+/// (fixed 10M supply, consumed treasury cap) and, for recordings, the fresh
+/// `object::new` id plus the read-only `&Composition` royalty snapshot.
 #[test_only]
 module miso::production_constructor_tests;
 
@@ -64,17 +64,17 @@ fun composition_new_above_cap_aborts() {
 }
 
 #[test]
-fun recording_new_snapshots_composition_and_claims_idx_zero() {
+fun recording_new_snapshots_composition() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, comp_cap) =
+    let (comp, comp_cap) =
         composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
     let (mut currency, treasury_cap) = test_share::currency_for_testing(ctx);
 
     let (rec, rec_cap, shares) = recording::new<Share, CompositionShare>(
-        &mut comp,
-        0,
+        &comp,
         &mut currency,
         treasury_cap,
+        ctx,
     );
 
     // Title is captured from the composition. The creator keeps the full
@@ -82,6 +82,8 @@ fun recording_new_snapshots_composition_and_claims_idx_zero() {
     // `recording::new` splits off and sends to the composition's address.
     assert_eq!(shares.value(), SHARE_SUPPLY - 1_500_000_000_000);
     assert_eq!(*rec.title(), b"Song".to_string());
+    // The parent composition's id is stored as an off-chain index field.
+    assert_eq!(rec.composition_id(), comp.id());
     assert!(rec.is_initialized_state());
     assert!(!rec.is_published_state());
 
@@ -96,15 +98,15 @@ fun recording_new_snapshots_composition_and_claims_idx_zero() {
 #[test]
 fun recording_new_zero_rate_grants_no_shares() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, comp_cap) =
+    let (comp, comp_cap) =
         composition::new_for_testing<CompositionShare>(b"Generative Track".to_string(), 0, ctx);
     let (mut currency, treasury_cap) = test_share::currency_for_testing(ctx);
 
     let (rec, rec_cap, shares) = recording::new<Share, CompositionShare>(
-        &mut comp,
-        0,
+        &comp,
         &mut currency,
         treasury_cap,
+        ctx,
     );
 
     // A 0% composition royalty grants the composition no recording shares: the
@@ -113,29 +115,6 @@ fun recording_new_zero_rate_grants_no_shares() {
 
     destroy(comp);
     destroy(comp_cap);
-    destroy(rec);
-    destroy(rec_cap);
-    destroy(shares);
-    destroy(currency);
-}
-
-#[test, expected_failure(abort_code = 53, location = miso::recording)] // ERecordingGap
-fun recording_new_nonzero_first_idx_aborts() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, _comp_cap) =
-        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
-    let (mut currency, treasury_cap) = test_share::currency_for_testing(ctx);
-
-    // idx 1 with no idx 0: production constructor enforces contiguity.
-    let (rec, rec_cap, shares) = recording::new<Share, CompositionShare>(
-        &mut comp,
-        1,
-        &mut currency,
-        treasury_cap,
-    );
-
-    destroy(comp);
-    destroy(_comp_cap);
     destroy(rec);
     destroy(rec_cap);
     destroy(shares);
@@ -164,31 +143,35 @@ fun composition_new_at_zero_rate_succeeds() {
     destroy(currency);
 }
 
-/// idx 1 succeeds once idx 0 exists — the contiguity check's passing branch
-/// through the production constructor.
+/// Two recordings under one composition are independent objects with distinct
+/// ids and no ordering/derivation between them — the composition is read-only,
+/// so this is exactly the concurrency-safe path (no index, no `&mut` contention).
+/// Both also carry the same parent `composition_id`.
 #[test]
-fun recording_new_contiguous_indices_succeed() {
+fun recording_new_independent_ids_succeed() {
     let ctx = &mut tx_context::dummy();
-    let (mut comp, comp_cap) =
+    let (comp, comp_cap) =
         composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
 
     let (mut currency0, treasury_cap0) = test_share::currency_for_testing(ctx);
     let (rec0, rec_cap0, shares0) = recording::new<Share, CompositionShare>(
-        &mut comp,
-        0,
+        &comp,
         &mut currency0,
         treasury_cap0,
+        ctx,
     );
 
     let (mut currency1, treasury_cap1) = test_share::currency_for_testing(ctx);
     let (rec1, rec_cap1, shares1) = recording::new<Share, CompositionShare>(
-        &mut comp,
-        1,
+        &comp,
         &mut currency1,
         treasury_cap1,
+        ctx,
     );
 
     assert!(rec0.id() != rec1.id());
+    assert_eq!(rec0.composition_id(), comp.id());
+    assert_eq!(rec1.composition_id(), comp.id());
 
     destroy(comp);
     destroy(comp_cap);

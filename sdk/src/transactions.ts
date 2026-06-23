@@ -9,8 +9,6 @@
 
 import { Transaction, type TransactionObjectArgument } from "@mysten/sui/transactions";
 import type { ClientWithCoreApi } from "@mysten/sui/client";
-import { bcs } from "@mysten/sui/bcs";
-import { deriveObjectID } from "@mysten/sui/utils";
 import { getShareCurrencyType, getShareCurrencyTreasuryCap } from "./queries.ts";
 
 import * as composition from "./contracts/miso/composition.ts";
@@ -136,47 +134,14 @@ export function publishComposition(params: PublishCompositionParams): TxThunk {
 // Recording
 // ============================================================================
 
-/**
- * Derives a recording's object id: the `idx`-th recording under a composition.
- * Mirrors `recording::RecordingKey(idx)` claimed off the composition's UID.
- */
-export function deriveRecordingId(compositionId: string, idx: number | bigint, misoPackageId: string): string {
-  const keyType = `${misoPackageId}::recording::RecordingKey`;
-  const keyBytes = bcs.u64().serialize(BigInt(idx)).toBytes();
-  return deriveObjectID(compositionId, keyType, keyBytes);
-}
-
-/** Whether an object currently exists on-chain. */
-async function objectExists(client: ClientWithCoreApi, objectId: string): Promise<boolean> {
-  try {
-    const { object } = await client.core.getObject({ objectId });
-    return object != null;
-  } catch {
-    return false; // not-found (or unreadable) → treat as absent
-  }
-}
-
-/**
- * Finds the next free recording index for a composition by probing derived ids
- * `0,1,2,…` until one doesn't exist. Recording indices are contiguous, so this
- * is the count of existing recordings. Best-effort under concurrency: if another
- * publish claims the same index first, the tx aborts and the caller re-probes.
- */
-export async function nextRecordingIndex(
-  client: ClientWithCoreApi,
-  compositionId: string,
-  misoPackageId: string,
-): Promise<number> {
-  let idx = 0;
-  while (await objectExists(client, deriveRecordingId(compositionId, idx, misoPackageId))) idx++;
-  return idx;
-}
-
 export interface PublishRecordingParams {
   client: ClientWithCoreApi;
+  /**
+   * Parent composition. Read-only at `recording::new` (only its royalty rate and
+   * id are read); the recording is its own fresh object, so there is no index and
+   * no per-composition contention.
+   */
   compositionId: string;
-  /** Recording index under the composition. Omit to auto-probe the next free one. */
-  recordingIndex?: number;
   /** Share type of the parent composition (the recording's `CompositionShare` phantom). */
   compositionShareType: string;
   shareCurrencyId: string;
@@ -196,13 +161,11 @@ export function publishRecording(params: PublishRecordingParams): TxThunk {
     const treasuryCapId = await getShareCurrencyTreasuryCap(client, params.shareCurrencyId, params.treasuryCapOwner);
     const typeArguments: [string, string] = [shareType, params.compositionShareType];
 
-    const idx = params.recordingIndex ?? (await nextRecordingIndex(client, params.compositionId, misoPackageId));
-
     const result = tx.add(
       recording._new({
         package: misoPackageId,
         typeArguments,
-        arguments: [tx.object(params.compositionId), tx.pure.u64(idx), tx.object(params.shareCurrencyId), tx.object(treasuryCapId)],
+        arguments: [tx.object(params.compositionId), tx.object(params.shareCurrencyId), tx.object(treasuryCapId)],
       }),
     );
     const rec = result[0]!;

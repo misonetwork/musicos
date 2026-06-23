@@ -26,8 +26,14 @@
  * `CompositionShare` phantom type parameter — the composition's share type is its
  * durable identity (a share currency is published independently of miso and
  * survives a fresh republish, whereas an object ID does not). This makes the
- * recording↔composition lineage compile-time enforced wherever the two meet, with
- * no stored `composition_id` to keep or assert.
+ * recording↔composition lineage compile-time enforced wherever the two meet. The
+ * parent composition's object id is also stored as a plain field for off-chain
+ * convenience, but it is not load-bearing for the protocol.
+ *
+ * A recording is its own freshly-created object (`object::new`), not a derived
+ * child of its composition: `recording::new` takes a read-only `&Composition`, so
+ * publishing recordings under a composition neither contends on its shared-object
+ * version nor collides on a per-composition index.
  */
 
 import { MoveEnum, MoveStruct, MoveTuple, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
@@ -44,6 +50,12 @@ export const RecordingState = new MoveEnum({ name: `${$moduleName}::RecordingSta
 export const Recording = new MoveStruct({ name: `${$moduleName}::Recording<phantom RecordingShare, phantom CompositionShare>`, fields: {
         /** Unique identifier for this recording. */
         id: bcs.Address,
+        /**
+         * Object id of the parent composition. Off-chain convenience for indexing the
+         * recording↔composition lineage by id; the durable, protocol-enforced link is the
+         * `CompositionShare` phantom.
+         */
+        composition_id: bcs.Address,
         /** Current lifecycle state. */
         state: RecordingState,
         /** Primary title of the recording. */
@@ -58,7 +70,6 @@ export const RecordingAdminCap = new MoveStruct({ name: `${$moduleName}::Recordi
         id: bcs.Address
     } });
 export const RecordingAdminCapKey = new MoveTuple({ name: `${$moduleName}::RecordingAdminCapKey`, fields: [bcs.bool()] });
-export const RecordingKey = new MoveTuple({ name: `${$moduleName}::RecordingKey`, fields: [bcs.u64()] });
 export const RecordingPublishedEvent = new MoveStruct({ name: `${$moduleName}::RecordingPublishedEvent<phantom RecordingShare, phantom CompositionShare>`, fields: {
         recording_id: bcs.Address
     } });
@@ -72,7 +83,6 @@ export const CompositionSharesGrantedEvent = new MoveStruct({ name: `${$moduleNa
     } });
 export interface NewArguments {
     composition: RawTransactionArgument<string>;
-    idx: RawTransactionArgument<number | bigint>;
     shareCurrency: RawTransactionArgument<string>;
     shareTreasuryCap: RawTransactionArgument<string>;
 }
@@ -80,7 +90,6 @@ export interface NewOptions {
     package?: string;
     arguments: NewArguments | [
         composition: RawTransactionArgument<string>,
-        idx: RawTransactionArgument<number | bigint>,
         shareCurrency: RawTransactionArgument<string>,
         shareTreasuryCap: RawTransactionArgument<string>
     ];
@@ -112,11 +121,10 @@ export function _new(options: NewOptions) {
     const packageAddress = options.package ?? '@local-pkg/miso';
     const argumentsTypes = [
         null,
-        'u64',
         null,
         null
     ] satisfies (string | null)[];
-    const parameterNames = ["composition", "idx", "shareCurrency", "shareTreasuryCap"];
+    const parameterNames = ["composition", "shareCurrency", "shareTreasuryCap"];
     return (tx: Transaction) => tx.moveCall({
         package: packageAddress,
         module: 'recording',
@@ -258,6 +266,37 @@ export function id(options: IdOptions) {
         package: packageAddress,
         module: 'recording',
         function: 'id',
+        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
+        typeArguments: options.typeArguments
+    });
+}
+export interface CompositionIdArguments {
+    self: RawTransactionArgument<string>;
+}
+export interface CompositionIdOptions {
+    package?: string;
+    arguments: CompositionIdArguments | [
+        self: RawTransactionArgument<string>
+    ];
+    typeArguments: [
+        string,
+        string
+    ];
+}
+/**
+ * Returns the object id of the parent composition. Off-chain convenience for
+ * indexing the lineage by id; the durable link is the `CompositionShare` phantom.
+ */
+export function compositionId(options: CompositionIdOptions) {
+    const packageAddress = options.package ?? '@local-pkg/miso';
+    const argumentsTypes = [
+        null
+    ] satisfies (string | null)[];
+    const parameterNames = ["self"];
+    return (tx: Transaction) => tx.moveCall({
+        package: packageAddress,
+        module: 'recording',
+        function: 'composition_id',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
         typeArguments: options.typeArguments
     });

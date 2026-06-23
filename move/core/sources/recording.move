@@ -24,7 +24,15 @@
 /// its durable identity (a share currency is published independently of miso
 /// and survives a fresh republish, whereas an object ID does not). This makes
 /// the recording↔composition lineage compile-time enforced wherever the two
-/// meet, with no stored `composition_id` to keep or assert.
+/// meet. The parent composition's object id is also stored as a plain field for
+/// off-chain convenience (indexing the lineage by id), but it is not load-bearing
+/// for the protocol — the `CompositionShare` phantom is the durable link.
+///
+/// A recording is its own freshly-created object (`object::new`), not a derived
+/// child of its composition: `recording::new` takes a read-only `&Composition`
+/// (only to read its royalty rate and id), so publishing recordings under a
+/// composition neither contends on the composition's shared-object version nor
+/// collides on a per-composition index.
 module miso::recording;
 
 use miso::composition::Composition;
@@ -34,7 +42,7 @@ use sui::balance::Balance;
 use sui::clock::Clock;
 use sui::coin::TreasuryCap;
 use sui::coin_registry::Currency;
-use sui::derived_object::{Self, claim};
+use sui::derived_object::claim;
 use sui::event::emit;
 
 // === Structs ===
@@ -45,6 +53,10 @@ use sui::event::emit;
 public struct Recording<phantom RecordingShare, phantom CompositionShare> has key {
     /// Unique identifier for this recording.
     id: UID,
+    /// Object id of the parent composition. Off-chain convenience for indexing
+    /// the recording↔composition lineage by id; the durable, protocol-enforced
+    /// link is the `CompositionShare` phantom.
+    composition_id: ID,
     /// Current lifecycle state.
     state: RecordingState,
     /// Primary title of the recording.
@@ -73,15 +85,6 @@ public struct RecordingAdminCap<phantom RecordingShare> has key, store {
 
 /// Key for deriving the admin capability's deterministic address from the recording.
 public struct RecordingAdminCapKey() has copy, drop, store;
-
-/// Key for deriving the recording's address from the composition: a recording
-/// is the `idx`-th one registered under its composition. Indices are contiguous
-/// (no gaps, enforced at creation), so a composition's recordings can be
-/// enumerated by deriving idx 0, 1, 2, … until one doesn't exist. Identity is the
-/// `(composition, idx)` pair alone — independent of any attached master — so a
-/// recording can carry multiple master formats and re-key an encrypted master
-/// (both attached as dynamic fields by ingesters) without changing its identity.
-public struct RecordingKey(u64) has copy, drop, store;
 
 // === Enums ===
 
@@ -150,10 +153,6 @@ const EMaxSubtitleLengthExceeded: u64 = 37;
 /// String must not be empty.
 const EEmptyString: u64 = 38;
 
-// Reference errors (50-59)
-/// Recordings must be created with contiguous indices — idx N requires N-1 to exist.
-const ERecordingGap: u64 = 53;
-
 // === Public Functions ===
 
 // === Lifecycle ===
@@ -175,10 +174,10 @@ const ERecordingGap: u64 = 53;
 /// - The creator's remaining share balance (full supply minus the
 ///   composition's cut)
 public fun new<RecordingShare, CompositionShare>(
-    composition: &mut Composition<CompositionShare>,
-    idx: u64,
+    composition: &Composition<CompositionShare>,
     share_currency: &mut Currency<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
+    ctx: &mut TxContext,
 ): (
     Recording<RecordingShare, CompositionShare>,
     RecordingAdminCap<RecordingShare>,
@@ -187,19 +186,15 @@ public fun new<RecordingShare, CompositionShare>(
     let composition_id = composition.id();
     let composition_royalty_rate = composition.royalty_rate();
 
-    // Recordings are indexed per composition. Require contiguity (no gaps) so the
-    // set is enumerable by deriving idx 0,1,2,… until one is absent: idx 0 is the
-    // first; idx N requires idx N-1 to already exist. `claim` itself rejects a
-    // duplicate idx, so a stale hint just aborts and the caller retries idx+1.
-    if (idx > 0) {
-        assert!(
-            derived_object::exists(composition.uid_mut_internal(), RecordingKey(idx - 1)),
-            ERecordingGap,
-        );
-    };
-
+    // A recording is its own freshly-created object, not a derived child of its
+    // composition. The composition is read-only (`&Composition`) — taken only to
+    // snapshot its royalty rate and id — so concurrent recordings under the same
+    // composition neither contend on its shared-object version nor collide on an
+    // index. The composition↔recording link rides on the `CompositionShare`
+    // phantom (durable identity) and the stored `composition_id` (off-chain index).
     let mut recording = Recording<RecordingShare, CompositionShare> {
-        id: claim(composition.uid_mut_internal(), RecordingKey(idx)),
+        id: object::new(ctx),
+        composition_id,
         state: RecordingState::Initialized,
         title: *composition.title(),
         title_version: option::none(),
@@ -317,6 +312,14 @@ public fun id<RecordingShare, CompositionShare>(
     self.id.to_inner()
 }
 
+/// Returns the object id of the parent composition. Off-chain convenience for
+/// indexing the lineage by id; the durable link is the `CompositionShare` phantom.
+public fun composition_id<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): ID {
+    self.composition_id
+}
+
 /// Returns the current lifecycle state.
 public fun state<RecordingShare, CompositionShare>(
     self: &Recording<RecordingShare, CompositionShare>,
@@ -388,6 +391,10 @@ public fun new_for_testing<RecordingShare, CompositionShare>(
 ): (Recording<RecordingShare, CompositionShare>, RecordingAdminCap<RecordingShare>) {
     let mut recording = Recording<RecordingShare, CompositionShare> {
         id: object::new(ctx),
+        // No parent composition in hand here; use the fresh object id as a
+        // self-referential placeholder. Tests that need a real link use the
+        // production `recording::new`.
+        composition_id: object::id_from_address(@0x0),
         state: RecordingState::Initialized,
         title,
         title_version: option::none(),
@@ -399,20 +406,4 @@ public fun new_for_testing<RecordingShare, CompositionShare>(
     };
 
     (recording, recording_admin_cap)
-}
-
-/// Claims a recording id off a composition via the real RecordingKey derivation
-/// (the production path; `new_for_testing` bypasses it with `object::new`).
-#[test_only]
-public fun derive_recording_id_for_testing<CompositionShare>(
-    composition: &mut Composition<CompositionShare>,
-    idx: u64,
-): UID {
-    if (idx > 0) {
-        assert!(
-            derived_object::exists(composition.uid_mut_internal(), RecordingKey(idx - 1)),
-            ERecordingGap,
-        );
-    };
-    claim(composition.uid_mut_internal(), RecordingKey(idx))
 }

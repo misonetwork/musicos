@@ -155,67 +155,7 @@ fun test_set_subtitle_twice() {
     destroy(cap);
 }
 
-// === Address derivation (RecordingKey: per-composition index) ===
-
-// Each idx yields a distinct recording id under one composition.
-#[test]
-fun test_distinct_id_per_index() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, comp_cap) =
-        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
-
-    let id0 = recording::derive_recording_id_for_testing(&mut comp, 0);
-    let id1 = recording::derive_recording_id_for_testing(&mut comp, 1);
-    assert!(id0.to_inner() != id1.to_inner());
-
-    id0.delete();
-    id1.delete();
-    destroy(comp);
-    destroy(comp_cap);
-}
-
-// Claiming the same idx twice aborts (dedup via the derived-object claim).
-#[test, expected_failure]
-fun test_same_index_aborts() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, comp_cap) =
-        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
-
-    let id0a = recording::derive_recording_id_for_testing(&mut comp, 0);
-    let id0b = recording::derive_recording_id_for_testing(&mut comp, 0); // aborts
-
-    id0a.delete();
-    id0b.delete();
-    destroy(comp);
-    destroy(comp_cap);
-}
-
-// A gap aborts: idx 2 can't be created before idx 1 exists.
-#[test, expected_failure(abort_code = 53, location = miso::recording)] // ERecordingGap
-fun test_gap_aborts() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, comp_cap) =
-        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
-
-    let id0 = recording::derive_recording_id_for_testing(&mut comp, 0);
-    let id2 = recording::derive_recording_id_for_testing(&mut comp, 2); // aborts: idx 1 absent
-
-    id0.delete();
-    id2.delete();
-    destroy(comp);
-    destroy(comp_cap);
-}
-
-// The first recording must be idx 0: idx > 0 on an empty composition aborts.
-#[test, expected_failure(abort_code = 53, location = miso::recording)] // ERecordingGap
-fun test_first_index_must_be_zero() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, comp_cap) =
-        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
-
-    let id1 = recording::derive_recording_id_for_testing(&mut comp, 1); // aborts: idx 0 absent
-
-    id1.delete();
-    destroy(comp);
-    destroy(comp_cap);
-}
+// Recordings are independent objects (fresh `object::new`), not derived children
+// keyed by a per-composition index: two recordings created under one composition
+// have distinct ids and require no contiguity/derivation. Concurrency- and
+// id-independence behavior is covered by `production_constructor_tests`.

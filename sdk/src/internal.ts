@@ -53,6 +53,7 @@ export function mapComposition(id: string, d: Parsed): Composition {
 export function mapRecording(id: string, d: Parsed): Recording {
   return {
     id,
+    compositionId: d.composition_id,
     state: mapState(d.state),
     title: d.title,
     titleVersion: d.title_version ?? undefined,

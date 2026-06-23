@@ -89,6 +89,11 @@ export type RecordingState =
 export interface Recording {
   /** Unique identifier for this recording. */
   id: string;
+  /**
+   * Object id of the parent composition. Off-chain convenience for indexing the
+   * recording↔composition lineage by id; the durable link is the share type.
+   */
+  compositionId: string;
   /** Current lifecycle state. */
   state: RecordingState;
   /** Primary title of the recording. */
