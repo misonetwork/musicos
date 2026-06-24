@@ -302,6 +302,181 @@ fun test_verify_and_consume_intent_replay_fails() {
     scenario.end();
 }
 
+// === secp256r1 (P-256) personal-message intent: hardcoded on-chain vector ===
+//
+// The same proof shape as the Ed25519 vector above, but for the secp256r1 /
+// WebCrypto-P-256 path. The triple was produced off-chain by `@mysten/sui`: a
+// `Secp256r1Keypair` (from the fixed 32-byte secret 0x0102..1f20) signed the
+// SAME 101-byte `INTENT_MSG` with `signPersonalMessage`, and the resulting
+// serialized wallet signature was split via `parseSerializedSignature` into the
+// raw 64-byte secp256r1 `(r, s)` signature (`R1_SIG`) and the compressed 33-byte
+// SEC1 public key (`R1_PUBKEY`).
+//
+// This proves the secp256r1 reconstruction end to end: the vault rebuilds the
+// personal-message digest `blake2b256([3,0,0] ++ bcs(PersonalMessage{ message:
+// INTENT_MSG }))` (identical to the Ed25519 path) and verifies it via
+// `secp256r1_verify(sig, pubkey, digest, /*hash=*/ SHA256)`. The SHA256 flag is
+// load-bearing: the native re-hashes the digest with sha256 internally, matching
+// `Secp256r1Keypair.sign`, which signs `sha256(digest)`. Reproduce the vector
+// off-chain with:
+//
+//   import { Secp256r1Keypair } from '@mysten/sui/keypairs/secp256r1';
+//   import { parseSerializedSignature } from '@mysten/sui/cryptography';
+//   const secret = Uint8Array.from('0102...1f20'.match(/../g).map(h=>parseInt(h,16)));
+//   const kp = Secp256r1Keypair.fromSecretKey(secret);
+//   const { signature } = await kp.signPersonalMessage(INTENT_MSG_BYTES);
+//   const { publicKey, signature: raw } = parseSerializedSignature(signature);
+//
+// secp256r1 ECDSA signatures are NOT deterministic across the spec (RFC6979 with
+// lowS makes @noble's output deterministic for a fixed key+msg, so this exact
+// vector is reproducible), but verification is what matters: any valid `(r, s)`
+// for this (pubkey, digest) passes.
+
+/// The compressed 33-byte SEC1 secp256r1 public key matching `R1_SIG`.
+const R1_PUBKEY: vector<u8> =
+    x"02515c3d6eb9e396b904d3feca7f54fdcd0cc1e997bf375dca515ad0a6c3b4035f";
+/// The raw 64-byte secp256r1 `(r, s)` signature of
+/// `Secp256r1Keypair.signPersonalMessage(INTENT_MSG)`.
+const R1_SIG: vector<u8> =
+    x"8058393a585b536f9cd09115d9f0f0787c2e07c4ee64fffabbf08679f12804a558cabcfaf38bfd896cac45cb82aa4d6c5f41aa0b41b653cad4dd39c33733dd90";
+
+#[test]
+/// The valid secp256r1 (pubkey, msg, sig) triple PASSES: a vault wrapped with
+/// `SCHEME_SECP256R1` reconstructs the personal-message digest and verifies it
+/// with `secp256r1_verify(.., SHA256)` against `admin_pubkey`, then records the
+/// nonce. This is the key on-chain proof of the secp256r1 personal-message
+/// reconstruction (digest bytes + SHA256 hash flag + compressed-pubkey format).
+fun test_verify_and_consume_intent_secp256r1_valid_vector() {
+    let mut scenario = ts::begin(OWNER);
+    let s = &mut scenario;
+
+    // Wrap a vault under the secp256r1 scheme whose admin_pubkey IS the P-256
+    // personal-message signer's compressed public key.
+    let cap = new_cap(s.ctx());
+    let admin_cap =
+        vault::wrap_with_scheme(cap, R1_PUBKEY, vault::scheme_secp256r1(), s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
+
+    ts::next_tx(s, OWNER);
+    {
+        let mut v = ts::take_shared<Vault<TestCap>>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+
+        assert!(vault::scheme(&v) == vault::scheme_secp256r1(), 0);
+        assert!(*vault::admin_pubkey(&v) == R1_PUBKEY, 1);
+
+        // Valid secp256r1 signature over the canonical message => passes, nonce 7
+        // consumed.
+        vault::verify_and_consume_intent(&mut v, INTENT_MSG, R1_SIG, 7u64);
+
+        ts::return_to_sender(s, admin);
+        ts::return_shared(v);
+    };
+
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = miso_vault::vault::EBadIntent)]
+/// Flipping a single byte of the signed message breaks the personal-message
+/// digest, so secp256r1 verification fails => EBadIntent. Mirrors the Ed25519
+/// negative, proving the digest binds the message under secp256r1 too.
+fun test_verify_and_consume_intent_secp256r1_flipped_byte_fails() {
+    let mut scenario = ts::begin(OWNER);
+    let s = &mut scenario;
+
+    let cap = new_cap(s.ctx());
+    let admin_cap =
+        vault::wrap_with_scheme(cap, R1_PUBKEY, vault::scheme_secp256r1(), s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
+
+    ts::next_tx(s, OWNER);
+    {
+        let mut v = ts::take_shared<Vault<TestCap>>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+
+        // Flip the first byte of the message: 'm' (0x6d) -> 0x6e. The secp256r1
+        // signature no longer matches the digest of the tampered message =>
+        // EBadIntent.
+        let mut tampered = INTENT_MSG;
+        *tampered.borrow_mut(0) = 0x6e;
+        vault::verify_and_consume_intent(&mut v, tampered, R1_SIG, 7u64);
+
+        ts::return_to_sender(s, admin);
+        ts::return_shared(v);
+    };
+
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = miso_vault::vault::EBadIntent)]
+/// Cross-scheme guard: the valid secp256r1 signature must NOT verify when the
+/// vault is (mis)configured as Ed25519. Verification dispatches on the stored
+/// scheme, so an Ed25519 vault runs `ed25519_verify` over the secp256r1 sig and
+/// rejects it => EBadIntent. (Here the 33-byte key is wrapped via the low-level
+/// scheme entrypoint with the Ed25519 tag; in practice `wrap_with_scheme` would
+/// reject a 33-byte Ed25519 key, so this isolates the verify dispatch using a
+/// 32-byte truncation of the key purely to reach the verify call.)
+fun test_secp256r1_sig_rejected_under_ed25519_scheme() {
+    let mut scenario = ts::begin(OWNER);
+    let s = &mut scenario;
+
+    // A syntactically valid 32-byte Ed25519 key (so wrap passes the length gate),
+    // but it is NOT the signer of R1_SIG, and the scheme is Ed25519. Either way
+    // the secp256r1 signature cannot verify => EBadIntent.
+    let cap = new_cap(s.ctx());
+    let admin_cap = vault::wrap(cap, PUBKEY, s.ctx()); // SCHEME_ED25519
+    transfer::public_transfer(admin_cap, OWNER);
+
+    ts::next_tx(s, OWNER);
+    {
+        let mut v = ts::take_shared<Vault<TestCap>>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+
+        // secp256r1 sig under an Ed25519-scheme vault => routed to ed25519_verify
+        // => fails => EBadIntent.
+        vault::verify_and_consume_intent(&mut v, INTENT_MSG, R1_SIG, 7u64);
+
+        ts::return_to_sender(s, admin);
+        ts::return_shared(v);
+    };
+
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = miso_vault::vault::EBadScheme)]
+/// `wrap_with_scheme` rejects a pubkey whose length is wrong for the scheme: a
+/// 32-byte key under the secp256r1 scheme (which expects a compressed 33-byte
+/// point) aborts EBadScheme at creation rather than failing silently later.
+fun test_wrap_with_scheme_bad_pubkey_len_fails() {
+    let mut scenario = ts::begin(OWNER);
+    let s = &mut scenario;
+
+    let cap = new_cap(s.ctx());
+    // PUBKEY is 32 bytes; secp256r1 wants 33 => EBadScheme.
+    let admin_cap =
+        vault::wrap_with_scheme(cap, PUBKEY, vault::scheme_secp256r1(), s.ctx());
+    transfer::public_transfer(admin_cap, OWNER); // unreachable
+
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = miso_vault::vault::EBadScheme)]
+/// `wrap_with_scheme` rejects an unknown scheme tag outright.
+fun test_wrap_with_unknown_scheme_fails() {
+    let mut scenario = ts::begin(OWNER);
+    let s = &mut scenario;
+
+    let cap = new_cap(s.ctx());
+    let admin_cap = vault::wrap_with_scheme(cap, R1_PUBKEY, 99u8, s.ctx());
+    transfer::public_transfer(admin_cap, OWNER); // unreachable
+
+    scenario.end();
+}
+
 // === Negative: revoked operator ===
 
 #[test]

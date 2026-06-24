@@ -32,8 +32,10 @@
 /// through a live, unexpired `OperatorCap`. Plugins additionally gate high-stakes
 /// ops on the principal's signed intent: `verify_and_consume_intent` reconstructs
 /// the Sui *personal-message* digest the principal's wallet (or agent key) signed,
-/// verifies it against the `admin_pubkey`, and replay-protects the intent via the
-/// `used_nonces` set — all in one call.
+/// verifies it against the `admin_pubkey` under the vault's `scheme`
+/// (Ed25519 or secp256r1/P-256 — the latter covering WebCrypto and passkey
+/// principals), and replay-protects the intent via the `used_nonces` set — all in
+/// one call.
 ///
 /// The owner holds a `VaultAdminCap` (a recovery key) and always retains an
 /// unconditional escape hatch via `withdraw`.
@@ -43,6 +45,7 @@ use std::type_name::{Self, TypeName};
 use sui::borrow::{Self, Referent, Borrow};
 use sui::clock::Clock;
 use sui::dynamic_field as df;
+use sui::ecdsa_r1;
 use sui::ed25519;
 use sui::event;
 use sui::hash;
@@ -66,6 +69,40 @@ const EPluginNotInstalled: u64 = 5;
 const ENonceUsed: u64 = 6;
 /// The principal's signature over the personal-message intent does not verify.
 const EBadIntent: u64 = 7;
+/// The `scheme` passed to `wrap_with_scheme` is not a supported signature scheme,
+/// or the `admin_pubkey` length does not match the scheme's expected key size.
+const EBadScheme: u64 = 8;
+
+// === Signature schemes ===
+//
+// The signature scheme of the principal key whose signed intents the vault
+// verifies. These mirror Sui's wire flags for ergonomics, but the vault only
+// needs them to dispatch verification — it never builds a Sui multisig/wire
+// signature, so the only requirement is internal consistency.
+
+/// Ed25519 personal-message intents. Pubkey is a raw 32-byte Ed25519 key;
+/// verification is `ed25519_verify` over the 32-byte personal-message digest.
+const SCHEME_ED25519: u8 = 0;
+/// Secp256r1 (NIST P-256) personal-message intents — the scheme produced by
+/// `@mysten/sui`'s `Secp256r1Keypair` and by a WebCrypto P-256 key wrapped in the
+/// SDK's generic `Signer`. Pubkey is a compressed 33-byte SEC1 point; verification
+/// is `secp256r1_verify(.., HASH_SHA256)` over the 32-byte personal-message digest
+/// (the native re-hashes that digest with sha256 internally — see
+/// `verify_and_consume_intent`).
+const SCHEME_SECP256R1: u8 = 2;
+
+/// Expected raw public-key length for `SCHEME_ED25519` (32-byte Ed25519 key).
+const ED25519_PUBKEY_LEN: u64 = 32;
+/// Expected raw public-key length for `SCHEME_SECP256R1` (compressed 33-byte
+/// SEC1 point — the format `secp256r1_verify` expects, and exactly what
+/// `Secp256r1Keypair.getPublicKey().toRawBytes()` returns).
+const SECP256R1_PUBKEY_LEN: u64 = 33;
+
+/// `hash` flag for `ecdsa_r1::secp256r1_verify` selecting SHA-256 as the internal
+/// message hash. Mirrors the framework's private `SHA256` constant. Secp256r1
+/// signers (incl. `Secp256r1Keypair.sign`) sign `sha256(digest)`, so the native
+/// must re-apply sha256 to the digest we hand it.
+const HASH_SHA256: u8 = 1;
 
 // === Structs ===
 
@@ -76,9 +113,16 @@ public struct Vault<Cap: key + store> has key {
     id: UID,
     /// The wrapped capability, lent out via the `sui::borrow` hot-potato API.
     cap: Referent<Cap>,
-    /// The principal / vault owner's Ed25519 public key. Plugins use this to
-    /// verify the principal's signed intents for high-stakes operations.
+    /// The principal / vault owner's public key. Plugins use this to verify the
+    /// principal's signed intents for high-stakes operations. Its scheme (and so
+    /// its expected length / verify algorithm) is given by `scheme`: a raw 32-byte
+    /// Ed25519 key for `SCHEME_ED25519`, or a compressed 33-byte SEC1 point for
+    /// `SCHEME_SECP256R1`.
     admin_pubkey: vector<u8>,
+    /// The signature scheme of `admin_pubkey` — `SCHEME_ED25519` or
+    /// `SCHEME_SECP256R1`. `verify_and_consume_intent` dispatches on this to the
+    /// matching on-chain verifier.
+    scheme: u8,
     /// Authorized `OperatorCap` object ids. Membership is the revocation
     /// registry: remove == instant revoke.
     operators: VecSet<ID>,
@@ -125,18 +169,40 @@ public struct OperatorRevoked has copy, drop {
 
 // === Lifecycle ===
 
-/// Wrap `cap` in a new shared `Vault` and return the `VaultAdminCap` for the
-/// caller to route. `admin_pubkey` is the principal's Ed25519 public key used by
+/// Wrap `cap` in a new shared `Vault` whose principal signs intents with
+/// **Ed25519**, and return the `VaultAdminCap` for the caller to route.
+/// `admin_pubkey` is the principal's raw 32-byte Ed25519 public key used by
 /// plugins to verify the principal's signed intents. Emits `VaultCreated`.
+///
+/// This is the back-compatible default; it delegates to `wrap_with_scheme` with
+/// `SCHEME_ED25519`. For a secp256r1/passkey principal, call `wrap_with_scheme`
+/// with `SCHEME_SECP256R1` and a compressed 33-byte key.
 public fun wrap<Cap: key + store>(
     cap: Cap,
     admin_pubkey: vector<u8>,
     ctx: &mut TxContext,
 ): VaultAdminCap {
+    wrap_with_scheme(cap, admin_pubkey, SCHEME_ED25519, ctx)
+}
+
+/// Wrap `cap` in a new shared `Vault`, selecting the signature `scheme` of the
+/// principal whose signed intents the vault will verify, and return the
+/// `VaultAdminCap`. `scheme` must be `SCHEME_ED25519` (raw 32-byte key) or
+/// `SCHEME_SECP256R1` (compressed 33-byte SEC1 point); the `admin_pubkey` length
+/// is validated against the scheme up front, so a misconfigured key fails at
+/// creation rather than silently at first intent. Emits `VaultCreated`.
+public fun wrap_with_scheme<Cap: key + store>(
+    cap: Cap,
+    admin_pubkey: vector<u8>,
+    scheme: u8,
+    ctx: &mut TxContext,
+): VaultAdminCap {
+    assert!(is_valid_scheme_pubkey(scheme, &admin_pubkey), EBadScheme);
     let vault = Vault {
         id: object::new(ctx),
         cap: borrow::new(cap, ctx),
         admin_pubkey,
+        scheme,
         operators: vec_set::empty(),
         plugins: vec_set::empty(),
         used_nonces: vec_set::empty(),
@@ -153,7 +219,15 @@ public fun wrap<Cap: key + store>(
 public fun withdraw<Cap: key + store>(v: Vault<Cap>, admin: &VaultAdminCap): Cap {
     assert!(admin.vault_id == object::id(&v), ENotAdmin);
     assert!(v.plugins.is_empty(), EPluginsInstalled);
-    let Vault { id, cap, admin_pubkey: _, operators: _, plugins: _, used_nonces: _ } = v;
+    let Vault {
+        id,
+        cap,
+        admin_pubkey: _,
+        scheme: _,
+        operators: _,
+        plugins: _,
+        used_nonces: _,
+    } = v;
     object::delete(id);
     borrow::destroy(cap)
 }
@@ -243,11 +317,12 @@ public fun return_cap<Cap: key + store>(v: &mut Vault<Cap>, cap: Cap, b: Borrow)
 /// every Sui wallet's `signPersonalMessage` and the SDK's
 /// `Keypair.signPersonalMessage` produce — so both human wallets and autonomous
 /// agent keys can author intents with their normal signing flow. The signature is
-/// a raw 64-byte Ed25519 signature (extract it from a serialized wallet signature
-/// off-chain) over the personal-message digest reconstructed here.
+/// a raw signature (extract it from a serialized wallet signature off-chain) over
+/// the personal-message digest reconstructed here: 64-byte Ed25519, or 64-byte
+/// secp256r1 `(r, s)`, per the vault's `scheme`.
 ///
 /// Digest reconstruction (the exact bytes a Sui signer hashes for a
-/// personal message):
+/// personal message), identical across schemes:
 ///
 /// ```text
 ///   preimage = [3, 0, 0]                    // Intent: scope=PersonalMessage(3), version=V0(0), app=Sui(0)
@@ -258,27 +333,83 @@ public fun return_cap<Cap: key + store>(v: &mut Vault<Cap>, cap: Cap, b: Borrow)
 /// `PersonalMessage` wraps a single `vector<u8>` field, so its BCS encoding is
 /// exactly the BCS encoding of `msg` itself: a ULEB128 length prefix followed by
 /// the raw bytes. We therefore append `bcs::to_bytes(&msg)` directly. The signer
-/// signs the 32-byte `digest`, so `ed25519_verify` is given the digest (NOT the
+/// signs the 32-byte `digest`, so the verifier is given the digest (NOT the
 /// preimage).
 ///
+/// Per-scheme verification of that 32-byte `digest`:
+/// - `SCHEME_ED25519`: `ed25519_verify(sig, pubkey, digest)`. Ed25519 hashes
+///   internally as part of the scheme, so the digest is passed as-is.
+/// - `SCHEME_SECP256R1`: `secp256r1_verify(sig, pubkey, digest, HASH_SHA256)`.
+///   Unlike ed25519, the secp256r1 native takes the *raw* message plus a hash
+///   flag and hashes it itself. A secp256r1 personal-message signer signs
+///   `sha256(digest)` (e.g. `Secp256r1Keypair.sign` does `sha256(data)` over the
+///   personal-message digest `data`), so we hand the native the digest and the
+///   `HASH_SHA256` flag, and it re-applies sha256 to match.
+///
 /// Aborts with `EBadIntent` if the signature does not verify against the vault's
-/// `admin_pubkey`, or with `ENonceUsed` if the nonce was already consumed.
+/// `admin_pubkey` under `scheme`, or with `ENonceUsed` if the nonce was already
+/// consumed.
 public fun verify_and_consume_intent<Cap: key + store>(
     v: &mut Vault<Cap>,
     msg: vector<u8>,
     sig: vector<u8>,
     nonce: u64,
 ) {
-    // Reconstruct the Sui personal-message digest the signer produced:
-    //   blake2b256( [3,0,0] ‖ bcs(PersonalMessage{message: msg}) )
-    // bcs of a vector<u8> is ULEB128(len) ‖ bytes, which equals
-    // bcs(PersonalMessage{message: msg}) since the struct has that one field.
-    let mut preimage = vector[3u8, 0u8, 0u8]; // Intent: PersonalMessage(3), V0(0), Sui(0)
-    preimage.append(std::bcs::to_bytes(&msg));
-    let digest = hash::blake2b256(&preimage);
-    assert!(ed25519::ed25519_verify(&sig, &v.admin_pubkey, &digest), EBadIntent);
+    let digest = personal_message_digest(&msg);
+    assert!(verify_intent_sig(v.scheme, &v.admin_pubkey, &digest, &sig), EBadIntent);
     assert!(!v.used_nonces.contains(&nonce), ENonceUsed);
     v.used_nonces.insert(nonce);
+}
+
+/// Reconstruct the Sui personal-message digest the signer produced:
+///   `blake2b256( [3,0,0] ‖ bcs(PersonalMessage{ message: msg }) )`.
+/// `bcs` of a `vector<u8>` is `ULEB128(len) ‖ bytes`, which equals
+/// `bcs(PersonalMessage{ message: msg })` since the struct has that one field, so
+/// we append `bcs::to_bytes(&msg)` directly. Scheme-independent: every Sui signer
+/// hashes this same 32-byte digest for a personal message.
+fun personal_message_digest(msg: &vector<u8>): vector<u8> {
+    let mut preimage = vector[3u8, 0u8, 0u8]; // Intent: PersonalMessage(3), V0(0), Sui(0)
+    preimage.append(std::bcs::to_bytes(msg));
+    hash::blake2b256(&preimage)
+}
+
+/// Verify a raw personal-message signature over `digest` for `pubkey` under
+/// `scheme`. Returns `false` for an unknown scheme (so an unsupported scheme can
+/// never spuriously authorize). Centralizing the dispatch here keeps
+/// `verify_and_consume_intent` and any future intent surfaces consistent.
+fun verify_intent_sig(
+    scheme: u8,
+    pubkey: &vector<u8>,
+    digest: &vector<u8>,
+    sig: &vector<u8>,
+): bool {
+    if (scheme == SCHEME_ED25519) {
+        // Ed25519 verifies the 32-byte digest directly (it hashes internally as
+        // part of the scheme); the signer signs the digest.
+        ed25519::ed25519_verify(sig, pubkey, digest)
+    } else if (scheme == SCHEME_SECP256R1) {
+        // secp256r1_verify hashes its `msg` argument internally with the selected
+        // hash before ECDSA-verifying. The signer signed `sha256(digest)`, so we
+        // pass the digest as `msg` with `HASH_SHA256` and the native re-derives
+        // the same pre-image.
+        ecdsa_r1::secp256r1_verify(sig, pubkey, digest, HASH_SHA256)
+    } else {
+        false
+    }
+}
+
+/// Whether `pubkey`'s length is consistent with `scheme`. Used at `wrap` time to
+/// reject a misconfigured principal key up front. (`ed25519_verify` /
+/// `secp256r1_verify` also reject wrong-length keys at verify time, but failing at
+/// creation is the friendlier and safer contract.)
+fun is_valid_scheme_pubkey(scheme: u8, pubkey: &vector<u8>): bool {
+    if (scheme == SCHEME_ED25519) {
+        pubkey.length() == ED25519_PUBKEY_LEN
+    } else if (scheme == SCHEME_SECP256R1) {
+        pubkey.length() == SECP256R1_PUBKEY_LEN
+    } else {
+        false
+    }
 }
 
 // === Plugins ===
@@ -345,10 +476,25 @@ public fun vault_id<Cap: key + store>(v: &Vault<Cap>): ID {
     object::id(v)
 }
 
-/// The principal's Ed25519 public key, used by plugins to verify signed intents.
+/// The principal's public key, used by plugins to verify signed intents. Its
+/// scheme (and so its byte format) is reported by `scheme`.
 public fun admin_pubkey<Cap: key + store>(v: &Vault<Cap>): &vector<u8> {
     &v.admin_pubkey
 }
+
+/// The signature scheme of `admin_pubkey` — `scheme_ed25519()` or
+/// `scheme_secp256r1()`.
+public fun scheme<Cap: key + store>(v: &Vault<Cap>): u8 {
+    v.scheme
+}
+
+/// The Ed25519 scheme tag (raw 32-byte key; `ed25519_verify` over the digest).
+public fun scheme_ed25519(): u8 { SCHEME_ED25519 }
+
+/// The secp256r1 / NIST P-256 scheme tag (compressed 33-byte SEC1 point;
+/// `secp256r1_verify(.., HASH_SHA256)` over the digest). The scheme produced by
+/// `@mysten/sui`'s `Secp256r1Keypair` and by WebCrypto P-256 keys.
+public fun scheme_secp256r1(): u8 { SCHEME_SECP256R1 }
 
 /// Whether `operator_id` is currently an authorized operator of the vault.
 public fun is_operator<Cap: key + store>(v: &Vault<Cap>, operator_id: ID): bool {
