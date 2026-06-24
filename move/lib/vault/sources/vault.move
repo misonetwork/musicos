@@ -2,25 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// A generic, standalone vault that wraps an admin capability and delegates
-/// *bounded, revocable* use of it to "agent" addresses.
+/// *bounded, revocable* use of it to "operator" addresses.
 ///
 /// The vault is a shared object holding the capability inside a
-/// `sui::borrow::Referent`. Agents receive a soulbound `AgentAuth` and may
+/// `sui::borrow::Referent`. Operators receive a soulbound `OperatorCap` and may
 /// hot-potato-borrow the capability for the duration of a single transaction;
 /// the `Borrow` hot potato forces the cap to be returned before the tx ends.
 ///
-/// Authorization is binary: an `AgentAuth` is only live while its object id is
-/// present in the vault's `auths` set. Removing it (`revoke_agent`) makes the
-/// auth instantly inert, even though the holder still owns the (now useless)
-/// object. `AgentAuth` is key-only (no `store`), so it is soulbound and the
-/// holder cannot transfer it.
+/// Authorization is binary: an `OperatorCap` is only live while its object id is
+/// present in the vault's `operators` set. Removing it (`revoke_operator`) makes
+/// the operator instantly inert, even though the holder still owns the (now
+/// useless) object. `OperatorCap` is key-only (no `store`), so it is soulbound
+/// and the holder cannot transfer it.
 ///
 /// Plugins are other packages that install per-vault `Config` values in dynamic
 /// fields keyed by a `Key` type. The `plugins` set tracks the installed `Key`
 /// types both for discoverability and as a teardown guard: `withdraw` can only
 /// run on a vault with no plugins installed, preventing orphaned dynamic fields.
 ///
-/// The owner holds an `OwnerCap` (a recovery key) and always retains an
+/// The cap path is split: the admin (`VaultAdminCap` holder) may borrow the cap
+/// unconditionally, while an installed plugin may borrow it (witness-gated)
+/// through a live, unexpired `OperatorCap`. Plugins additionally verify the
+/// principal's signed intents off the `admin_pubkey` and replay-protect them via
+/// the `used_nonces` set (`consume_nonce`).
+///
+/// The owner holds a `VaultAdminCap` (a recovery key) and always retains an
 /// unconditional escape hatch via `withdraw`.
 module miso_vault::vault;
 
@@ -33,16 +39,20 @@ use sui::vec_set::{Self, VecSet};
 
 // === Errors ===
 
-/// The supplied `OwnerCap` does not own this vault.
-const ENotOwner: u64 = 0;
+/// The supplied `VaultAdminCap` does not control this vault.
+const ENotAdmin: u64 = 0;
 /// Cannot withdraw the cap while plugins are still installed.
 const EPluginsInstalled: u64 = 1;
-/// The `AgentAuth` was minted for a different vault.
+/// The `OperatorCap` was minted for a different vault.
 const EWrongVault: u64 = 2;
-/// The `AgentAuth` has been revoked (removed from the `auths` registry).
+/// The `OperatorCap` has been revoked (removed from the `operators` registry).
 const ERevoked: u64 = 3;
-/// The `AgentAuth` has expired.
+/// The `OperatorCap` has expired.
 const EExpired: u64 = 4;
+/// The plugin (witness type) is not installed on this vault.
+const EPluginNotInstalled: u64 = 5;
+/// The supplied nonce has already been consumed (replay).
+const ENonceUsed: u64 = 6;
 
 // === Structs ===
 
@@ -53,24 +63,29 @@ public struct Vault<Cap: key + store> has key {
     id: UID,
     /// The wrapped capability, lent out via the `sui::borrow` hot-potato API.
     cap: Referent<Cap>,
-    /// Authorized `AgentAuth` object ids. Membership is the revocation
+    /// The principal / vault owner's Ed25519 public key. Plugins use this to
+    /// verify the principal's signed intents for high-stakes operations.
+    admin_pubkey: vector<u8>,
+    /// Authorized `OperatorCap` object ids. Membership is the revocation
     /// registry: remove == instant revoke.
-    auths: VecSet<ID>,
+    operators: VecSet<ID>,
     /// Installed plugin `Key` types. Teardown guard + discoverability.
     plugins: VecSet<TypeName>,
+    /// Consumed signed-intent nonces. Replay protection for plugin ops.
+    used_nonces: VecSet<u64>,
 }
 
-/// The recovery key for a vault. Holder may authorize/revoke agents, manage
+/// The recovery key for a vault. Holder may authorize/revoke operators, manage
 /// plugins, and unconditionally withdraw the wrapped cap.
-public struct OwnerCap has key, store {
+public struct VaultAdminCap has key, store {
     id: UID,
     vault_id: ID,
 }
 
-/// A soulbound (key-only, no `store`) authorization granting an agent address
-/// the right to borrow the vault's cap until `expires_ms`, while the auth's id
-/// remains in the vault's `auths` set.
-public struct AgentAuth has key {
+/// A soulbound (key-only, no `store`) authorization granting an operator address
+/// the right to borrow the vault's cap until `expires_ms`, while the operator's
+/// id remains in the vault's `operators` set.
+public struct OperatorCap has key {
     id: UID,
     vault_id: ID,
     expires_ms: u64,
@@ -82,100 +97,140 @@ public struct VaultCreated has copy, drop {
     vault_id: ID,
 }
 
-public struct AgentAuthorized has copy, drop {
+public struct OperatorAuthorized has copy, drop {
     vault_id: ID,
-    auth_id: ID,
-    agent: address,
+    operator_id: ID,
+    operator: address,
     expires_ms: u64,
 }
 
-public struct AgentRevoked has copy, drop {
+public struct OperatorRevoked has copy, drop {
     vault_id: ID,
-    auth_id: ID,
+    operator_id: ID,
 }
 
 // === Lifecycle ===
 
-/// Wrap `cap` in a new shared `Vault` and return the `OwnerCap` for the caller
-/// to route. Emits `VaultCreated`.
-public fun wrap<Cap: key + store>(cap: Cap, ctx: &mut TxContext): OwnerCap {
+/// Wrap `cap` in a new shared `Vault` and return the `VaultAdminCap` for the
+/// caller to route. `admin_pubkey` is the principal's Ed25519 public key used by
+/// plugins to verify the principal's signed intents. Emits `VaultCreated`.
+public fun wrap<Cap: key + store>(
+    cap: Cap,
+    admin_pubkey: vector<u8>,
+    ctx: &mut TxContext,
+): VaultAdminCap {
     let vault = Vault {
         id: object::new(ctx),
         cap: borrow::new(cap, ctx),
-        auths: vec_set::empty(),
+        admin_pubkey,
+        operators: vec_set::empty(),
         plugins: vec_set::empty(),
+        used_nonces: vec_set::empty(),
     };
     let vault_id = object::id(&vault);
-    let owner = OwnerCap { id: object::new(ctx), vault_id };
+    let admin = VaultAdminCap { id: object::new(ctx), vault_id };
     event::emit(VaultCreated { vault_id });
     transfer::share_object(vault);
-    owner
+    admin
 }
 
-/// Owner escape hatch: consume the vault and recover the wrapped cap. Requires
+/// Admin escape hatch: consume the vault and recover the wrapped cap. Requires
 /// the vault to be free of plugins so no dynamic fields are orphaned.
-public fun withdraw<Cap: key + store>(v: Vault<Cap>, o: &OwnerCap): Cap {
-    assert!(o.vault_id == object::id(&v), ENotOwner);
+public fun withdraw<Cap: key + store>(v: Vault<Cap>, admin: &VaultAdminCap): Cap {
+    assert!(admin.vault_id == object::id(&v), ENotAdmin);
     assert!(v.plugins.is_empty(), EPluginsInstalled);
-    let Vault { id, cap, auths: _, plugins: _ } = v;
+    let Vault { id, cap, admin_pubkey: _, operators: _, plugins: _, used_nonces: _ } = v;
     object::delete(id);
     borrow::destroy(cap)
 }
 
-// === Agent authorization ===
+// === Operator authorization ===
 
-/// Mint a soulbound `AgentAuth` for `agent`, register it in `auths`, and
-/// transfer it to `agent`. Emits `AgentAuthorized`.
-public fun authorize_agent<Cap: key + store>(
+/// Mint a soulbound `OperatorCap` for `operator`, register it in `operators`,
+/// and transfer it to `operator`. Emits `OperatorAuthorized`.
+public fun authorize_operator<Cap: key + store>(
     v: &mut Vault<Cap>,
-    o: &OwnerCap,
-    agent: address,
+    admin: &VaultAdminCap,
+    operator: address,
     expires_ms: u64,
     ctx: &mut TxContext,
 ) {
-    assert!(o.vault_id == object::id(v), ENotOwner);
+    assert!(admin.vault_id == object::id(v), ENotAdmin);
     let vault_id = object::id(v);
-    let auth = AgentAuth { id: object::new(ctx), vault_id, expires_ms };
-    let auth_id = object::id(&auth);
-    v.auths.insert(auth_id);
-    event::emit(AgentAuthorized { vault_id, auth_id, agent, expires_ms });
-    transfer::transfer(auth, agent);
+    let op = OperatorCap { id: object::new(ctx), vault_id, expires_ms };
+    let operator_id = object::id(&op);
+    v.operators.insert(operator_id);
+    event::emit(OperatorAuthorized { vault_id, operator_id, operator, expires_ms });
+    transfer::transfer(op, operator);
 }
 
-/// Revoke an agent by removing its auth id from the registry. The holder's
-/// `AgentAuth` object becomes instantly inert. Emits `AgentRevoked`.
-public fun revoke_agent<Cap: key + store>(v: &mut Vault<Cap>, o: &OwnerCap, auth_id: ID) {
-    assert!(o.vault_id == object::id(v), ENotOwner);
-    v.auths.remove(&auth_id);
-    event::emit(AgentRevoked { vault_id: object::id(v), auth_id });
+/// Revoke an operator by removing its id from the registry. The holder's
+/// `OperatorCap` object becomes instantly inert. Emits `OperatorRevoked`.
+public fun revoke_operator<Cap: key + store>(
+    v: &mut Vault<Cap>,
+    admin: &VaultAdminCap,
+    operator_id: ID,
+) {
+    assert!(admin.vault_id == object::id(v), ENotAdmin);
+    v.operators.remove(&operator_id);
+    event::emit(OperatorRevoked { vault_id: object::id(v), operator_id });
 }
 
-/// Holder cleanup of a dead or revoked auth. No checks: it is the holder's own
-/// object to destroy.
-public fun destroy_auth(auth: AgentAuth) {
-    let AgentAuth { id, vault_id: _, expires_ms: _ } = auth;
+/// Holder cleanup of a dead or revoked operator. No checks: it is the holder's
+/// own object to destroy.
+public fun destroy_operator(op: OperatorCap) {
+    let OperatorCap { id, vault_id: _, expires_ms: _ } = op;
     object::delete(id);
 }
 
 // === Borrow ===
 
-/// Borrow the wrapped cap. The returned `Borrow` hot potato must be returned
-/// via `put_back` in the same transaction. Aborts if the auth is for another
-/// vault, has been revoked, or has expired.
-public fun borrow<Cap: key + store>(
+/// Admin borrow of the wrapped cap. Unconditional for the admin. The returned
+/// `Borrow` hot potato must be returned via `return_cap` in the same tx.
+public fun borrow_cap_admin<Cap: key + store>(
     v: &mut Vault<Cap>,
-    auth: &AgentAuth,
+    admin: &VaultAdminCap,
+): (Cap, Borrow) {
+    assert!(admin.vault_id == object::id(v), ENotAdmin);
+    borrow::borrow(&mut v.cap)
+}
+
+/// Plugin borrow of the wrapped cap. Witness-gated: only an installed plugin
+/// (whose witness type `W` is in `plugins`) may borrow, and only through a live,
+/// unexpired `OperatorCap` for this vault. The returned `Borrow` hot potato must
+/// be returned via `return_cap` in the same tx.
+public fun borrow_cap_plugin<Cap: key + store, W: drop>(
+    v: &mut Vault<Cap>,
+    op: &OperatorCap,
+    _w: W,
     clk: &Clock,
 ): (Cap, Borrow) {
-    assert!(auth.vault_id == object::id(v), EWrongVault);
-    assert!(v.auths.contains(&object::id(auth)), ERevoked);
-    assert!(auth.expires_ms > clk.timestamp_ms(), EExpired);
+    assert!(v.plugins.contains(&type_name::with_defining_ids<W>()), EPluginNotInstalled);
+    assert!(op.vault_id == object::id(v), EWrongVault);
+    assert!(v.operators.contains(&object::id(op)), ERevoked);
+    assert!(op.expires_ms > clk.timestamp_ms(), EExpired);
     borrow::borrow(&mut v.cap)
 }
 
 /// Return a previously borrowed cap together with its `Borrow` hot potato.
-public fun put_back<Cap: key + store>(v: &mut Vault<Cap>, cap: Cap, b: Borrow) {
+public fun return_cap<Cap: key + store>(v: &mut Vault<Cap>, cap: Cap, b: Borrow) {
     borrow::put_back(&mut v.cap, cap, b);
+}
+
+// === Signed-intent nonces ===
+
+/// Witness-gated consumption of a signed-intent nonce. Only an installed plugin
+/// (witness type `W` in `plugins`) may consume nonces, inside its op flow.
+/// Aborts on replay. Asserting both installation and uniqueness keeps the
+/// principal's signed intents single-use.
+public fun consume_nonce<Cap: key + store, W: drop>(
+    v: &mut Vault<Cap>,
+    _w: W,
+    nonce: u64,
+) {
+    assert!(v.plugins.contains(&type_name::with_defining_ids<W>()), EPluginNotInstalled);
+    assert!(!v.used_nonces.contains(&nonce), ENonceUsed);
+    v.used_nonces.insert(nonce);
 }
 
 // === Plugins ===
@@ -184,11 +239,11 @@ public fun put_back<Cap: key + store>(v: &mut Vault<Cap>, cap: Cap, b: Borrow) {
 /// the `Key` type in the `plugins` set.
 public fun add_plugin<Cap: key + store, Key: copy + drop + store, Config: store>(
     v: &mut Vault<Cap>,
-    o: &OwnerCap,
+    admin: &VaultAdminCap,
     key: Key,
     cfg: Config,
 ) {
-    assert!(o.vault_id == object::id(v), ENotOwner);
+    assert!(admin.vault_id == object::id(v), ENotAdmin);
     df::add(&mut v.id, key, cfg);
     v.plugins.insert(type_name::with_defining_ids<Key>());
 }
@@ -197,10 +252,10 @@ public fun add_plugin<Cap: key + store, Key: copy + drop + store, Config: store>
 /// stored `Config`.
 public fun remove_plugin<Cap: key + store, Key: copy + drop + store, Config: store>(
     v: &mut Vault<Cap>,
-    o: &OwnerCap,
+    admin: &VaultAdminCap,
     key: Key,
 ): Config {
-    assert!(o.vault_id == object::id(v), ENotOwner);
+    assert!(admin.vault_id == object::id(v), ENotAdmin);
     v.plugins.remove(&type_name::with_defining_ids<Key>());
     df::remove(&mut v.id, key)
 }
@@ -214,13 +269,13 @@ public fun config<Cap: key + store, Key: copy + drop + store, Config: store>(
     df::borrow(&v.id, key)
 }
 
-/// Owner-gated mutable access to a plugin's config.
+/// Admin-gated mutable access to a plugin's config.
 public fun config_mut<Cap: key + store, Key: copy + drop + store, Config: store>(
     v: &mut Vault<Cap>,
-    o: &OwnerCap,
+    admin: &VaultAdminCap,
     key: Key,
 ): &mut Config {
-    assert!(o.vault_id == object::id(v), ENotOwner);
+    assert!(admin.vault_id == object::id(v), ENotAdmin);
     df::borrow_mut(&mut v.id, key)
 }
 
@@ -231,9 +286,14 @@ public fun vault_id<Cap: key + store>(v: &Vault<Cap>): ID {
     object::id(v)
 }
 
-/// Whether `auth_id` is currently an authorized agent of the vault.
-public fun is_agent<Cap: key + store>(v: &Vault<Cap>, auth_id: ID): bool {
-    v.auths.contains(&auth_id)
+/// The principal's Ed25519 public key, used by plugins to verify signed intents.
+public fun admin_pubkey<Cap: key + store>(v: &Vault<Cap>): &vector<u8> {
+    &v.admin_pubkey
+}
+
+/// Whether `operator_id` is currently an authorized operator of the vault.
+public fun is_operator<Cap: key + store>(v: &Vault<Cap>, operator_id: ID): bool {
+    v.operators.contains(&operator_id)
 }
 
 /// Whether a plugin keyed by type `Key` is installed.
@@ -241,12 +301,12 @@ public fun has_plugin<Cap: key + store, Key: copy + drop + store>(v: &Vault<Cap>
     v.plugins.contains(&type_name::with_defining_ids<Key>())
 }
 
-/// The vault id an `AgentAuth` was minted for.
-public fun auth_vault_id(auth: &AgentAuth): ID {
-    auth.vault_id
+/// The vault id an `OperatorCap` was minted for.
+public fun operator_vault_id(op: &OperatorCap): ID {
+    op.vault_id
 }
 
-/// The vault id an `OwnerCap` controls.
-public fun owner_vault_id(o: &OwnerCap): ID {
-    o.vault_id
+/// The vault id a `VaultAdminCap` controls.
+public fun admin_vault_id(admin: &VaultAdminCap): ID {
+    admin.vault_id
 }

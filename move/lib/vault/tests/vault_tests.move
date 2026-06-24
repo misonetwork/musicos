@@ -4,7 +4,7 @@
 #[test_only]
 module miso_vault::vault_tests;
 
-use miso_vault::vault::{Self, Vault, OwnerCap, AgentAuth};
+use miso_vault::vault::{Self, Vault, VaultAdminCap, OperatorCap};
 use sui::clock;
 use sui::test_scenario as ts;
 
@@ -16,8 +16,14 @@ public struct TestCap has key, store {
     secret: u64,
 }
 
-/// A dynamic-field key type for a plugin.
-public struct TestKey has copy, drop, store {}
+/// The installed plugin's type: used both as the dynamic-field `Key` (so it is
+/// recorded in the vault's `plugins` set) and as the witness `W` for the
+/// witness-gated cap borrow / nonce consumption. A real plugin uses one type for
+/// both roles, so `with_defining_ids<W>()` matches the installed key.
+public struct TestPlugin has copy, drop, store {}
+
+/// A second, *uninstalled* plugin witness type — used to prove witness gating.
+public struct OtherPlugin has drop {}
 
 /// A plugin config value.
 public struct TestConfig has store {
@@ -30,6 +36,8 @@ const AGENT: address = @0xB2;
 // `take_from_sender` is unambiguous in the cross-cap negative tests.
 const OWNER2: address = @0xC3;
 
+const PUBKEY: vector<u8> = x"0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
+
 fun new_cap(ctx: &mut TxContext): TestCap {
     TestCap { id: object::new(ctx), secret: 42 }
 }
@@ -41,76 +49,179 @@ fun test_full_lifecycle() {
     let mut scenario = ts::begin(OWNER);
     let s = &mut scenario;
 
-    // wrap -> shares Vault, returns OwnerCap to owner.
+    // wrap -> shares Vault, returns VaultAdminCap to owner.
     let cap = new_cap(s.ctx());
-    let owner_cap = vault::wrap(cap, s.ctx());
-    transfer::public_transfer(owner_cap, OWNER);
+    let admin_cap = vault::wrap(cap, PUBKEY, s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
 
-    // authorize_agent + add_plugin (owner).
+    // authorize_operator + add_plugin (admin).
     ts::next_tx(s, OWNER);
     {
         let mut v = ts::take_shared<Vault<TestCap>>(s);
-        let o = ts::take_from_sender<OwnerCap>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+
+        // admin_pubkey reader.
+        assert!(*vault::admin_pubkey(&v) == PUBKEY, 0);
 
         let exp = 1_000;
-        vault::authorize_agent(&mut v, &o, AGENT, exp, s.ctx());
-        vault::add_plugin(&mut v, &o, TestKey {}, TestConfig { limit: 7 });
+        vault::authorize_operator(&mut v, &admin, AGENT, exp, s.ctx());
+        vault::add_plugin(&mut v, &admin, TestPlugin {}, TestConfig { limit: 7 });
 
-        assert!(vault::has_plugin<TestCap, TestKey>(&v), 0);
+        assert!(vault::has_plugin<TestCap, TestPlugin>(&v), 1);
         // permissionless read of plugin config
-        let cfg = vault::config<TestCap, TestKey, TestConfig>(&v, TestKey {});
-        assert!(cfg.limit == 7, 1);
-        // owner-gated mutable read
-        let cfg_mut = vault::config_mut<TestCap, TestKey, TestConfig>(&mut v, &o, TestKey {});
+        let cfg = vault::config<TestCap, TestPlugin, TestConfig>(&v, TestPlugin {});
+        assert!(cfg.limit == 7, 2);
+        // admin-gated mutable read
+        let cfg_mut = vault::config_mut<TestCap, TestPlugin, TestConfig>(&mut v, &admin, TestPlugin {});
         cfg_mut.limit = 9;
 
-        ts::return_to_sender(s, o);
+        ts::return_to_sender(s, admin);
         ts::return_shared(v);
     };
 
-    // agent borrows -> uses -> put_back (same tx).
+    // operator borrows (plugin path) -> uses -> return_cap (same tx).
     ts::next_tx(s, AGENT);
     {
         let mut v = ts::take_shared<Vault<TestCap>>(s);
-        let auth = ts::take_from_sender<AgentAuth>(s);
-        assert!(vault::is_agent(&v, object::id(&auth)), 2);
-        assert!(vault::auth_vault_id(&auth) == vault::vault_id(&v), 3);
+        let op = ts::take_from_sender<OperatorCap>(s);
+        assert!(vault::is_operator(&v, object::id(&op)), 3);
+        assert!(vault::operator_vault_id(&op) == vault::vault_id(&v), 4);
 
         let clk = clock::create_for_testing(s.ctx());
-        // clock at 0 < expires_ms 1000 => OK.
-        let (cap, b) = vault::borrow(&mut v, &auth, &clk);
-        assert!(cap.secret == 42, 4);
-        vault::put_back(&mut v, cap, b);
+        // clock at 0 < expires_ms 1000, plugin installed => OK.
+        let (cap, b) = vault::borrow_cap_plugin(&mut v, &op, TestPlugin {}, &clk);
+        assert!(cap.secret == 42, 5);
+        vault::return_cap(&mut v, cap, b);
+
+        // consume a signed-intent nonce (witness-gated, plugin installed).
+        vault::consume_nonce(&mut v, TestPlugin {}, 1u64);
 
         clock::destroy_for_testing(clk);
-        ts::return_to_sender(s, auth);
+        ts::return_to_sender(s, op);
         ts::return_shared(v);
     };
 
-    // owner removes plugin then withdraws the cap.
+    // admin removes plugin then withdraws the cap.
     ts::next_tx(s, OWNER);
     {
         let mut v = ts::take_shared<Vault<TestCap>>(s);
-        let o = ts::take_from_sender<OwnerCap>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
 
         let cfg: TestConfig =
-            vault::remove_plugin<TestCap, TestKey, TestConfig>(&mut v, &o, TestKey {});
-        assert!(cfg.limit == 9, 5);
+            vault::remove_plugin<TestCap, TestPlugin, TestConfig>(&mut v, &admin, TestPlugin {});
+        assert!(cfg.limit == 9, 6);
         let TestConfig { limit: _ } = cfg;
-        assert!(!vault::has_plugin<TestCap, TestKey>(&v), 6);
+        assert!(!vault::has_plugin<TestCap, TestPlugin>(&v), 7);
 
-        let recovered = vault::withdraw(v, &o);
-        assert!(recovered.secret == 42, 7);
+        let recovered = vault::withdraw(v, &admin);
+        assert!(recovered.secret == 42, 8);
         let TestCap { id, secret: _ } = recovered;
         object::delete(id);
 
-        ts::return_to_sender(s, o);
+        ts::return_to_sender(s, admin);
     };
 
     scenario.end();
 }
 
-// === Negative: revoked auth ===
+// === Admin borrow path ===
+
+#[test]
+fun test_borrow_cap_admin() {
+    let mut scenario = ts::begin(OWNER);
+    let s = &mut scenario;
+
+    let cap = new_cap(s.ctx());
+    let admin_cap = vault::wrap(cap, PUBKEY, s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
+
+    ts::next_tx(s, OWNER);
+    {
+        let mut v = ts::take_shared<Vault<TestCap>>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+
+        // admin can borrow unconditionally (no operator, no plugin, no clock).
+        let (cap, b) = vault::borrow_cap_admin(&mut v, &admin);
+        assert!(cap.secret == 42, 0);
+        vault::return_cap(&mut v, cap, b);
+
+        ts::return_to_sender(s, admin);
+        ts::return_shared(v);
+    };
+
+    scenario.end();
+}
+
+// === Negative: plugin borrow with an uninstalled plugin witness ===
+
+#[test]
+#[expected_failure(abort_code = miso_vault::vault::EPluginNotInstalled)]
+fun test_borrow_cap_plugin_not_installed_fails() {
+    let mut scenario = ts::begin(OWNER);
+    let s = &mut scenario;
+
+    let cap = new_cap(s.ctx());
+    let admin_cap = vault::wrap(cap, PUBKEY, s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
+
+    // authorize an operator but install a plugin keyed by TestPlugin only; the
+    // borrow below uses OtherPlugin as the witness, which is NOT installed.
+    ts::next_tx(s, OWNER);
+    {
+        let mut v = ts::take_shared<Vault<TestCap>>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+        vault::authorize_operator(&mut v, &admin, AGENT, 1_000, s.ctx());
+        vault::add_plugin(&mut v, &admin, TestPlugin {}, TestConfig { limit: 1 });
+        ts::return_to_sender(s, admin);
+        ts::return_shared(v);
+    };
+
+    ts::next_tx(s, AGENT);
+    {
+        let mut v = ts::take_shared<Vault<TestCap>>(s);
+        let op = ts::take_from_sender<OperatorCap>(s);
+        let clk = clock::create_for_testing(s.ctx());
+        // OtherPlugin witness is not in `plugins` => EPluginNotInstalled.
+        let (cap, b) = vault::borrow_cap_plugin(&mut v, &op, OtherPlugin {}, &clk);
+        vault::return_cap(&mut v, cap, b); // unreachable
+        clock::destroy_for_testing(clk);
+        ts::return_to_sender(s, op);
+        ts::return_shared(v);
+    };
+
+    scenario.end();
+}
+
+// === Negative: reused nonce ===
+
+#[test]
+#[expected_failure(abort_code = miso_vault::vault::ENonceUsed)]
+fun test_consume_nonce_replay_fails() {
+    let mut scenario = ts::begin(OWNER);
+    let s = &mut scenario;
+
+    let cap = new_cap(s.ctx());
+    let admin_cap = vault::wrap(cap, PUBKEY, s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
+
+    ts::next_tx(s, OWNER);
+    {
+        let mut v = ts::take_shared<Vault<TestCap>>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+        vault::add_plugin(&mut v, &admin, TestPlugin {}, TestConfig { limit: 1 });
+
+        // first consume succeeds, second with the same nonce => ENonceUsed.
+        vault::consume_nonce(&mut v, TestPlugin {}, 7u64);
+        vault::consume_nonce(&mut v, TestPlugin {}, 7u64); // unreachable
+
+        ts::return_to_sender(s, admin);
+        ts::return_shared(v);
+    };
+
+    scenario.end();
+}
+
+// === Negative: revoked operator ===
 
 #[test]
 #[expected_failure(abort_code = miso_vault::vault::ERevoked)]
@@ -119,56 +230,57 @@ fun test_borrow_revoked_fails() {
     let s = &mut scenario;
 
     let cap = new_cap(s.ctx());
-    let owner_cap = vault::wrap(cap, s.ctx());
-    transfer::public_transfer(owner_cap, OWNER);
+    let admin_cap = vault::wrap(cap, PUBKEY, s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
 
-    // authorize.
+    // authorize + install plugin (so the borrow reaches the revocation check).
     ts::next_tx(s, OWNER);
     {
         let mut v = ts::take_shared<Vault<TestCap>>(s);
-        let o = ts::take_from_sender<OwnerCap>(s);
-        vault::authorize_agent(&mut v, &o, AGENT, 1_000, s.ctx());
-        ts::return_to_sender(s, o);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+        vault::authorize_operator(&mut v, &admin, AGENT, 1_000, s.ctx());
+        vault::add_plugin(&mut v, &admin, TestPlugin {}, TestConfig { limit: 1 });
+        ts::return_to_sender(s, admin);
         ts::return_shared(v);
     };
 
-    // grab the auth id.
+    // grab the operator id.
     ts::next_tx(s, AGENT);
-    let auth_id;
+    let operator_id;
     {
-        let auth = ts::take_from_sender<AgentAuth>(s);
-        auth_id = object::id(&auth);
-        ts::return_to_sender(s, auth);
+        let op = ts::take_from_sender<OperatorCap>(s);
+        operator_id = object::id(&op);
+        ts::return_to_sender(s, op);
     };
 
     // revoke.
     ts::next_tx(s, OWNER);
     {
         let mut v = ts::take_shared<Vault<TestCap>>(s);
-        let o = ts::take_from_sender<OwnerCap>(s);
-        vault::revoke_agent(&mut v, &o, auth_id);
-        assert!(!vault::is_agent(&v, auth_id), 0);
-        ts::return_to_sender(s, o);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+        vault::revoke_operator(&mut v, &admin, operator_id);
+        assert!(!vault::is_operator(&v, operator_id), 0);
+        ts::return_to_sender(s, admin);
         ts::return_shared(v);
     };
 
-    // agent attempts to borrow with a revoked auth => ERevoked.
+    // operator attempts to borrow with a revoked cap => ERevoked.
     ts::next_tx(s, AGENT);
     {
         let mut v = ts::take_shared<Vault<TestCap>>(s);
-        let auth = ts::take_from_sender<AgentAuth>(s);
+        let op = ts::take_from_sender<OperatorCap>(s);
         let clk = clock::create_for_testing(s.ctx());
-        let (cap, b) = vault::borrow(&mut v, &auth, &clk);
-        vault::put_back(&mut v, cap, b); // unreachable
+        let (cap, b) = vault::borrow_cap_plugin(&mut v, &op, TestPlugin {}, &clk);
+        vault::return_cap(&mut v, cap, b); // unreachable
         clock::destroy_for_testing(clk);
-        ts::return_to_sender(s, auth);
+        ts::return_to_sender(s, op);
         ts::return_shared(v);
     };
 
     scenario.end();
 }
 
-// === Negative: expired auth ===
+// === Negative: expired operator ===
 
 #[test]
 #[expected_failure(abort_code = miso_vault::vault::EExpired)]
@@ -177,37 +289,38 @@ fun test_borrow_expired_fails() {
     let s = &mut scenario;
 
     let cap = new_cap(s.ctx());
-    let owner_cap = vault::wrap(cap, s.ctx());
-    transfer::public_transfer(owner_cap, OWNER);
+    let admin_cap = vault::wrap(cap, PUBKEY, s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
 
     ts::next_tx(s, OWNER);
     {
         let mut v = ts::take_shared<Vault<TestCap>>(s);
-        let o = ts::take_from_sender<OwnerCap>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
         // expires at 500ms.
-        vault::authorize_agent(&mut v, &o, AGENT, 500, s.ctx());
-        ts::return_to_sender(s, o);
+        vault::authorize_operator(&mut v, &admin, AGENT, 500, s.ctx());
+        vault::add_plugin(&mut v, &admin, TestPlugin {}, TestConfig { limit: 1 });
+        ts::return_to_sender(s, admin);
         ts::return_shared(v);
     };
 
     ts::next_tx(s, AGENT);
     {
         let mut v = ts::take_shared<Vault<TestCap>>(s);
-        let auth = ts::take_from_sender<AgentAuth>(s);
+        let op = ts::take_from_sender<OperatorCap>(s);
         let mut clk = clock::create_for_testing(s.ctx());
         // advance clock to exactly expiry: 500 is not > 500 => EExpired.
         clock::set_for_testing(&mut clk, 500);
-        let (cap, b) = vault::borrow(&mut v, &auth, &clk);
-        vault::put_back(&mut v, cap, b); // unreachable
+        let (cap, b) = vault::borrow_cap_plugin(&mut v, &op, TestPlugin {}, &clk);
+        vault::return_cap(&mut v, cap, b); // unreachable
         clock::destroy_for_testing(clk);
-        ts::return_to_sender(s, auth);
+        ts::return_to_sender(s, op);
         ts::return_shared(v);
     };
 
     scenario.end();
 }
 
-// === Negative: auth for a different vault ===
+// === Negative: operator for a different vault ===
 
 #[test]
 #[expected_failure(abort_code = miso_vault::vault::EWrongVault)]
@@ -215,39 +328,49 @@ fun test_borrow_wrong_vault_fails() {
     let mut scenario = ts::begin(OWNER);
     let s = &mut scenario;
 
-    // Vault A; its agent auth goes to AGENT.
+    // Vault A; its operator cap goes to AGENT.
     let cap_a = new_cap(s.ctx());
-    let owner_a = vault::wrap(cap_a, s.ctx());
-    transfer::public_transfer(owner_a, OWNER);
+    let admin_a = vault::wrap(cap_a, PUBKEY, s.ctx());
+    transfer::public_transfer(admin_a, OWNER);
 
     let vault_a_id;
     ts::next_tx(s, OWNER);
     {
-        let o_a = ts::take_from_sender<OwnerCap>(s);
-        vault_a_id = vault::owner_vault_id(&o_a);
+        let admin_a = ts::take_from_sender<VaultAdminCap>(s);
+        vault_a_id = vault::admin_vault_id(&admin_a);
         let mut v_a = ts::take_shared_by_id<Vault<TestCap>>(s, vault_a_id);
-        vault::authorize_agent(&mut v_a, &o_a, AGENT, 1_000, s.ctx());
-        ts::return_to_sender(s, o_a);
+        vault::authorize_operator(&mut v_a, &admin_a, AGENT, 1_000, s.ctx());
+        ts::return_to_sender(s, admin_a);
         ts::return_shared(v_a);
     };
 
-    // Vault B (the wrong target).
+    // Vault B (the wrong target) — install the plugin so the borrow reaches the
+    // wrong-vault check rather than aborting on EPluginNotInstalled.
     ts::next_tx(s, OWNER);
     let cap_b = new_cap(s.ctx());
-    let owner_b = vault::wrap(cap_b, s.ctx());
-    let vault_b_id = vault::owner_vault_id(&owner_b);
-    transfer::public_transfer(owner_b, OWNER);
+    let admin_b = vault::wrap(cap_b, PUBKEY, s.ctx());
+    let vault_b_id = vault::admin_vault_id(&admin_b);
+    transfer::public_transfer(admin_b, OWNER);
 
-    // AGENT tries to borrow from vault B using vault A's auth => EWrongVault.
+    ts::next_tx(s, OWNER);
+    {
+        let admin_b = ts::take_from_sender<VaultAdminCap>(s);
+        let mut v_b = ts::take_shared_by_id<Vault<TestCap>>(s, vault_b_id);
+        vault::add_plugin(&mut v_b, &admin_b, TestPlugin {}, TestConfig { limit: 1 });
+        ts::return_to_sender(s, admin_b);
+        ts::return_shared(v_b);
+    };
+
+    // AGENT tries to borrow from vault B using vault A's operator => EWrongVault.
     ts::next_tx(s, AGENT);
     {
-        let auth = ts::take_from_sender<AgentAuth>(s);
+        let op = ts::take_from_sender<OperatorCap>(s);
         let mut v_b = ts::take_shared_by_id<Vault<TestCap>>(s, vault_b_id);
         let clk = clock::create_for_testing(s.ctx());
-        let (cap, b) = vault::borrow(&mut v_b, &auth, &clk); // auth is for vault A
-        vault::put_back(&mut v_b, cap, b); // unreachable
+        let (cap, b) = vault::borrow_cap_plugin(&mut v_b, &op, TestPlugin {}, &clk);
+        vault::return_cap(&mut v_b, cap, b); // unreachable
         clock::destroy_for_testing(clk);
-        ts::return_to_sender(s, auth);
+        ts::return_to_sender(s, op);
         ts::return_shared(v_b);
     };
 
@@ -264,55 +387,55 @@ fun test_withdraw_with_plugin_fails() {
     let s = &mut scenario;
 
     let cap = new_cap(s.ctx());
-    let owner_cap = vault::wrap(cap, s.ctx());
-    transfer::public_transfer(owner_cap, OWNER);
+    let admin_cap = vault::wrap(cap, PUBKEY, s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
 
     ts::next_tx(s, OWNER);
     {
         let mut v = ts::take_shared<Vault<TestCap>>(s);
-        let o = ts::take_from_sender<OwnerCap>(s);
-        vault::add_plugin(&mut v, &o, TestKey {}, TestConfig { limit: 1 });
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+        vault::add_plugin(&mut v, &admin, TestPlugin {}, TestConfig { limit: 1 });
         // withdraw with a plugin still installed => EPluginsInstalled.
-        let recovered = vault::withdraw(v, &o);
+        let recovered = vault::withdraw(v, &admin);
         let TestCap { id, secret: _ } = recovered; // unreachable
         object::delete(id);
-        ts::return_to_sender(s, o);
+        ts::return_to_sender(s, admin);
     };
 
     scenario.end();
 }
 
-// === Negative: owner-gated fn with the wrong OwnerCap ===
+// === Negative: admin-gated fn with the wrong VaultAdminCap ===
 
 #[test]
-#[expected_failure(abort_code = miso_vault::vault::ENotOwner)]
-fun test_wrong_owner_cap_fails() {
+#[expected_failure(abort_code = miso_vault::vault::ENotAdmin)]
+fun test_wrong_admin_cap_fails() {
     let mut scenario = ts::begin(OWNER);
     let s = &mut scenario;
 
     // Vault A.
     let cap_a = new_cap(s.ctx());
-    let owner_a = vault::wrap(cap_a, s.ctx());
-    let vault_a_id = vault::owner_vault_id(&owner_a);
-    transfer::public_transfer(owner_a, OWNER);
+    let admin_a = vault::wrap(cap_a, PUBKEY, s.ctx());
+    let vault_a_id = vault::admin_vault_id(&admin_a);
+    transfer::public_transfer(admin_a, OWNER);
 
-    // Vault B owned by OWNER2 (its OwnerCap is the "wrong" cap for vault A).
+    // Vault B owned by OWNER2 (its VaultAdminCap is the "wrong" cap for vault A).
     ts::next_tx(s, OWNER2);
     let cap_b = new_cap(s.ctx());
-    let owner_b = vault::wrap(cap_b, s.ctx());
-    transfer::public_transfer(owner_b, OWNER2);
+    let admin_b = vault::wrap(cap_b, PUBKEY, s.ctx());
+    transfer::public_transfer(admin_b, OWNER2);
 
-    // Use vault B's OwnerCap against vault A => ENotOwner.
+    // Use vault B's VaultAdminCap against vault A => ENotAdmin.
     ts::next_tx(s, OWNER2);
-    let wrong_owner = ts::take_from_sender<OwnerCap>(s);
+    let wrong_admin = ts::take_from_sender<VaultAdminCap>(s);
     ts::next_tx(s, OWNER);
     {
         let mut v_a = ts::take_shared_by_id<Vault<TestCap>>(s, vault_a_id);
-        // owner-gated call with the wrong cap.
-        vault::authorize_agent(&mut v_a, &wrong_owner, AGENT, 1_000, s.ctx());
+        // admin-gated call with the wrong cap.
+        vault::authorize_operator(&mut v_a, &wrong_admin, AGENT, 1_000, s.ctx());
         ts::return_shared(v_a);
     };
-    ts::return_to_address(OWNER2, wrong_owner);
+    ts::return_to_address(OWNER2, wrong_admin);
 
     scenario.end();
 }
