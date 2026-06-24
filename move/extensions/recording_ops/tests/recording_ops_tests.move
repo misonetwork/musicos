@@ -23,9 +23,11 @@ const AGENT: address = @0xB2;
 const ASSEMBLER: address = @0xC3;
 
 // A 32-byte placeholder Ed25519 public key. The byte-encoding and pre-signature
-// abort-path tests never reach `ed25519_verify`, so a real key is unnecessary;
-// the full signature-verified happy path is covered by the off-chain
-// integration eval, which signs with the matching private key.
+// abort-path tests either never reach the signature check or only need it to
+// FAIL, so a real key is unnecessary here. The full signature-verified happy path
+// (personal-message reconstruction) is proven on-chain by the hardcoded vector in
+// `miso_vault::vault_tests` and exercised end-to-end by the off-chain integration
+// eval, which signs with the matching private key via `signPersonalMessage`.
 const PUBKEY: vector<u8> = x"0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
 
 public struct TEST_SHARE() has drop;
@@ -213,9 +215,10 @@ fun test_submit_deal_expired_intent_aborts() {
 }
 
 #[test]
-#[expected_failure(abort_code = recording_ops::EBadIntent)]
-/// With floor and expiry satisfied, a bogus signature is rejected by the
-/// on-chain Ed25519 verification.
+#[expected_failure(abort_code = miso_vault::vault::EBadIntent)]
+/// With floor and expiry satisfied, a bogus signature is rejected by the vault's
+/// on-chain personal-message Ed25519 verification (`EBadIntent` now lives in the
+/// vault, where `verify_and_consume_intent` performs the check).
 fun test_submit_deal_bad_signature_aborts() {
     let mut scenario = ts::begin(OWNER);
     let s = &mut scenario;
@@ -229,7 +232,7 @@ fun test_submit_deal_bad_signature_aborts() {
         let clk = clock::create_for_testing(s.ctx());
 
         // floor 500 <= 1000, expiry 10_000 > now 0; a 64-byte all-zero sig over
-        // PUBKEY will not verify => EBadIntent.
+        // the personal-message digest for PUBKEY will not verify => EBadIntent.
         recording_ops::submit_deal<TEST_SHARE, TEST_COMP_SHARE>(
             &mut v,
             &recording,

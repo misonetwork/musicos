@@ -29,13 +29,17 @@ use sui::clock::Clock;
 // === Plugin identity ===
 
 /// The plugin's witness type. Canonical name: `Key`. It is a `drop`-only witness
-/// with THREE roles:
+/// with TWO roles:
 ///   1. fix the type parameter `K` at `install` (the vault keys the `Config`
 ///      dynamic field by its own `vault::PluginKey<Key>` wrapper, and records
 ///      `with_defining_ids<Key>()` in the vault's `plugins` set);
 ///   2. the witness `W` for `vault::borrow_cap_plugin` (the real auth proof —
-///      only this package can construct `Key`, so only it can borrow the cap);
-///   3. (if the plugin uses signed intents) the witness for `vault::consume_nonce`.
+///      only this package can construct `Key`, so only it can borrow the cap).
+///
+/// Signed-intent ops do NOT use the witness: `vault::verify_and_consume_intent`
+/// is authorized purely by the principal's personal-message signature over the
+/// canonical intent bytes (and replay-protected by the vault's nonce set), so it
+/// takes no `Key`.
 ///
 /// It must NOT have `store` — the vault, not the plugin, owns the df key now, so
 /// `Key` is never itself a dynamic-field key. `drop` is the only required ability.

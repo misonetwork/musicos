@@ -94,9 +94,6 @@ fun test_full_lifecycle() {
         assert!(cap.secret == 42, 5);
         vault::return_cap(&mut v, cap, b);
 
-        // consume a signed-intent nonce (witness-gated, plugin installed).
-        vault::consume_nonce(&mut v, TestPlugin {}, 1u64);
-
         clock::destroy_for_testing(clk);
         ts::return_to_sender(s, op);
         ts::return_shared(v);
@@ -193,27 +190,110 @@ fun test_borrow_cap_plugin_not_installed_fails() {
     scenario.end();
 }
 
-// === Negative: reused nonce ===
+// === Signed personal-message intent: hardcoded on-chain vector ===
+//
+// The following three tests use a REAL (pubkey, msg, sig) triple produced
+// off-chain by `@mysten/sui`: an `Ed25519Keypair` (from the fixed 32-byte secret
+// 0x0102..1f20) signed `INTENT_MSG` with `signPersonalMessage`, and the resulting
+// serialized wallet signature was split via `parseSerializedSignature` into the
+// raw 64-byte Ed25519 signature (`INTENT_SIG`) and 32-byte public key
+// (`INTENT_PUBKEY`). `INTENT_MSG` is exactly `recording_ops::build_intent_msg`
+// for vault @0xAA, release @0xBB, split 1500, nonce 42, expiry 1_000_000 — the
+// 101-byte canonical encoding. These vectors prove, independent of any off-chain
+// eval, that `verify_and_consume_intent` reconstructs the Sui personal-message
+// digest `blake2b256([3,0,0] ++ bcs(PersonalMessage{ message: msg }))` correctly
+// and verifies a wallet's `signPersonalMessage` output on-chain.
+
+/// The personal-message public key matching `INTENT_SIG` (raw 32-byte Ed25519).
+const INTENT_PUBKEY: vector<u8> =
+    x"79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664";
+/// The 101-byte canonical intent message that was signed.
+const INTENT_MSG: vector<u8> =
+    x"6d69736f3a7375626d69745f6465616c3a763100000000000000000000000000000000000000000000000000000000000000aa00000000000000000000000000000000000000000000000000000000000000bbdc052a0000000000000040420f0000000000";
+/// The raw 64-byte Ed25519 signature `signPersonalMessage(INTENT_MSG)` produced.
+const INTENT_SIG: vector<u8> =
+    x"a1c3078e07c04f90b6450ca1ace68610ba4b4c80f21bb863b75e08780aeff30e8a5350bc5ffd0ac48637d50e1986a0ce059626efc7338f87d5ffaca4e1fa0d0d";
 
 #[test]
-#[expected_failure(abort_code = miso_vault::vault::ENonceUsed)]
-fun test_consume_nonce_replay_fails() {
+/// The valid (pubkey, msg, sig) triple PASSES: the vault reconstructs the
+/// personal-message digest and Ed25519-verifies it against `admin_pubkey`, then
+/// records the nonce. This is the key on-chain proof of the personal-message
+/// reconstruction.
+fun test_verify_and_consume_intent_valid_vector() {
     let mut scenario = ts::begin(OWNER);
     let s = &mut scenario;
 
+    // Wrap a vault whose admin_pubkey IS the personal-message signer's pubkey.
     let cap = new_cap(s.ctx());
-    let admin_cap = vault::wrap(cap, PUBKEY, s.ctx());
+    let admin_cap = vault::wrap(cap, INTENT_PUBKEY, s.ctx());
     transfer::public_transfer(admin_cap, OWNER);
 
     ts::next_tx(s, OWNER);
     {
         let mut v = ts::take_shared<Vault<TestCap>>(s);
         let admin = ts::take_from_sender<VaultAdminCap>(s);
-        vault::add_plugin(&mut v, &admin, TestPlugin {}, TestConfig { limit: 1 });
 
-        // first consume succeeds, second with the same nonce => ENonceUsed.
-        vault::consume_nonce(&mut v, TestPlugin {}, 7u64);
-        vault::consume_nonce(&mut v, TestPlugin {}, 7u64); // unreachable
+        // Valid signature over the canonical message => passes, nonce 42 consumed.
+        vault::verify_and_consume_intent(&mut v, INTENT_MSG, INTENT_SIG, 42u64);
+
+        ts::return_to_sender(s, admin);
+        ts::return_shared(v);
+    };
+
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = miso_vault::vault::EBadIntent)]
+/// Flipping a single byte of the signed message breaks the personal-message
+/// digest, so Ed25519 verification fails => EBadIntent.
+fun test_verify_and_consume_intent_flipped_byte_fails() {
+    let mut scenario = ts::begin(OWNER);
+    let s = &mut scenario;
+
+    let cap = new_cap(s.ctx());
+    let admin_cap = vault::wrap(cap, INTENT_PUBKEY, s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
+
+    ts::next_tx(s, OWNER);
+    {
+        let mut v = ts::take_shared<Vault<TestCap>>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+
+        // Flip the first byte of the message: 'm' (0x6d) -> 0x6e. The signature no
+        // longer matches the digest of the tampered message => EBadIntent.
+        let mut tampered = INTENT_MSG;
+        *tampered.borrow_mut(0) = 0x6e;
+        vault::verify_and_consume_intent(&mut v, tampered, INTENT_SIG, 42u64);
+
+        ts::return_to_sender(s, admin);
+        ts::return_shared(v);
+    };
+
+    scenario.end();
+}
+
+#[test]
+#[expected_failure(abort_code = miso_vault::vault::ENonceUsed)]
+/// Replaying the same valid intent (same nonce) a second time aborts ENonceUsed:
+/// the first call recorded nonce 42, so the second is rejected as a replay.
+fun test_verify_and_consume_intent_replay_fails() {
+    let mut scenario = ts::begin(OWNER);
+    let s = &mut scenario;
+
+    let cap = new_cap(s.ctx());
+    let admin_cap = vault::wrap(cap, INTENT_PUBKEY, s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
+
+    ts::next_tx(s, OWNER);
+    {
+        let mut v = ts::take_shared<Vault<TestCap>>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+
+        // First call succeeds and burns nonce 42; the replay with the same nonce
+        // aborts ENonceUsed (the signature is still valid, but the nonce is spent).
+        vault::verify_and_consume_intent(&mut v, INTENT_MSG, INTENT_SIG, 42u64);
+        vault::verify_and_consume_intent(&mut v, INTENT_MSG, INTENT_SIG, 42u64); // unreachable
 
         ts::return_to_sender(s, admin);
         ts::return_shared(v);

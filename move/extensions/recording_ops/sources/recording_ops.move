@@ -13,13 +13,16 @@
 ///   into a release at an agreed revenue split — a high-stakes, economically
 ///   irreversible act. The operator may *relay* it, but only the recording
 ///   owner (the vault's principal) can *authorize* it: the owner signs a
-///   canonical intent message off-chain with the raw Ed25519 key whose public
-///   half is stored on the vault (`admin_pubkey`), and this plugin verifies that
-///   signature on-chain before minting the `Deal`. The vault's nonce set makes
-///   each signed intent single-use, and an explicit expiry bounds its lifetime.
-///   A configurable economic floor (`min_split_bps`) is enforced on-chain so a
-///   compromised or careless operator cannot relay a deal below the owner's
-///   stated minimum even with a valid signature for that split.
+///   canonical intent message off-chain with the Sui **personal-message** scheme
+///   (`signPersonalMessage`) under the key whose public half is stored on the
+///   vault (`admin_pubkey`), and the vault verifies that signature on-chain
+///   before this plugin mints the `Deal`. Personal-message signing is what every
+///   Sui wallet and the SDK keypairs emit, so both human owners and autonomous
+///   agent keys can author intents with their normal signing flow. The vault's
+///   nonce set makes each signed intent single-use, and an explicit expiry bounds
+///   its lifetime. A configurable economic floor (`min_split_bps`) is enforced
+///   on-chain so a compromised or careless operator cannot relay a deal below the
+///   owner's stated minimum even with a valid signature for that split.
 ///
 /// - **Autonomous tier (royalty sweeps + `set_extension`).** Folding inbound
 ///   revenue into the royalty pool and writing operational metadata are
@@ -30,11 +33,12 @@
 ///
 /// The plugin's witness type is `Key`: a single `drop`-only witness that fixes
 /// the type parameter `K` at install (the vault keys the `Config` df by its own
-/// `vault::PluginKey<Key>` wrapper), gates the witness-checked cap borrow, and
-/// gates nonce consumption. Installing with `Key()`, borrowing with `Key()`, and
-/// consuming a nonce with `Key()` all reference the same `with_defining_ids<Key>()`
-/// type tag, so the vault's installation guard, borrow gate, and replay guard are
-/// all keyed to this package.
+/// `vault::PluginKey<Key>` wrapper) and gates the witness-checked cap borrow.
+/// Installing with `Key()` and borrowing with `Key()` reference the same
+/// `with_defining_ids<Key>()` type tag, so the vault's installation guard and
+/// borrow gate are both keyed to this package. The signed-intent check itself is
+/// not witness-gated: it lives in `vault::verify_and_consume_intent`, authorized
+/// solely by the principal's signature over the canonical intent bytes.
 module recording_ops::recording_ops;
 
 use miso::deal;
@@ -47,7 +51,6 @@ use std::string::String;
 use sui::clock::Clock;
 use sui::coin::Coin;
 use sui::dynamic_field as df;
-use sui::ed25519;
 use sui::event::emit;
 use sui::transfer::Receiving;
 
@@ -57,8 +60,6 @@ use sui::transfer::Receiving;
 const ESplitTooLow: u64 = 0;
 /// The signed intent has expired (its expiry is at or before now).
 const EIntentExpired: u64 = 1;
-/// The principal's Ed25519 signature over the canonical intent does not verify.
-const EBadIntent: u64 = 2;
 
 // === Constants ===
 
@@ -68,17 +69,19 @@ const SUBMIT_DEAL_INTENT_TAG: vector<u8> = b"miso:submit_deal:v1";
 
 // === Structs ===
 
-/// The plugin's witness type. It serves three roles:
+/// The plugin's witness type. It serves two roles:
 /// - fixes the type parameter `K` at install (the vault keys the `Config` df by
 ///   its own `vault::PluginKey<Key>` wrapper, and tags this plugin in `plugins`),
-/// - the witness `W` for the vault's witness-gated cap borrow, and
-/// - the witness `W` for the vault's witness-gated nonce consumption.
+///   and
+/// - the witness `W` for the vault's witness-gated cap borrow.
 ///
 /// A `drop`-only witness: the vault — not this module — owns the config df key,
-/// so `Key` is never the df key itself. The vault's `plugins` set, borrow gate,
-/// and nonce gate are all keyed to `with_defining_ids<Key>()` — i.e. to this
-/// package — so no other package can borrow this vault's cap through this plugin
-/// or burn its nonces. A client resolves this vault's config under
+/// so `Key` is never the df key itself. The vault's `plugins` set and borrow gate
+/// are both keyed to `with_defining_ids<Key>()` — i.e. to this package — so no
+/// other package can borrow this vault's cap through this plugin. (The signed
+/// intent's replay guard is keyed to the principal's signature, not the witness,
+/// so it lives in `vault::verify_and_consume_intent` and takes no witness.) A
+/// client resolves this vault's config under
 /// `recording_ops::recording_ops::Key` / `::Config`.
 public struct Key() has drop;
 
@@ -140,10 +143,12 @@ public fun uninstall<RS>(
 
 /// Build the canonical `submit_deal` intent message the principal signs.
 ///
-/// EXACT ENCODING (an off-chain signer must reproduce this bit-for-bit and sign
-/// the result with the RAW Ed25519 primitive — NOT `signPersonalMessage`, which
-/// wraps the payload in a BCS `PersonalMessage` envelope and would not verify
-/// here):
+/// EXACT ENCODING (an off-chain signer must reproduce these bytes bit-for-bit and
+/// then sign them with the Sui **personal-message** scheme — i.e. pass this exact
+/// `msg` to `signPersonalMessage` / `Keypair.signPersonalMessage`. The vault's
+/// `verify_and_consume_intent` reconstructs the personal-message digest
+/// `blake2b256([3,0,0] ‖ bcs(PersonalMessage{ message: msg }))` and verifies the
+/// raw 64-byte Ed25519 signature against it):
 ///
 /// ```text
 ///   msg = b"miso:submit_deal:v1"          // 19 bytes, the domain tag, no length prefix
@@ -157,7 +162,10 @@ public fun uninstall<RS>(
 /// Total length is fixed at 19 + 32 + 32 + 2 + 8 + 8 = 101 bytes. The two IDs
 /// are appended as their raw 32-byte address representations (NOT BCS-wrapped:
 /// `id.to_bytes()` returns the bare 32 bytes). The three scalars ARE
-/// BCS-encoded, which for fixed-width integers is just little-endian bytes.
+/// BCS-encoded, which for fixed-width integers is just little-endian bytes. This
+/// 101-byte `msg` is the personal-message payload; the personal-message envelope
+/// (intent prefix + BCS length) is applied by the wallet when signing and
+/// reconstructed on-chain by the vault.
 ///
 /// Exposed `public` so tests and the off-chain integration eval share one
 /// source of truth for the encoding.
@@ -181,20 +189,20 @@ public fun build_intent_msg(
 /// verified signed intent.
 ///
 /// The operator relays; the owner authorizes. The owner signs the canonical
-/// intent (see `build_intent_msg`) off-chain with the raw Ed25519 key whose
-/// public half is the vault's `admin_pubkey`; this function verifies that
-/// signature before minting the `Deal`. Steps, in order:
+/// intent (see `build_intent_msg`) off-chain with the Sui personal-message scheme
+/// under the key whose public half is the vault's `admin_pubkey`; the vault
+/// verifies that signature before this function mints the `Deal`. Steps, in order:
 ///
 /// 1. Read the installed `Config` (aborts if the plugin is not installed) and
 ///    enforce the economic floor: `split_bps >= min_split_bps`.
 /// 2. Enforce the intent has not expired: `intent_expires_ms > now`.
-/// 3. Rebuild the canonical intent message and verify the principal's signature
-///    over it against the vault's `admin_pubkey`.
-/// 4. Consume the nonce (witness-gated replay guard) so the signed intent is
-///    single-use.
-/// 5. Borrow the `RecordingAdminCap` under operator authority, mint the `Deal`,
+/// 3. Rebuild the canonical intent message and call
+///    `vault::verify_and_consume_intent`, which verifies the principal's
+///    personal-message signature against the vault's `admin_pubkey` and burns the
+///    nonce so the signed intent is single-use (replay guard).
+/// 4. Borrow the `RecordingAdminCap` under operator authority, mint the `Deal`,
 ///    return the cap.
-/// 6. Route the `Deal` (key + store) to the assembler and emit `DealSubmitted`.
+/// 5. Route the `Deal` (key + store) to the assembler and emit `DealSubmitted`.
 ///
 /// `entry` is intentional and matches the operator's relay call site (a PTB
 /// command), even though `public` already permits PTB calls.
@@ -223,10 +231,12 @@ public entry fun submit_deal<RS, CS>(
     // 2. Expiry. The signed intent must still be live.
     assert!(intent_expires_ms > clk.timestamp_ms(), EIntentExpired);
 
-    // 3. Verify the principal's signature over the canonical intent. Binding the
-    //    vault id, release, split, nonce, and expiry into the signed bytes means
-    //    a signature for one (vault, release, split, nonce, expiry) tuple cannot
-    //    be replayed against any other.
+    // 3. Verify the principal's personal-message signature over the canonical
+    //    intent and burn the nonce (replay guard), in one vault call. Binding the
+    //    vault id, release, split, nonce, and expiry into the signed bytes means a
+    //    signature for one (vault, release, split, nonce, expiry) tuple cannot be
+    //    replayed against any other. Aborts `EBadIntent` / `ENonceUsed` in the
+    //    vault.
     let msg = build_intent_msg(
         object::id(v),
         release_id,
@@ -234,18 +244,15 @@ public entry fun submit_deal<RS, CS>(
         nonce,
         intent_expires_ms,
     );
-    assert!(ed25519::ed25519_verify(&intent_sig, vault::admin_pubkey(v), &msg), EBadIntent);
+    vault::verify_and_consume_intent(v, msg, intent_sig, nonce);
 
-    // 4. Replay guard: burn the nonce (witness-gated to this plugin).
-    vault::consume_nonce(v, Key(), nonce);
-
-    // 5. Borrow the cap under operator authority, mint the deal, return the cap.
+    // 4. Borrow the cap under operator authority, mint the deal, return the cap.
     let (cap, b) = vault::borrow_cap_plugin(v, op, Key(), clk);
     let deal = deal::new(&cap, rec, release_id, split_bps, ctx);
     let deal_id = deal.id();
     vault::return_cap(v, cap, b);
 
-    // 6. Route the deal to the assembler and announce the submission.
+    // 5. Route the deal to the assembler and announce the submission.
     transfer::public_transfer(deal, assembler);
 
     emit(DealSubmitted {

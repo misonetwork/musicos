@@ -29,9 +29,11 @@
 ///
 /// The cap path is split: the admin (`VaultAdminCap` holder) may borrow the cap
 /// unconditionally, while an installed plugin may borrow it (witness-gated)
-/// through a live, unexpired `OperatorCap`. Plugins additionally verify the
-/// principal's signed intents off the `admin_pubkey` and replay-protect them via
-/// the `used_nonces` set (`consume_nonce`).
+/// through a live, unexpired `OperatorCap`. Plugins additionally gate high-stakes
+/// ops on the principal's signed intent: `verify_and_consume_intent` reconstructs
+/// the Sui *personal-message* digest the principal's wallet (or agent key) signed,
+/// verifies it against the `admin_pubkey`, and replay-protects the intent via the
+/// `used_nonces` set — all in one call.
 ///
 /// The owner holds a `VaultAdminCap` (a recovery key) and always retains an
 /// unconditional escape hatch via `withdraw`.
@@ -41,7 +43,9 @@ use std::type_name::{Self, TypeName};
 use sui::borrow::{Self, Referent, Borrow};
 use sui::clock::Clock;
 use sui::dynamic_field as df;
+use sui::ed25519;
 use sui::event;
+use sui::hash;
 use sui::vec_set::{Self, VecSet};
 
 // === Errors ===
@@ -60,6 +64,8 @@ const EExpired: u64 = 4;
 const EPluginNotInstalled: u64 = 5;
 /// The supplied nonce has already been consumed (replay).
 const ENonceUsed: u64 = 6;
+/// The principal's signature over the personal-message intent does not verify.
+const EBadIntent: u64 = 7;
 
 // === Structs ===
 
@@ -225,18 +231,52 @@ public fun return_cap<Cap: key + store>(v: &mut Vault<Cap>, cap: Cap, b: Borrow)
     borrow::put_back(&mut v.cap, cap, b);
 }
 
-// === Signed-intent nonces ===
+// === Signed intents ===
 
-/// Witness-gated consumption of a signed-intent nonce. Only an installed plugin
-/// (witness type `W` in `plugins`) may consume nonces, inside its op flow.
-/// Aborts on replay. Asserting both installation and uniqueness keeps the
-/// principal's signed intents single-use.
-public fun consume_nonce<Cap: key + store, W: drop>(
+/// Verify the principal's signed intent over `msg` and consume its `nonce` in one
+/// step. This is the high-stakes authorization primitive: a plugin builds the
+/// canonical intent bytes for the operation it is about to perform, and this
+/// function proves the vault's principal authorized exactly those bytes and that
+/// the authorization is single-use.
+///
+/// The principal signs `msg` with the Sui **personal-message** scheme — i.e. what
+/// every Sui wallet's `signPersonalMessage` and the SDK's
+/// `Keypair.signPersonalMessage` produce — so both human wallets and autonomous
+/// agent keys can author intents with their normal signing flow. The signature is
+/// a raw 64-byte Ed25519 signature (extract it from a serialized wallet signature
+/// off-chain) over the personal-message digest reconstructed here.
+///
+/// Digest reconstruction (the exact bytes a Sui signer hashes for a
+/// personal message):
+///
+/// ```text
+///   preimage = [3, 0, 0]                    // Intent: scope=PersonalMessage(3), version=V0(0), app=Sui(0)
+///            ++ bcs(PersonalMessage{ message: msg })
+///   digest   = blake2b256(preimage)         // 32 bytes
+/// ```
+///
+/// `PersonalMessage` wraps a single `vector<u8>` field, so its BCS encoding is
+/// exactly the BCS encoding of `msg` itself: a ULEB128 length prefix followed by
+/// the raw bytes. We therefore append `bcs::to_bytes(&msg)` directly. The signer
+/// signs the 32-byte `digest`, so `ed25519_verify` is given the digest (NOT the
+/// preimage).
+///
+/// Aborts with `EBadIntent` if the signature does not verify against the vault's
+/// `admin_pubkey`, or with `ENonceUsed` if the nonce was already consumed.
+public fun verify_and_consume_intent<Cap: key + store>(
     v: &mut Vault<Cap>,
-    _w: W,
+    msg: vector<u8>,
+    sig: vector<u8>,
     nonce: u64,
 ) {
-    assert!(v.plugins.contains(&type_name::with_defining_ids<W>()), EPluginNotInstalled);
+    // Reconstruct the Sui personal-message digest the signer produced:
+    //   blake2b256( [3,0,0] ‖ bcs(PersonalMessage{message: msg}) )
+    // bcs of a vector<u8> is ULEB128(len) ‖ bytes, which equals
+    // bcs(PersonalMessage{message: msg}) since the struct has that one field.
+    let mut preimage = vector[3u8, 0u8, 0u8]; // Intent: PersonalMessage(3), V0(0), Sui(0)
+    preimage.append(std::bcs::to_bytes(&msg));
+    let digest = hash::blake2b256(&preimage);
+    assert!(ed25519::ed25519_verify(&sig, &v.admin_pubkey, &digest), EBadIntent);
     assert!(!v.used_nonces.contains(&nonce), ENonceUsed);
     v.used_nonces.insert(nonce);
 }
