@@ -1,0 +1,10 @@
+[package]
+name = "release_ops"
+edition = "2024"
+license = "Apache 2.0"
+authors = ["Miso Labs, Inc. (build@miso.network)"]
+
+[dependencies]
+miso = { local = "../../core" }
+miso_vault = { local = "../../lib/vault" }
+release_revenue_distributor = { local = "../release_revenue_distributor" }

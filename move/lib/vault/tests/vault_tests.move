@@ -16,11 +16,12 @@ public struct TestCap has key, store {
     secret: u64,
 }
 
-/// The installed plugin's type: used both as the dynamic-field `Key` (so it is
-/// recorded in the vault's `plugins` set) and as the witness `W` for the
-/// witness-gated cap borrow / nonce consumption. A real plugin uses one type for
-/// both roles, so `with_defining_ids<W>()` matches the installed key.
-public struct TestPlugin has copy, drop, store {}
+/// The installed plugin's witness type `K`: supplied (by value) at install to fix
+/// the type parameter, and used as the witness `W` for the witness-gated cap
+/// borrow / nonce consumption. The vault keys the config df by its own
+/// `PluginKey<K>` wrapper and records `with_defining_ids<K>()` in `plugins`. A
+/// real plugin uses one `drop`-only witness type for these roles.
+public struct TestPlugin has drop {}
 
 /// A second, *uninstalled* plugin witness type — used to prove witness gating.
 public struct OtherPlugin has drop {}
@@ -68,11 +69,11 @@ fun test_full_lifecycle() {
         vault::add_plugin(&mut v, &admin, TestPlugin {}, TestConfig { limit: 7 });
 
         assert!(vault::has_plugin<TestCap, TestPlugin>(&v), 1);
-        // permissionless read of plugin config
-        let cfg = vault::config<TestCap, TestPlugin, TestConfig>(&v, TestPlugin {});
+        // permissionless read of plugin config (by type param, no witness value)
+        let cfg = vault::config<TestCap, TestPlugin, TestConfig>(&v);
         assert!(cfg.limit == 7, 2);
-        // admin-gated mutable read
-        let cfg_mut = vault::config_mut<TestCap, TestPlugin, TestConfig>(&mut v, &admin, TestPlugin {});
+        // admin-gated mutable read (by type param, no witness value)
+        let cfg_mut = vault::config_mut<TestCap, TestPlugin, TestConfig>(&mut v, &admin);
         cfg_mut.limit = 9;
 
         ts::return_to_sender(s, admin);
@@ -108,7 +109,7 @@ fun test_full_lifecycle() {
         let admin = ts::take_from_sender<VaultAdminCap>(s);
 
         let cfg: TestConfig =
-            vault::remove_plugin<TestCap, TestPlugin, TestConfig>(&mut v, &admin, TestPlugin {});
+            vault::remove_plugin<TestCap, TestPlugin, TestConfig>(&mut v, &admin);
         assert!(cfg.limit == 9, 6);
         let TestConfig { limit: _ } = cfg;
         assert!(!vault::has_plugin<TestCap, TestPlugin>(&v), 7);
@@ -399,6 +400,61 @@ fun test_withdraw_with_plugin_fails() {
         let recovered = vault::withdraw(v, &admin);
         let TestCap { id, secret: _ } = recovered; // unreachable
         object::delete(id);
+        ts::return_to_sender(s, admin);
+    };
+
+    scenario.end();
+}
+
+// === Owner-direct uninstall: no plugin cooperation needed ===
+
+/// The whole point of the vault-owned `PluginKey<K>` keying: the OWNER can
+/// uninstall ANY installed plugin purely by type parameter — `remove_plugin<Cap,
+/// K, Config>` takes no witness value and calls into no plugin module — and then
+/// withdraw the wrapped cap. This proves the `withdraw` escape hatch is
+/// structurally un-loseable: a plugin that ships no `uninstall` (or whose package
+/// is gone) can still be torn down by the owner directly through the vault.
+#[test]
+fun test_owner_can_remove_any_plugin_directly() {
+    let mut scenario = ts::begin(OWNER);
+    let s = &mut scenario;
+
+    let cap = new_cap(s.ctx());
+    let admin_cap = vault::wrap(cap, PUBKEY, s.ctx());
+    transfer::public_transfer(admin_cap, OWNER);
+
+    // Install a plugin keyed by the `TestPlugin` witness type.
+    ts::next_tx(s, OWNER);
+    {
+        let mut v = ts::take_shared<Vault<TestCap>>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+        vault::add_plugin(&mut v, &admin, TestPlugin {}, TestConfig { limit: 5 });
+        assert!(vault::has_plugin<TestCap, TestPlugin>(&v), 0);
+        ts::return_to_sender(s, admin);
+        ts::return_shared(v);
+    };
+
+    // The owner removes it WITHOUT the plugin module's help: `remove_plugin` is
+    // keyed purely by the `TestPlugin` type parameter, takes no witness value,
+    // and is callable with just the `VaultAdminCap`. Then the now-plugin-free
+    // cap is withdrawn.
+    ts::next_tx(s, OWNER);
+    {
+        let mut v = ts::take_shared<Vault<TestCap>>(s);
+        let admin = ts::take_from_sender<VaultAdminCap>(s);
+
+        let cfg: TestConfig =
+            vault::remove_plugin<TestCap, TestPlugin, TestConfig>(&mut v, &admin);
+        assert!(cfg.limit == 5, 1);
+        let TestConfig { limit: _ } = cfg;
+        assert!(!vault::has_plugin<TestCap, TestPlugin>(&v), 2);
+
+        // With no plugins left, the escape hatch is available.
+        let recovered = vault::withdraw(v, &admin);
+        assert!(recovered.secret == 42, 3);
+        let TestCap { id, secret: _ } = recovered;
+        object::delete(id);
+
         ts::return_to_sender(s, admin);
     };
 

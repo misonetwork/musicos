@@ -1,0 +1,18 @@
+[package]
+name = "recording_ops"
+edition = "2024"
+license = "Apache 2.0"
+authors = ["Miso Labs, Inc. (build@miso.network)"]
+
+# The marquee operations plugin for a vaulted `RecordingAdminCap`. It depends on
+# miso core (to mint `Deal`s and reach the recording's `uid_mut`), the vault
+# (to borrow the cap under operator authority and verify the principal's signed
+# intents), and the recording royalty pool (to fold inbound revenue under cap).
+[dependencies]
+miso = { local = "../../core" }
+miso_vault = { local = "../../lib/vault" }
+recording_royalty_pool = { local = "../recording_royalty_pool" }
+# `recording_royalty_pool` re-exports `RoyaltyPool` and the `pool::share`
+# entrypoint in its public surface, so this package names them directly and must
+# declare the dependency explicitly (transitive deps are not in scope).
+royalty_pool = { local = "../../lib/royalty_pool" }

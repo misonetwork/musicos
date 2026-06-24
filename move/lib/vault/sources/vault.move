@@ -16,9 +16,16 @@
 /// and the holder cannot transfer it.
 ///
 /// Plugins are other packages that install per-vault `Config` values in dynamic
-/// fields keyed by a `Key` type. The `plugins` set tracks the installed `Key`
-/// types both for discoverability and as a teardown guard: `withdraw` can only
-/// run on a vault with no plugins installed, preventing orphaned dynamic fields.
+/// fields keyed by a *vault-owned* `PluginKey<K>` wrapper, parameterized by the
+/// plugin's witness type `K`. Because the vault constructs the df key (the plugin
+/// never names it), the owner can install and — critically — *uninstall* any
+/// plugin purely by type parameter, with no cooperation from the plugin module.
+/// This is what makes the `withdraw` escape hatch structurally un-loseable: even
+/// a plugin that ships no `uninstall` (or whose package is gone) can be torn down
+/// by the owner via `remove_plugin<Cap, K, Config>`. The `plugins` set tracks the
+/// installed witness types both for discoverability and as a teardown guard:
+/// `withdraw` can only run on a vault with no plugins installed, preventing
+/// orphaned dynamic fields.
 ///
 /// The cap path is split: the admin (`VaultAdminCap` holder) may borrow the cap
 /// unconditionally, while an installed plugin may borrow it (witness-gated)
@@ -69,7 +76,8 @@ public struct Vault<Cap: key + store> has key {
     /// Authorized `OperatorCap` object ids. Membership is the revocation
     /// registry: remove == instant revoke.
     operators: VecSet<ID>,
-    /// Installed plugin `Key` types. Teardown guard + discoverability.
+    /// Installed plugin witness types (`type_name` of each plugin's `K`).
+    /// Teardown guard + discoverability.
     plugins: VecSet<TypeName>,
     /// Consumed signed-intent nonces. Replay protection for plugin ops.
     used_nonces: VecSet<u64>,
@@ -235,48 +243,59 @@ public fun consume_nonce<Cap: key + store, W: drop>(
 
 // === Plugins ===
 
-/// Install a plugin: store `cfg` in a dynamic field keyed by `key` and record
-/// the `Key` type in the `plugins` set.
-public fun add_plugin<Cap: key + store, Key: copy + drop + store, Config: store>(
+/// The vault-owned dynamic-field key under which a plugin's `Config` is stored,
+/// parameterized (phantom) by the plugin's witness type `K`. Crucially this key
+/// is constructed *by the vault*, not by the plugin — the plugin never names the
+/// df key, it only supplies its witness type. That is what lets the owner add and
+/// remove ANY plugin purely by type parameter (`add_plugin`/`remove_plugin`),
+/// with no cooperation from the plugin module, keeping the `withdraw` escape
+/// hatch structurally un-loseable.
+public struct PluginKey<phantom K> has copy, drop, store {}
+
+/// Install a plugin: store `cfg` in a dynamic field keyed by the vault-owned
+/// `PluginKey<K>` and record the witness type `K` in the `plugins` set. The
+/// plugin passes its witness value `_w: K` only to fix the type parameter `K`
+/// at the call site; the vault owns the resulting df key.
+public fun add_plugin<Cap: key + store, K: drop, Config: store>(
     v: &mut Vault<Cap>,
     admin: &VaultAdminCap,
-    key: Key,
+    _w: K,
     cfg: Config,
 ) {
     assert!(admin.vault_id == object::id(v), ENotAdmin);
-    df::add(&mut v.id, key, cfg);
-    v.plugins.insert(type_name::with_defining_ids<Key>());
+    df::add(&mut v.id, PluginKey<K> {}, cfg);
+    v.plugins.insert(type_name::with_defining_ids<K>());
 }
 
-/// Uninstall a plugin: remove the `Key` type from `plugins` and return the
-/// stored `Config`.
-public fun remove_plugin<Cap: key + store, Key: copy + drop + store, Config: store>(
+/// Uninstall a plugin: remove the witness type `K` from `plugins` and return the
+/// stored `Config`. Owner-only and keyed purely by the type parameter `K` — no
+/// witness VALUE and no plugin cooperation required, so the owner can tear down
+/// ANY installed plugin (even one whose module is unavailable) directly through
+/// the vault. This is the structural guarantee that the cap can always later be
+/// `withdraw`n.
+public fun remove_plugin<Cap: key + store, K: drop, Config: store>(
     v: &mut Vault<Cap>,
     admin: &VaultAdminCap,
-    key: Key,
 ): Config {
     assert!(admin.vault_id == object::id(v), ENotAdmin);
-    v.plugins.remove(&type_name::with_defining_ids<Key>());
-    df::remove(&mut v.id, key)
+    v.plugins.remove(&type_name::with_defining_ids<K>());
+    df::remove(&mut v.id, PluginKey<K> {})
 }
 
-/// Operate-time read of a plugin's config. Aborts if the plugin is not
-/// installed. Permissionless by design.
-public fun config<Cap: key + store, Key: copy + drop + store, Config: store>(
-    v: &Vault<Cap>,
-    key: Key,
-): &Config {
-    df::borrow(&v.id, key)
+/// Operate-time read of a plugin's config, keyed purely by the type parameter
+/// `K`. Aborts if the plugin is not installed. Permissionless by design.
+public fun config<Cap: key + store, K: drop, Config: store>(v: &Vault<Cap>): &Config {
+    df::borrow(&v.id, PluginKey<K> {})
 }
 
-/// Admin-gated mutable access to a plugin's config.
-public fun config_mut<Cap: key + store, Key: copy + drop + store, Config: store>(
+/// Admin-gated mutable access to a plugin's config, keyed purely by the type
+/// parameter `K`.
+public fun config_mut<Cap: key + store, K: drop, Config: store>(
     v: &mut Vault<Cap>,
     admin: &VaultAdminCap,
-    key: Key,
 ): &mut Config {
     assert!(admin.vault_id == object::id(v), ENotAdmin);
-    df::borrow_mut(&mut v.id, key)
+    df::borrow_mut(&mut v.id, PluginKey<K> {})
 }
 
 // === Views ===
@@ -296,9 +315,9 @@ public fun is_operator<Cap: key + store>(v: &Vault<Cap>, operator_id: ID): bool 
     v.operators.contains(&operator_id)
 }
 
-/// Whether a plugin keyed by type `Key` is installed.
-public fun has_plugin<Cap: key + store, Key: copy + drop + store>(v: &Vault<Cap>): bool {
-    v.plugins.contains(&type_name::with_defining_ids<Key>())
+/// Whether a plugin with witness type `K` is installed.
+public fun has_plugin<Cap: key + store, K: drop>(v: &Vault<Cap>): bool {
+    v.plugins.contains(&type_name::with_defining_ids<K>())
 }
 
 /// The vault id an `OperatorCap` was minted for.

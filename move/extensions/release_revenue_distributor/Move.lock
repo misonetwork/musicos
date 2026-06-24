@@ -45,3 +45,45 @@ source = { local = "../../lib/share" }
 use_environment = "mainnet"
 manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
 deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.testnet.MoveStdlib]
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "718ae563a42fb4ba0d055588f81c704dcef58c25" }
+use_environment = "testnet"
+manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
+deps = {}
+
+[pinned.testnet.Sui]
+source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "718ae563a42fb4ba0d055588f81c704dcef58c25" }
+use_environment = "testnet"
+manifest_digest = "7AFB66695545775FBFBB2D3078ADFD084244D5002392E837FDE21D9EA1C6D01C"
+deps = { MoveStdlib = "MoveStdlib" }
+
+[pinned.testnet.bps]
+source = { git = "https://github.com/unconfirmedlabs/bps.git", subdir = ".", rev = "d1c07015b98c407e556d014eaa1f4991bd081372" }
+use_environment = "testnet"
+manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.testnet.hikida]
+source = { git = "https://github.com/unconfirmedlabs/hikida.git", subdir = ".", rev = "bc8e04947f5728328948df584b74ae8b03d17ef8" }
+use_environment = "testnet"
+manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.testnet.miso]
+source = { local = "../../core" }
+use_environment = "testnet"
+manifest_digest = "C7BC3575CE4779C127A679D6A95F7BCD3C225B49E8E28D8F816C68EE24F55049"
+deps = { bps = "bps", share = "share", std = "MoveStdlib", sui = "Sui" }
+
+[pinned.testnet.release_revenue_distributor]
+source = { root = true }
+use_environment = "testnet"
+manifest_digest = "3E48E1029B45D8F187BB0624D702B942075D2E44BF28486DC0CFB2095A927079"
+deps = { hikida = "hikida", miso = "miso", std = "MoveStdlib", sui = "Sui" }
+
+[pinned.testnet.share]
+source = { local = "../../lib/share" }
+use_environment = "testnet"
+manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
+deps = { std = "MoveStdlib", sui = "Sui" }

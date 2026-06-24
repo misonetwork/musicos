@@ -4,54 +4,6 @@
 [move]
 version = 4
 
-[pinned.mainnet.MoveStdlib]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "367fd808279bed26f7c64fc63160062a2ee29ab7" }
-use_environment = "mainnet"
-manifest_digest = "C4FE4C91DE74CBF223B2E380AE40F592177D21870DC2D7EB6227D2D694E05363"
-deps = {}
-
-[pinned.mainnet.Sui]
-source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "367fd808279bed26f7c64fc63160062a2ee29ab7" }
-use_environment = "mainnet"
-manifest_digest = "CD547CB1ACCE0880C835DAED2D8FFCB91D56C833AE5240D3AA5B918398263195"
-deps = { MoveStdlib = "MoveStdlib" }
-
-[pinned.mainnet.bps]
-source = { git = "https://github.com/unconfirmedlabs/bps.git", subdir = ".", rev = "d1c07015b98c407e556d014eaa1f4991bd081372" }
-use_environment = "mainnet"
-manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
-deps = { std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mainnet.hikida]
-source = { git = "https://github.com/unconfirmedlabs/hikida.git", subdir = ".", rev = "bc8e04947f5728328948df584b74ae8b03d17ef8" }
-use_environment = "mainnet"
-manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
-deps = { std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mainnet.miso]
-source = { local = "../../core" }
-use_environment = "mainnet"
-manifest_digest = "931E488D4C6A6C9557E2223361938CA3E1FBEB5EDB7E81ADD9EBB3404535B4CA"
-deps = { bps = "bps", share = "share", std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mainnet.recording_royalty_pool]
-source = { root = true }
-use_environment = "mainnet"
-manifest_digest = "C4167054AE470BEF70C89CBF6074E21ABF100DC456A58ACE93E20639056A24CE"
-deps = { hikida = "hikida", miso = "miso", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mainnet.royalty_pool]
-source = { local = "../../lib/royalty_pool" }
-use_environment = "mainnet"
-manifest_digest = "76ABCDCB65A072C5413E29814C9145BA96864E01F54F95168B64A95FF539845C"
-deps = { hikida = "hikida", std = "MoveStdlib", sui = "Sui" }
-
-[pinned.mainnet.share]
-source = { local = "../../lib/share" }
-use_environment = "mainnet"
-manifest_digest = "E41BBD67BE8940D26C79D78B028477EF5B33BA217A1282C78ACB344CF8A5ECF6"
-deps = { std = "MoveStdlib", sui = "Sui" }
-
 [pinned.testnet.MoveStdlib]
 source = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/move-stdlib", rev = "718ae563a42fb4ba0d055588f81c704dcef58c25" }
 use_environment = "testnet"
@@ -82,8 +34,20 @@ use_environment = "testnet"
 manifest_digest = "C7BC3575CE4779C127A679D6A95F7BCD3C225B49E8E28D8F816C68EE24F55049"
 deps = { bps = "bps", share = "share", std = "MoveStdlib", sui = "Sui" }
 
-[pinned.testnet.recording_royalty_pool]
+[pinned.testnet.miso_vault]
+source = { local = "../../lib/vault" }
+use_environment = "testnet"
+manifest_digest = "5745706258F61D6CE210904B3E6AE87A73CE9D31A6F93BE4718C442529332A87"
+deps = { std = "MoveStdlib", sui = "Sui" }
+
+[pinned.testnet.recording_ops]
 source = { root = true }
+use_environment = "testnet"
+manifest_digest = "859428CE07A17481687756E4D0EA2A61D790CC0B2675ADFDE8F25E430F53CF5A"
+deps = { miso = "miso", miso_vault = "miso_vault", recording_royalty_pool = "recording_royalty_pool", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
+
+[pinned.testnet.recording_royalty_pool]
+source = { local = "../recording_royalty_pool" }
 use_environment = "testnet"
 manifest_digest = "C7918D697BE11A1FB9643C0CEEEA00D90E1F6C3D5E4BB508BE04FDF135CE6E6C"
 deps = { hikida = "hikida", miso = "miso", royalty_pool = "royalty_pool", std = "MoveStdlib", sui = "Sui" }
