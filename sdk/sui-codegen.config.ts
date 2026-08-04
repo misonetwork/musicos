@@ -23,7 +23,7 @@ const config: SuiCodegenConfig = {
     // Record layer — the drop (record sale) + cover art (a Walrus blob ref
     // via ori, attached to a Release by release_cover_art). Both drive the
     // album-publish CLI flow and the app's featured-drop render.
-    { package: "@local-pkg/miso_drop", path: "../../miso-drop/move" },
+    { package: "@local-pkg/miso_drop", path: "../../miso-pressing/move" },
     { package: "@local-pkg/cover_art", path: "../../miso-protocol-extensions/lib/cover_art" },
     // Caveat: release_cover_art transitively depends on ori (walrus_data), which
     // is NOT declared here, so its dep bindings land under the deployed package
