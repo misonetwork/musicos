@@ -100,9 +100,13 @@ bun run typecheck
 
 ## Deployment
 
-The protocol is **pre-launch**. Current deployments are iteration publishes —
-package ids rotate on each republish and any state on them is disposable. The
-final launch publish will be immutable (its `UpgradeCap` destroyed).
+The current Testnet deployment is immutable: it was published and its
+`UpgradeCap` destroyed atomically.
+
+- `miso`: `0x5bb3ec642b1f7debd8bc2acbc16232abe893844d5978431d1cc0fbdddad73b97`
+- `ReleaseRegistry` (shared): `0x3f202b6f89cf635f54bd7ddee7a21e73c77b88a10f1fc451571e9e931997e8d6`
+- `bps` (immutable): `0x0f170226c83d612e407732f46170d02530fbc76bc626221642c4142d86759bff`
+- `miso_share` (immutable): `0x7e7c860158dd0dd840133b68a608854e30101d496781bb835dc747f410732390`
 
 Current package and object ids for every network live in
 [`misonetwork/miso-deployments`](https://github.com/misonetwork/miso-deployments),

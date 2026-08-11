@@ -17,7 +17,7 @@
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
     "./queries": "./src/queries.ts",
-    "./drop": "./src/drop.ts",
+    "./pressing": "./src/pressing.ts",
     "./cover": "./src/cover.ts",
     "./credits": "./src/credits.ts",
     "./transactions": "./src/transactions.ts",

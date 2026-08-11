@@ -33,6 +33,16 @@ export const ReleaseCredits = new MoveStruct({ name: `${$moduleName}::ReleaseCre
         /** Map of party IDs to their credit (display name + role). */
         credits: vec_map.VecMap(bcs.Address, credit.Credit(release_party_role.ReleasePartyRole))
     } });
+export const CreditAddedEvent = new MoveStruct({ name: `${$moduleName}::CreditAddedEvent`, fields: {
+        release_id: bcs.Address,
+        party_id: bcs.Address,
+        credit: credit.Credit(release_party_role.ReleasePartyRole)
+    } });
+export const CreditRemovedEvent = new MoveStruct({ name: `${$moduleName}::CreditRemovedEvent`, fields: {
+        release_id: bcs.Address,
+        party_id: bcs.Address,
+        credit: credit.Credit(release_party_role.ReleasePartyRole)
+    } });
 export interface AddCreditArguments {
     self: RawTransactionArgument<string>;
     cap: RawTransactionArgument<string>;

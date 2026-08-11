@@ -40,6 +40,18 @@ fun test_new_with_defaults() {
     assert_eq!(d.release_id(), release_id);
     assert_eq!(d.track_split_bps().value(), 10000);
 
+    let mut events = sui::event::events_by_type<
+        deal::DealCreatedEvent<RecordingShare, CompositionShare>,
+    >();
+    assert_eq!(events.length(), 1);
+    let (deal_id, recording_id, event_release_id, split_bps, created_by) =
+        deal::deal_created_event_fields(events.pop_back());
+    assert_eq!(deal_id, d.id());
+    assert_eq!(recording_id, rec.id());
+    assert_eq!(event_release_id, release_id);
+    assert_eq!(split_bps, 10000);
+    assert_eq!(created_by, ctx.sender());
+
     d.reject();
     destroy(comp);
     destroy(comp_cap);

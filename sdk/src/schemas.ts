@@ -18,7 +18,6 @@ export const CompositionSchema = z.object({
   state: CompositionStateSchema,
   title: z.string().min(1, "Composition title cannot be empty"),
   royaltyRate: z.object({ value: z.number().int().min(0).max(2000) }),
-  royaltyRateLastChangedEpoch: z.number().int().min(0),
 });
 
 export const CompositionPublishedEventSchema = z.object({

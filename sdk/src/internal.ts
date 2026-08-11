@@ -88,9 +88,7 @@ export function mapComposition(id: string, d: Parsed): Composition {
     id,
     state: mapState(d.state),
     title: d.title,
-    // CompositionRoyaltyRate is a Move tuple struct `(BPS, u64)` -> [bps, epoch].
-    royaltyRate: mapBps(d.royalty_rate[0]),
-    royaltyRateLastChangedEpoch: Number(d.royalty_rate[1]),
+    royaltyRate: mapBps(d.royalty_rate),
   };
 }
 

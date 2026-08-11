@@ -34,7 +34,6 @@ fun composition_new_initializes_fixed_share_supply() {
     assert_eq!(shares.value(), SHARE_SUPPLY);
     assert_eq!(*comp.title(), b"Production Song".to_string());
     assert_eq!(comp.royalty_rate().value(), 1500);
-    assert_eq!(comp.royalty_rate_last_changed_epoch(), ctx.epoch());
     assert!(comp.is_initialized_state());
     assert!(!comp.is_published_state());
 
@@ -84,6 +83,18 @@ fun recording_new_settles_composition_cut() {
     assert_eq!(shares.value(), SHARE_SUPPLY - 1_500_000_000_000);
     assert!(rec.is_initialized_state());
     assert!(!rec.is_published_state());
+
+    let mut events = sui::event::events_by_type<
+        recording::CompositionSharesGrantedEvent<Share, CompositionShare>,
+    >();
+    assert_eq!(events.length(), 1);
+    let (recording_id, composition_id, value, rate_bps, granted_by) =
+        recording::composition_shares_granted_event_fields(events.pop_back());
+    assert_eq!(recording_id, rec.id());
+    assert_eq!(composition_id, comp.id());
+    assert_eq!(value, 1_500_000_000_000);
+    assert_eq!(rate_bps, 1500);
+    assert_eq!(granted_by, ctx.sender());
 
     destroy(comp);
     destroy(comp_cap);

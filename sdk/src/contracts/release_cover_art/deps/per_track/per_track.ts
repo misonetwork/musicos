@@ -14,8 +14,8 @@
  * natural home for display grouping (disc/side boundaries), which core
  * deliberately does not store.
  * 
- * Construction reads the `Release` and sizes/validates the array against
- * `total_tracks()`, so a `PerTrack` is parallel to the tracklist _by construction_
+ * Construction reads the `Release` and sizes/validates the array against the
+ * tracklist length, so a `PerTrack` is parallel to the tracklist _by construction_
  * — an extension cannot attach a misaligned array. Because a release's tracklist
  * is frozen at creation, that alignment holds for the release's whole life.
  */

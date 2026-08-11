@@ -35,6 +35,32 @@ export const RecordingCredits = new MoveStruct({ name: `${$moduleName}::Recordin
         /** IDs of the featured artists. Always a subset of `credits`. */
         featured_artist_ids: vec_set.VecSet(bcs.Address)
     } });
+export const CreditAddedEvent = new MoveStruct({ name: `${$moduleName}::CreditAddedEvent`, fields: {
+        recording_id: bcs.Address,
+        party_id: bcs.Address,
+        credit: credit.Credit(recording_party_role.RecordingPartyRole)
+    } });
+export const CreditRemovedEvent = new MoveStruct({ name: `${$moduleName}::CreditRemovedEvent`, fields: {
+        recording_id: bcs.Address,
+        party_id: bcs.Address,
+        credit: credit.Credit(recording_party_role.RecordingPartyRole)
+    } });
+export const PrimaryArtistAddedEvent = new MoveStruct({ name: `${$moduleName}::PrimaryArtistAddedEvent`, fields: {
+        recording_id: bcs.Address,
+        party_id: bcs.Address
+    } });
+export const PrimaryArtistRemovedEvent = new MoveStruct({ name: `${$moduleName}::PrimaryArtistRemovedEvent`, fields: {
+        recording_id: bcs.Address,
+        party_id: bcs.Address
+    } });
+export const FeaturedArtistAddedEvent = new MoveStruct({ name: `${$moduleName}::FeaturedArtistAddedEvent`, fields: {
+        recording_id: bcs.Address,
+        party_id: bcs.Address
+    } });
+export const FeaturedArtistRemovedEvent = new MoveStruct({ name: `${$moduleName}::FeaturedArtistRemovedEvent`, fields: {
+        recording_id: bcs.Address,
+        party_id: bcs.Address
+    } });
 export interface AddCreditArguments {
     self: RawTransactionArgument<string>;
     cap: RawTransactionArgument<string>;

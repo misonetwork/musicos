@@ -20,10 +20,11 @@ const config: SuiCodegenConfig = {
     { package: "@local-pkg/composition_royalty_pool", path: "../../miso-protocol-extensions/composition_royalty_pool" },
     { package: "@local-pkg/recording_royalty_pool", path: "../../miso-protocol-extensions/recording_royalty_pool" },
 
-    // Record layer — the drop (record sale) + cover art (a Walrus blob ref
-    // via ori, attached to a Release by release_cover_art). Both drive the
-    // album-publish CLI flow and the app's featured-drop render.
-    { package: "@local-pkg/miso_drop", path: "../../miso-pressing/move" },
+    // Record layer — the pressing (the record production line: one uncapped run
+    // per release, plus a `Listing<Currency>` per payment rail) + cover art (a
+    // Walrus blob ref via ori, attached to a Release by release_cover_art). Both
+    // drive the album-publish CLI flow and the app's record-purchase render.
+    { package: "@local-pkg/miso_pressing", path: "../../../misofm/miso-pressing/move" },
     { package: "@local-pkg/cover_art", path: "../../miso-protocol-extensions/lib/cover_art" },
     // Caveat: release_cover_art transitively depends on ori (walrus_data), which
     // is NOT declared here, so its dep bindings land under the deployed package

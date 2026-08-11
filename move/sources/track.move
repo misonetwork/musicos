@@ -90,7 +90,7 @@ public fun new<RecordingShare, CompositionShare>(
 
     deal.accept();
 
-    return track
+    track
 }
 
 /// Assigns the track to a release by verifying the release UID matches
@@ -117,17 +117,24 @@ public fun split_bps(self: &Track): BPS {
     self.split_bps
 }
 
-/// Returns true if the track is in the Assigned state.
+// === Test Only ===
+
+// The state predicates are test-only: a track's state is determined by where
+// it came from. `assign` is package-only and runs solely inside release
+// publish, and there is no extraction path — so a track read out of a (shared,
+// therefore published) release is always `Assigned`, and a track anywhere else
+// is always `Unassigned`. No runtime caller learns anything from asking; tests
+// still need them to verify the transition itself.
+
+#[test_only]
 public fun is_assigned_state(self: &Track): bool {
     match (self.state) { TrackState::Assigned => true, _ => false }
 }
 
-/// Returns true if the track is in the Unassigned state.
+#[test_only]
 public fun is_unassigned_state(self: &Track): bool {
     match (self.state) { TrackState::Unassigned(_) => true, _ => false }
 }
-
-// === Test Only ===
 
 #[test_only]
 public fun new_for_testing(recording_id: ID, release_id: ID, split_bps_value: u16): Track {

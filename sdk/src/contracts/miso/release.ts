@@ -102,6 +102,10 @@ export const ReleaseAdminCap = new MoveStruct({ name: `${$moduleName}::ReleaseAd
         release_id: bcs.Address
     } });
 export const ReleaseAdminCapKey = new MoveTuple({ name: `${$moduleName}::ReleaseAdminCapKey`, fields: [bcs.bool()] });
+export const ReleaseRegistryCreatedEvent = new MoveStruct({ name: `${$moduleName}::ReleaseRegistryCreatedEvent`, fields: {
+        registry_id: bcs.Address,
+        created_by: bcs.Address
+    } });
 export const ReleasePublishedEvent = new MoveStruct({ name: `${$moduleName}::ReleasePublishedEvent`, fields: {
         release_id: bcs.Address
     } });
@@ -258,75 +262,6 @@ export function id(options: IdOptions) {
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }
-export interface StateArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface StateOptions {
-    package?: string;
-    arguments: StateArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-/** Returns the release state. */
-export function state(options: StateOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'state',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface IsInitializedStateArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface IsInitializedStateOptions {
-    package?: string;
-    arguments: IsInitializedStateArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-/** Returns true if the release is in the Initialized state. */
-export function isInitializedState(options: IsInitializedStateOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'is_initialized_state',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface IsPublishedStateArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface IsPublishedStateOptions {
-    package?: string;
-    arguments: IsPublishedStateArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-/** Returns true if the release is in the Published state. */
-export function isPublishedState(options: IsPublishedStateOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'is_published_state',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
 export interface TitleArguments {
     self: RawTransactionArgument<string>;
 }
@@ -359,7 +294,11 @@ export interface TracksOptions {
         self: RawTransactionArgument<string>
     ];
 }
-/** Returns a reference to the ordered tracklist. */
+/**
+ * Returns a reference to the ordered tracklist. The single tracklist accessor —
+ * consumers derive length, membership, and per-track data from it
+ * (`tracks().length()`, `tracks().any!(..)`, indexing).
+ */
 export function tracks(options: TracksOptions) {
     const packageAddress = options.package ?? '@local-pkg/miso';
     const argumentsTypes = [
@@ -370,55 +309,6 @@ export function tracks(options: TracksOptions) {
         package: packageAddress,
         module: 'release',
         function: 'tracks',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface TotalTracksArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface TotalTracksOptions {
-    package?: string;
-    arguments: TotalTracksArguments | [
-        self: RawTransactionArgument<string>
-    ];
-}
-/** Returns the number of tracks on the release. */
-export function totalTracks(options: TotalTracksOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'total_tracks',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-    });
-}
-export interface ContainsRecordingArguments {
-    self: RawTransactionArgument<string>;
-    recordingId: RawTransactionArgument<string>;
-}
-export interface ContainsRecordingOptions {
-    package?: string;
-    arguments: ContainsRecordingArguments | [
-        self: RawTransactionArgument<string>,
-        recordingId: RawTransactionArgument<string>
-    ];
-}
-/** Returns whether the release contains a track for the given recording. */
-export function containsRecording(options: ContainsRecordingOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null,
-        '0x2::object::ID'
-    ] satisfies (string | null)[];
-    const parameterNames = ["self", "recordingId"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'release',
-        function: 'contains_recording',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
     });
 }

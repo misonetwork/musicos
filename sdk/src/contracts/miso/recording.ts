@@ -87,10 +87,13 @@ export const RecordingPublishedEvent = new MoveStruct({ name: `${$moduleName}::R
         recording_id: bcs.Address
     } });
 export const CompositionSharesGrantedEvent = new MoveStruct({ name: `${$moduleName}::CompositionSharesGrantedEvent<phantom RecordingShare, phantom CompositionShare>`, fields: {
+        recording_id: bcs.Address,
+        composition_id: bcs.Address,
         /** Recording-share base units granted to the composition. */
         value: bcs.u64(),
         /** The composition royalty rate applied at creation, in basis points. */
-        rate_bps: bcs.u16()
+        rate_bps: bcs.u16(),
+        granted_by: bcs.Address
     } });
 export interface NewArguments {
     composition: RawTransactionArgument<string>;
@@ -224,90 +227,6 @@ export function id(options: IdOptions) {
         package: packageAddress,
         module: 'recording',
         function: 'id',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface StateArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface StateOptions {
-    package?: string;
-    arguments: StateArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string,
-        string
-    ];
-}
-/** Returns the current lifecycle state. */
-export function state(options: StateOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'state',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface IsInitializedStateArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface IsInitializedStateOptions {
-    package?: string;
-    arguments: IsInitializedStateArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string,
-        string
-    ];
-}
-/** Returns true if the recording is in the Initialized state. */
-export function isInitializedState(options: IsInitializedStateOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'is_initialized_state',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface IsPublishedStateArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface IsPublishedStateOptions {
-    package?: string;
-    arguments: IsPublishedStateArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string,
-        string
-    ];
-}
-/** Returns true if the recording is in the Published state. */
-export function isPublishedState(options: IsPublishedStateOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'recording',
-        function: 'is_published_state',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
         typeArguments: options.typeArguments
     });

@@ -37,7 +37,7 @@
  * holder as able to mutate or delete any extension data, forever.
  */
 
-import { MoveEnum, MoveTuple, MoveStruct, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
+import { MoveEnum, MoveStruct, MoveTuple, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
 import { bcs } from '@mysten/sui/bcs';
 import { type Transaction } from '@mysten/sui/transactions';
 import * as bps from './deps/bps/bps.js';
@@ -49,7 +49,6 @@ export const CompositionState = new MoveEnum({ name: `${$moduleName}::Compositio
         /** Composition is published and immutable. Includes publication timestamp. */
         Published: bcs.u64()
     } });
-export const CompositionRoyaltyRate = new MoveTuple({ name: `${$moduleName}::CompositionRoyaltyRate`, fields: [bps.BPS, bcs.u64()] });
 export const Composition = new MoveStruct({ name: `${$moduleName}::Composition<phantom CompositionShare>`, fields: {
         /** Unique identifier for this composition. */
         id: bcs.Address,
@@ -57,12 +56,8 @@ export const Composition = new MoveStruct({ name: `${$moduleName}::Composition<p
         state: CompositionState,
         /** Primary title of the composition. */
         title: bcs.string(),
-        /**
-         * Royalty rate this composition earns from each recording's revenue, paired with
-         * the epoch it was last changed in. Each rate stays in effect for at least one
-         * full epoch.
-         */
-        royalty_rate: CompositionRoyaltyRate
+        /** Royalty rate this composition earns from each recording's revenue. */
+        royalty_rate: bps.BPS
     } });
 export const CompositionAdminCap = new MoveStruct({ name: `${$moduleName}::CompositionAdminCap<phantom CompositionShare>`, fields: {
         /** Unique identifier for this capability. */
@@ -73,7 +68,10 @@ export const CompositionPublishedEvent = new MoveStruct({ name: `${$moduleName}:
         composition_id: bcs.Address
     } });
 export const CompositionRoyaltySetEvent = new MoveStruct({ name: `${$moduleName}::CompositionRoyaltySetEvent<phantom CompositionShare>`, fields: {
-        royalty_rate_bps: bcs.u16()
+        composition_id: bcs.Address,
+        previous_royalty_rate_bps: bcs.u16(),
+        royalty_rate_bps: bcs.u16(),
+        changed_by: bcs.Address
     } });
 export interface NewArguments {
     title: RawTransactionArgument<string>;
@@ -175,13 +173,13 @@ export interface SetRoyaltyRateOptions {
 }
 /**
  * Sets the royalty rate this composition earns from each recording. Must not
- * exceed `MAX_ROYALTY_RATE_BPS` (there is no floor; 0% is allowed), and only after
- * a full epoch has elapsed since the last change — a rate set in epoch N is
- * changeable from epoch N+2 onward, so every rate is in effect for at least one
- * complete epoch. The rate can be changed in any lifecycle state, including after
- * publishing — because each recording snapshots the rate when it is created, a
- * change only affects recordings created afterward (existing recordings keep the
- * rate they captured).
+ * exceed `MAX_ROYALTY_RATE_BPS` (there is no floor; 0% is allowed). The rate can
+ * be changed in any lifecycle state, including after publishing, and takes effect
+ * immediately. There is deliberately no rate-change cooldown: a change cannot
+ * surprise anyone, because each recording snapshots the rate when it is created
+ * (existing recordings keep the rate they captured) and `recording::new`'s
+ * `max_royalty_rate_bps` slippage guard means no future recorder can be charged a
+ * rate they did not consent to.
  */
 export function setRoyaltyRate(options: SetRoyaltyRateOptions) {
     const packageAddress = options.package ?? '@local-pkg/miso';
@@ -222,87 +220,6 @@ export function id(options: IdOptions) {
         package: packageAddress,
         module: 'composition',
         function: 'id',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface StateArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface StateOptions {
-    package?: string;
-    arguments: StateArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns the current lifecycle state. */
-export function state(options: StateOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'composition',
-        function: 'state',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface IsInitializedStateArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface IsInitializedStateOptions {
-    package?: string;
-    arguments: IsInitializedStateArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns true if the composition is in the Initialized state. */
-export function isInitializedState(options: IsInitializedStateOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'composition',
-        function: 'is_initialized_state',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface IsPublishedStateArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface IsPublishedStateOptions {
-    package?: string;
-    arguments: IsPublishedStateArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns true if the composition is in the Published state. */
-export function isPublishedState(options: IsPublishedStateOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'composition',
-        function: 'is_published_state',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
         typeArguments: options.typeArguments
     });
@@ -357,33 +274,6 @@ export function royaltyRate(options: RoyaltyRateOptions) {
         package: packageAddress,
         module: 'composition',
         function: 'royalty_rate',
-        arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
-        typeArguments: options.typeArguments
-    });
-}
-export interface RoyaltyRateLastChangedEpochArguments {
-    self: RawTransactionArgument<string>;
-}
-export interface RoyaltyRateLastChangedEpochOptions {
-    package?: string;
-    arguments: RoyaltyRateLastChangedEpochArguments | [
-        self: RawTransactionArgument<string>
-    ];
-    typeArguments: [
-        string
-    ];
-}
-/** Returns the epoch in which the royalty rate was last changed. */
-export function royaltyRateLastChangedEpoch(options: RoyaltyRateLastChangedEpochOptions) {
-    const packageAddress = options.package ?? '@local-pkg/miso';
-    const argumentsTypes = [
-        null
-    ] satisfies (string | null)[];
-    const parameterNames = ["self"];
-    return (tx: Transaction) => tx.moveCall({
-        package: packageAddress,
-        module: 'composition',
-        function: 'royalty_rate_last_changed_epoch',
         arguments: normalizeMoveArguments(options.arguments, argumentsTypes, parameterNames),
         typeArguments: options.typeArguments
     });

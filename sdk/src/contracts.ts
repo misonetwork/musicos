@@ -11,8 +11,11 @@ export * as release from "./contracts/miso/release.ts";
 export * as deal from "./contracts/miso/deal.ts";
 export * as track from "./contracts/miso/track.ts";
 
-// Record layer (drop — the record sale).
-export * as drop from "./contracts/miso_drop/drop.ts";
+// Record layer (the pressing — one uncapped run per release, plus a
+// `Listing<Currency>` per payment rail, and the certificate a record carries out).
+export * as pressing from "./contracts/miso_pressing/pressing.ts";
+export * as listing from "./contracts/miso_pressing/listing.ts";
+export * as certificate from "./contracts/miso_pressing/certificate.ts";
 
 // Royalty-pool extension (base lib + per-work extensions).
 export * as royaltyPool from "./contracts/royalty_pool/pool.ts";

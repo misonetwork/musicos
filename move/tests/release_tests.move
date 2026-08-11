@@ -204,7 +204,7 @@ fun test_views() {
     assert!(rel.is_initialized_state());
     assert!(!rel.is_published_state());
     assert_eq!(*rel.title(), b"Album".to_string());
-    assert_eq!(rel.total_tracks(), 1);
+    assert_eq!(rel.tracks().length(), 1);
     assert_eq!(cap.release_id(), rel.id());
 
     destroy(rel);

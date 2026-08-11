@@ -12,7 +12,7 @@
  * release (the consumer object) rather than the recording. A track's effective
  * cover resolves as: its per-track override if set, else the album cover. The
  * overrides are a `PerTrack<Option<CoverArt>>` — one slot per track, aligned to
- * the release's tracklist by construction (sized from `total_tracks()`).
+ * the release's tracklist by construction (sized from `tracks().length()`).
  */
 
 import { MoveTuple, MoveStruct, normalizeMoveArguments, type RawTransactionArgument } from '../utils/index.js';
@@ -25,6 +25,24 @@ export const ExtensionKey = new MoveTuple({ name: `${$moduleName}::ExtensionKey`
 export const ReleaseCoverArt = new MoveStruct({ name: `${$moduleName}::ReleaseCoverArt`, fields: {
         cover: bcs.option(cover_art.CoverArt),
         track_covers: per_track.PerTrack(bcs.option(cover_art.CoverArt))
+    } });
+export const CoverSetEvent = new MoveStruct({ name: `${$moduleName}::CoverSetEvent`, fields: {
+        release_id: bcs.Address,
+        /** The full cover art record that was written. */
+        art: cover_art.CoverArt
+    } });
+export const CoverUnsetEvent = new MoveStruct({ name: `${$moduleName}::CoverUnsetEvent`, fields: {
+        release_id: bcs.Address
+    } });
+export const TrackCoverSetEvent = new MoveStruct({ name: `${$moduleName}::TrackCoverSetEvent`, fields: {
+        release_id: bcs.Address,
+        track_index: bcs.u64(),
+        /** The full cover art record that was written. */
+        art: cover_art.CoverArt
+    } });
+export const TrackCoverUnsetEvent = new MoveStruct({ name: `${$moduleName}::TrackCoverUnsetEvent`, fields: {
+        release_id: bcs.Address,
+        track_index: bcs.u64()
     } });
 export interface SetCoverArguments {
     self: RawTransactionArgument<string>;
@@ -66,7 +84,10 @@ export interface UnsetCoverOptions {
         cap: RawTransactionArgument<string>
     ];
 }
-/** Removes the album-level cover, if any. Per-track overrides are untouched. */
+/**
+ * Removes the album-level cover. Per-track overrides are untouched. Aborts with
+ * `ENoCoverArt` if no cover art record is attached.
+ */
 export function unsetCover(options: UnsetCoverOptions) {
     const packageAddress = options.package ?? '@local-pkg/release_cover_art';
     const argumentsTypes = [
@@ -130,8 +151,9 @@ export interface UnsetTrackCoverOptions {
     ];
 }
 /**
- * Removes the cover override for a specific track, if any — the track then falls
- * back to the album cover.
+ * Removes the cover override for a specific track — the track then falls back to
+ * the album cover. Aborts if no cover art record is attached, or if the index is
+ * out of range for the release.
  */
 export function unsetTrackCover(options: UnsetTrackCoverOptions) {
     const packageAddress = options.package ?? '@local-pkg/release_cover_art';

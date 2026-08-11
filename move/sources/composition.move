@@ -58,10 +58,8 @@ public struct Composition<phantom CompositionShare> has key {
     state: CompositionState,
     /// Primary title of the composition.
     title: String,
-    /// Royalty rate this composition earns from each recording's revenue,
-    /// paired with the epoch it was last changed in. Each rate stays in
-    /// effect for at least one full epoch.
-    royalty_rate: CompositionRoyaltyRate,
+    /// Royalty rate this composition earns from each recording's revenue.
+    royalty_rate: BPS,
 }
 
 /// Capability that authorizes modifications to a specific composition.
@@ -71,15 +69,6 @@ public struct CompositionAdminCap<phantom CompositionShare> has key, store {
     /// Unique identifier for this capability.
     id: UID,
 }
-
-/// The royalty rate paired with the epoch in which it was last set.
-/// A rate change requires a full epoch to have elapsed since the last change —
-/// a rate set in epoch N is changeable from epoch N+2 onward — so every rate
-/// is in effect for at least one complete epoch. This bounds how a rate change
-/// can surprise a recording creator and makes bait-and-revert oscillation
-/// uneconomical: once a change lands, it is pinned in full public view for the
-/// remainder of that epoch plus the entire next one.
-public struct CompositionRoyaltyRate(BPS, u64) has copy, drop, store;
 
 // === Derivation Keys ===
 
@@ -111,10 +100,14 @@ public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop
     composition_id: ID,
 }
 
-/// Emitted when the composition's royalty rate is set or changed. The
-/// composition is identified by the event's `CompositionShare` phantom.
+/// Emitted when the composition's royalty rate is changed. Carries both sides
+/// of the transition and the actor so an indexer can reconstruct royalty-rate
+/// history without fetching mutable object state.
 public struct CompositionRoyaltySetEvent<phantom CompositionShare> has copy, drop {
+    composition_id: ID,
+    previous_royalty_rate_bps: u16,
     royalty_rate_bps: u16,
+    changed_by: address,
 }
 
 // === Constants ===
@@ -139,8 +132,6 @@ const MAX_ROYALTY_RATE_BPS: u16 = 2000;
 // State errors (10-19)
 /// Operation requires Initialized state but composition is in a different state.
 const ENotInitializedState: u64 = 10;
-/// Royalty rate was changed less than one full epoch ago.
-const ERoyaltyRateCooldown: u64 = 11;
 
 // Validation errors (20-29)
 /// Royalty rate is above the protocol maximum.
@@ -182,7 +173,7 @@ public fun new<CompositionShare>(
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
-        royalty_rate: CompositionRoyaltyRate(bps::new(royalty_rate_bps), ctx.epoch()),
+        royalty_rate: bps::new(royalty_rate_bps),
     };
 
     let composition_admin_cap = CompositionAdminCap<CompositionShare> {
@@ -225,13 +216,14 @@ public fun publish<CompositionShare>(
 // === Financial ===
 
 /// Sets the royalty rate this composition earns from each recording.
-/// Must not exceed `MAX_ROYALTY_RATE_BPS` (there is no floor; 0% is allowed),
-/// and only after a full epoch has elapsed since the last change — a rate set in epoch
-/// N is changeable from epoch N+2 onward, so every rate is in effect for at
-/// least one complete epoch. The rate can be changed in any lifecycle state,
-/// including after publishing — because each recording snapshots the rate
-/// when it is created, a change only affects recordings created afterward
-/// (existing recordings keep the rate they captured).
+/// Must not exceed `MAX_ROYALTY_RATE_BPS` (there is no floor; 0% is allowed).
+/// The rate can be changed in any lifecycle state, including after publishing,
+/// and takes effect immediately. There is deliberately no rate-change cooldown:
+/// a change cannot surprise anyone, because each recording snapshots the rate
+/// when it is created (existing recordings keep the rate they captured) and
+/// `recording::new`'s `max_royalty_rate_bps` slippage guard means no future
+/// recorder can be charged a rate they did not consent to.
+#[allow(lint(prefer_mut_tx_context))]
 public fun set_royalty_rate<CompositionShare>(
     self: &mut Composition<CompositionShare>,
     _: &CompositionAdminCap<CompositionShare>,
@@ -239,11 +231,14 @@ public fun set_royalty_rate<CompositionShare>(
     ctx: &TxContext,
 ) {
     assert!(royalty_rate_bps <= MAX_ROYALTY_RATE_BPS, EAboveMaxRoyaltyRate);
-    assert!(ctx.epoch() > self.royalty_rate.1 + 1, ERoyaltyRateCooldown);
-    self.royalty_rate = CompositionRoyaltyRate(bps::new(royalty_rate_bps), ctx.epoch());
+    let previous_royalty_rate_bps = self.royalty_rate.value();
+    self.royalty_rate = bps::new(royalty_rate_bps);
 
     emit(CompositionRoyaltySetEvent<CompositionShare> {
+        composition_id: self.id(),
+        previous_royalty_rate_bps,
         royalty_rate_bps,
+        changed_by: ctx.sender(),
     });
 }
 
@@ -254,27 +249,6 @@ public fun id<CompositionShare>(self: &Composition<CompositionShare>): ID {
     self.id.to_inner()
 }
 
-/// Returns the current lifecycle state.
-public fun state<CompositionShare>(self: &Composition<CompositionShare>): CompositionState {
-    self.state
-}
-
-/// Returns true if the composition is in the Initialized state.
-public fun is_initialized_state<CompositionShare>(self: &Composition<CompositionShare>): bool {
-    match (self.state) {
-        CompositionState::Initialized => true,
-        _ => false,
-    }
-}
-
-/// Returns true if the composition is in the Published state.
-public fun is_published_state<CompositionShare>(self: &Composition<CompositionShare>): bool {
-    match (self.state) {
-        CompositionState::Published(_) => true,
-        _ => false,
-    }
-}
-
 /// Returns the primary title.
 public fun title<CompositionShare>(self: &Composition<CompositionShare>): &String {
     &self.title
@@ -282,14 +256,7 @@ public fun title<CompositionShare>(self: &Composition<CompositionShare>): &Strin
 
 /// Returns the royalty rate this composition earns from each recording.
 public fun royalty_rate<CompositionShare>(self: &Composition<CompositionShare>): BPS {
-    self.royalty_rate.0
-}
-
-/// Returns the epoch in which the royalty rate was last changed.
-public fun royalty_rate_last_changed_epoch<CompositionShare>(
-    self: &Composition<CompositionShare>,
-): u64 {
-    self.royalty_rate.1
+    self.royalty_rate
 }
 
 // === UID Functions ===
@@ -314,6 +281,27 @@ public fun uid_mut<CompositionShare>(
 
 // === Test Only ===
 
+// The state predicates are test-only: create-and-publish is atomic (see the
+// module doc), so every composition any runtime caller can hold is `Published`
+// — the answer is known a priori and a public accessor would carry no
+// information. Tests still need them to verify the transition itself.
+
+#[test_only]
+public fun is_initialized_state<CompositionShare>(self: &Composition<CompositionShare>): bool {
+    match (self.state) {
+        CompositionState::Initialized => true,
+        _ => false,
+    }
+}
+
+#[test_only]
+public fun is_published_state<CompositionShare>(self: &Composition<CompositionShare>): bool {
+    match (self.state) {
+        CompositionState::Published(_) => true,
+        _ => false,
+    }
+}
+
 #[test_only]
 public fun new_for_testing<CompositionShare>(
     title: String,
@@ -328,7 +316,7 @@ public fun new_for_testing<CompositionShare>(
         id: object::new(ctx),
         state: CompositionState::Initialized,
         title,
-        royalty_rate: CompositionRoyaltyRate(bps::new(royalty_rate_bps), ctx.epoch()),
+        royalty_rate: bps::new(royalty_rate_bps),
     };
 
     let composition_admin_cap = CompositionAdminCap<CompositionShare> {
@@ -336,4 +324,17 @@ public fun new_for_testing<CompositionShare>(
     };
 
     (composition, composition_admin_cap)
+}
+
+#[test_only]
+public fun royalty_set_event_fields<CompositionShare>(
+    event: CompositionRoyaltySetEvent<CompositionShare>,
+): (ID, u16, u16, address) {
+    let CompositionRoyaltySetEvent {
+        composition_id,
+        previous_royalty_rate_bps,
+        royalty_rate_bps,
+        changed_by,
+    } = event;
+    (composition_id, previous_royalty_rate_bps, royalty_rate_bps, changed_by)
 }

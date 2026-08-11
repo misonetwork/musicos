@@ -6,6 +6,7 @@
 module miso::release_digest_tests;
 
 use miso::release::{Self, new_release_registry_for_testing};
+use std::unit_test::destroy;
 use sui::bcs::to_bytes;
 use sui::hash::blake2b256;
 
@@ -198,7 +199,7 @@ fun test_derive_release_id_parity_single() {
     let release_id_2 = release::derive_release_id(recording_ids, track_splits, nonce, &registry);
     assert!(release_id_1 == release_id_2, 1);
 
-    sui::test_utils::destroy(registry);
+    destroy(registry);
 }
 
 #[test]
@@ -229,5 +230,5 @@ fun test_derive_release_id_parity_multiple() {
     let release_id_different_nonce = release::derive_release_id(recording_ids, track_splits, 43u256, &registry);
     assert!(release_id_1 != release_id_different_nonce, 2);
 
-    sui::test_utils::destroy(registry);
+    destroy(registry);
 }

@@ -26,7 +26,7 @@ fun publish_composition(
     scenario: &mut test_scenario::Scenario,
 ): composition::CompositionAdminCap<CompositionShare> {
     let ctx = scenario.ctx();
-    let (mut comp, cap) =
+    let (comp, cap) =
         composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
     let clock = sui::clock::create_for_testing(ctx);
     comp.publish(&cap, &clock);
@@ -92,9 +92,8 @@ fun composition_uid_mut_works_after_publish() {
     let mut comp = scenario.take_shared<Composition<CompositionShare>>();
     assert!(comp.is_published_state());
     assert!(!comp.is_initialized_state());
-    let _state = comp.state();
     dynamic_field::add(comp.uid_mut(&cap), b"extension", 42u64);
-    assert!(dynamic_field::exists_(comp.uid(), b"extension"));
+    assert!(dynamic_field::exists(comp.uid(), b"extension"));
     assert!(*dynamic_field::borrow<vector<u8>, u64>(comp.uid(), b"extension") == 42);
     test_scenario::return_shared(comp);
 
@@ -152,9 +151,8 @@ fun recording_uid_mut_works_after_publish() {
     let mut rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
     assert!(rec.is_published_state());
     assert!(!rec.is_initialized_state());
-    let _state = rec.state();
     dynamic_field::add(rec.uid_mut(&cap), b"master", 7u64);
-    assert!(dynamic_field::exists_(rec.uid(), b"master"));
+    assert!(dynamic_field::exists(rec.uid(), b"master"));
     test_scenario::return_shared(rec);
 
     destroy(cap);
@@ -170,9 +168,8 @@ fun release_uid_mut_works_after_publish() {
     let mut rel = scenario.take_shared<Release>();
     assert!(rel.is_published_state());
     assert!(!rel.is_initialized_state());
-    let _state = rel.state();
     dynamic_field::add(rel.uid_mut(&cap), b"metadata", 9u64);
-    assert!(dynamic_field::exists_(rel.uid(), b"metadata"));
+    assert!(dynamic_field::exists(rel.uid(), b"metadata"));
     test_scenario::return_shared(rel);
 
     destroy(cap);

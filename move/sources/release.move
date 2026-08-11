@@ -134,6 +134,12 @@ public enum ReleaseState has copy, drop, store {
 
 // === Events ===
 
+/// Emitted when package initialization creates the shared release registry.
+public struct ReleaseRegistryCreatedEvent has copy, drop {
+    registry_id: ID,
+    created_by: address,
+}
+
 /// Emitted once when a release is published. A pure pointer: it carries the
 /// release's identity. A release's embedded fields (discs, tracks) are
 /// immutable after publishing, so an indexer treats this as a signal to
@@ -190,6 +196,11 @@ fun init(_otw: RELEASE, ctx: &mut TxContext) {
     let registry = ReleaseRegistry {
         id: object::new(ctx),
     };
+
+    emit(ReleaseRegistryCreatedEvent {
+        registry_id: object::id(&registry),
+        created_by: ctx.sender(),
+    });
 
     transfer::share_object(registry);
 }
@@ -289,45 +300,16 @@ public fun id(self: &Release): ID {
     self.id.to_inner()
 }
 
-/// Returns the release state.
-public fun state(self: &Release): ReleaseState {
-    self.state
-}
-
-/// Returns true if the release is in the Initialized state.
-public fun is_initialized_state(self: &Release): bool {
-    match (self.state) {
-        ReleaseState::Initialized => true,
-        _ => false,
-    }
-}
-
-/// Returns true if the release is in the Published state.
-public fun is_published_state(self: &Release): bool {
-    match (self.state) {
-        ReleaseState::Published(_) => true,
-        _ => false,
-    }
-}
-
 /// Returns the release title.
 public fun title(self: &Release): &String {
     &self.title
 }
 
-/// Returns a reference to the ordered tracklist.
+/// Returns a reference to the ordered tracklist. The single tracklist
+/// accessor — consumers derive length, membership, and per-track data from it
+/// (`tracks().length()`, `tracks().any!(..)`, indexing).
 public fun tracks(self: &Release): &vector<Track> {
     &self.tracks
-}
-
-/// Returns the number of tracks on the release.
-public fun total_tracks(self: &Release): u64 {
-    self.tracks.length()
-}
-
-/// Returns whether the release contains a track for the given recording.
-public fun contains_recording(self: &Release, recording_id: ID): bool {
-    self.tracks.any!(|track| track.recording_id() == recording_id)
 }
 
 /// Returns the release ID associated with the admin capability.
@@ -388,6 +370,27 @@ fun assert_track_assignments(self: &mut Release) {
 
 // === Test Only ===
 
+// The state predicates are test-only: create-and-publish is atomic (see the
+// module doc), so every release any runtime caller can hold is `Published` —
+// the answer is known a priori and a public accessor would carry no
+// information. Tests still need them to verify the transition itself.
+
+#[test_only]
+public fun is_initialized_state(self: &Release): bool {
+    match (self.state) {
+        ReleaseState::Initialized => true,
+        _ => false,
+    }
+}
+
+#[test_only]
+public fun is_published_state(self: &Release): bool {
+    match (self.state) {
+        ReleaseState::Published(_) => true,
+        _ => false,
+    }
+}
+
 /// Runs the real module initializer (creates and shares the `ReleaseRegistry`).
 #[test_only]
 public fun init_for_testing(ctx: &mut TxContext) {
@@ -426,4 +429,12 @@ public fun new_for_testing(
     };
 
     (release, release_admin_cap)
+}
+
+#[test_only]
+public fun release_registry_created_event_fields(
+    event: ReleaseRegistryCreatedEvent,
+): (ID, address) {
+    let ReleaseRegistryCreatedEvent { registry_id, created_by } = event;
+    (registry_id, created_by)
 }

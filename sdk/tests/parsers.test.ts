@@ -26,7 +26,12 @@ test("compositionPublishedEvent round-trips", () => {
 });
 
 test("compositionRoyaltySetEvent round-trips", () => {
-  const bytes = CompositionRoyaltySetEvent.serialize({ royalty_rate_bps: 1500 }).toBytes();
+  const bytes = CompositionRoyaltySetEvent.serialize({
+    composition_id: A1,
+    previous_royalty_rate_bps: 1000,
+    royalty_rate_bps: 1500,
+    changed_by: A2,
+  }).toBytes();
   expect(parse.parseCompositionRoyaltySetEvent(bytes)).toEqual({ royaltyRateBps: 1500 });
 });
 
@@ -43,8 +48,10 @@ test("releasePublishedEvent round-trips", () => {
 test("dealCreatedEvent round-trips (split only)", () => {
   const bytes = DealCreatedEvent.serialize({
     deal_id: A1,
+    recording_id: A2,
     release_id: A2,
     track_split_bps_value: 2500,
+    created_by: A1,
   }).toBytes();
   expect(parse.parseDealCreatedEvent(bytes)).toEqual({
     dealId: A1,

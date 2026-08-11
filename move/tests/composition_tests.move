@@ -6,7 +6,6 @@ use miso::test_helpers::{Self, CompositionShare};
 use std::unit_test::{assert_eq, destroy};
 
 // Error codes from composition.move
-const ERoyaltyRateCooldown: u64 = 11;
 const EAboveMaxRoyaltyRate: u64 = 22;
 const EMaxTitleLengthExceeded: u64 = 33;
 const EEmptyString: u64 = 35;
@@ -58,68 +57,37 @@ fun test_publish_composition() {
 fun test_set_royalty_rate() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 1500, ctx);
+    let composition_id = comp.id();
 
-    // A rate set in epoch N is changeable from epoch N+2 onward.
-    ctx.increment_epoch_number();
-    ctx.increment_epoch_number();
     comp.set_royalty_rate(&cap, 2000, ctx);
     assert_eq!(comp.royalty_rate().value(), 2000);
-    assert_eq!(comp.royalty_rate_last_changed_epoch(), ctx.epoch());
+
+    let mut events = sui::event::events_by_type<
+        composition::CompositionRoyaltySetEvent<CompositionShare>,
+    >();
+    assert_eq!(events.length(), 1);
+    let (event_composition_id, previous_rate, rate, changed_by) =
+        composition::royalty_set_event_fields(events.pop_back());
+    assert_eq!(event_composition_id, composition_id);
+    assert_eq!(previous_rate, 1500);
+    assert_eq!(rate, 2000);
+    assert_eq!(changed_by, ctx.sender());
 
     destroy(comp);
     destroy(cap);
 }
 
+/// There is no rate-change cooldown: back-to-back changes in the same
+/// transaction all take effect (recorders are protected by the snapshot at
+/// recording creation plus the `max_royalty_rate_bps` slippage guard).
 #[test]
-fun test_set_royalty_rate_after_full_epoch_elapsed() {
+fun test_set_royalty_rate_repeatedly() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 1500, ctx);
 
-    ctx.increment_epoch_number();
-    ctx.increment_epoch_number();
     comp.set_royalty_rate(&cap, 1200, ctx);
-    ctx.increment_epoch_number();
-    ctx.increment_epoch_number();
     comp.set_royalty_rate(&cap, 1800, ctx);
     assert_eq!(comp.royalty_rate().value(), 1800);
-
-    destroy(comp);
-    destroy(cap);
-}
-
-#[test, expected_failure(abort_code = ERoyaltyRateCooldown, location = miso::composition)]
-fun test_set_royalty_rate_in_creation_epoch() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 1500, ctx);
-    // The creation epoch counts as the rate's last change.
-    comp.set_royalty_rate(&cap, 2000, ctx);
-    destroy(comp);
-    destroy(cap);
-}
-
-#[test, expected_failure(abort_code = ERoyaltyRateCooldown, location = miso::composition)]
-fun test_set_royalty_rate_one_epoch_after_creation() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 1500, ctx);
-
-    // One epoch is not enough: the rate must live one *full* epoch first.
-    ctx.increment_epoch_number();
-    comp.set_royalty_rate(&cap, 2000, ctx);
-
-    destroy(comp);
-    destroy(cap);
-}
-
-#[test, expected_failure(abort_code = ERoyaltyRateCooldown, location = miso::composition)]
-fun test_set_royalty_rate_one_epoch_after_change() {
-    let ctx = &mut tx_context::dummy();
-    let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 1500, ctx);
-
-    ctx.increment_epoch_number();
-    ctx.increment_epoch_number();
-    comp.set_royalty_rate(&cap, 1200, ctx);
-    ctx.increment_epoch_number();
-    comp.set_royalty_rate(&cap, 1800, ctx); // only one epoch since the change
 
     destroy(comp);
     destroy(cap);
@@ -129,8 +97,6 @@ fun test_set_royalty_rate_one_epoch_after_change() {
 fun test_set_royalty_rate_to_zero() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 1500, ctx);
-    ctx.increment_epoch_number();
-    ctx.increment_epoch_number();
     comp.set_royalty_rate(&cap, 0, ctx); // no floor — 0% is allowed
     assert_eq!(comp.royalty_rate().value(), 0);
     destroy(comp);
@@ -141,8 +107,6 @@ fun test_set_royalty_rate_to_zero() {
 fun test_set_royalty_rate_above_cap() {
     let ctx = &mut tx_context::dummy();
     let (mut comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 1500, ctx);
-    ctx.increment_epoch_number();
-    ctx.increment_epoch_number();
     comp.set_royalty_rate(&cap, 2001, ctx); // above 20% cap
     destroy(comp);
     destroy(cap);

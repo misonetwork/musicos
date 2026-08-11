@@ -37,8 +37,6 @@ export interface Composition {
   title: string;
   /** Royalty rate this composition earns from each recording's revenue (basis points, 0-2000). */
   royaltyRate: BPS;
-  /** Epoch in which the royalty rate was last changed (changeable after one full elapsed epoch). */
-  royaltyRateLastChangedEpoch: number;
 }
 
 /**

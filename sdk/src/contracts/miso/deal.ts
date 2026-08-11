@@ -47,10 +47,13 @@ export const Deal = new MoveStruct({ name: `${$moduleName}::Deal<phantom Recordi
 export const DealCreatedEvent = new MoveStruct({ name: `${$moduleName}::DealCreatedEvent<phantom RecordingShare, phantom CompositionShare>`, fields: {
         /** ID of the deal. */
         deal_id: bcs.Address,
+        /** ID of the recording whose inclusion is authorized. */
+        recording_id: bcs.Address,
         /** ID of the target release. */
         release_id: bcs.Address,
         /** Track-level revenue split in basis points. */
-        track_split_bps_value: bcs.u16()
+        track_split_bps_value: bcs.u16(),
+        created_by: bcs.Address
     } });
 export const DealAcceptedEvent = new MoveStruct({ name: `${$moduleName}::DealAcceptedEvent<phantom RecordingShare, phantom CompositionShare>`, fields: {
         /** ID of the deal. */

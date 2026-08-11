@@ -50,10 +50,13 @@ public struct Deal<phantom RecordingShare, phantom CompositionShare> has key, st
 public struct DealCreatedEvent<phantom RecordingShare, phantom CompositionShare> has copy, drop {
     /// ID of the deal.
     deal_id: ID,
+    /// ID of the recording whose inclusion is authorized.
+    recording_id: ID,
     /// ID of the target release.
     release_id: ID,
     /// Track-level revenue split in basis points.
     track_split_bps_value: u16,
+    created_by: address,
 }
 
 /// Emitted when a deal is accepted: consumed by `track::new` into a track for
@@ -135,8 +138,10 @@ public fun new<RecordingShare, CompositionShare>(
     // is read from the `Recording` again at `track::new`. No ids are emitted.
     emit(DealCreatedEvent<RecordingShare, CompositionShare> {
         deal_id: deal.id(),
+        recording_id: recording.id(),
         release_id,
         track_split_bps_value,
+        created_by: ctx.sender(),
     });
 
     deal
@@ -200,4 +205,18 @@ public fun track_split_bps<RecordingShare, CompositionShare>(
     self: &Deal<RecordingShare, CompositionShare>,
 ): BPS {
     self.track_split_bps
+}
+
+#[test_only]
+public fun deal_created_event_fields<RecordingShare, CompositionShare>(
+    event: DealCreatedEvent<RecordingShare, CompositionShare>,
+): (ID, ID, ID, u16, address) {
+    let DealCreatedEvent {
+        deal_id,
+        recording_id,
+        release_id,
+        track_split_bps_value,
+        created_by,
+    } = event;
+    (deal_id, recording_id, release_id, track_split_bps_value, created_by)
 }

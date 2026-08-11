@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export * from "./types.ts";
-export * from "./drop.ts";
+export * from "./pressing.ts";
 export * from "./schemas.ts";
 export * from "./transactions.ts";
 export * from "./execute.ts";

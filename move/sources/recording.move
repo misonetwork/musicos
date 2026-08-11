@@ -136,14 +136,15 @@ public struct RecordingPublishedEvent<phantom RecordingShare, phantom Compositio
 /// recording: this event (in the creation transaction's effects) is its
 /// canonical record. What the composition owner then does with the shares
 /// (hold, stake, sell) is outside the protocol's scope. Both parties are
-/// identified by the event's phantom type parameters — `RecordingShare` for the
-/// granting recording, `CompositionShare` for the receiving composition — so the
-/// payload carries no object ids.
+/// identified by both object IDs and the event's phantom type parameters.
 public struct CompositionSharesGrantedEvent<phantom RecordingShare, phantom CompositionShare> has copy, drop {
+    recording_id: ID,
+    composition_id: ID,
     /// Recording-share base units granted to the composition.
     value: u64,
     /// The composition royalty rate applied at creation, in basis points.
     rate_bps: u16,
+    granted_by: address,
 }
 
 // === Errors ===
@@ -248,8 +249,11 @@ public fun new<RecordingShare, CompositionShare>(
     };
 
     emit(CompositionSharesGrantedEvent<RecordingShare, CompositionShare> {
+        recording_id: recording.id(),
+        composition_id,
         value: composition_cut,
         rate_bps: composition_royalty_rate.value(),
+        granted_by: ctx.sender(),
     });
 
     (recording, recording_admin_cap, recording_shares)
@@ -290,27 +294,6 @@ public fun id<RecordingShare, CompositionShare>(
     self.id.to_inner()
 }
 
-/// Returns the current lifecycle state.
-public fun state<RecordingShare, CompositionShare>(
-    self: &Recording<RecordingShare, CompositionShare>,
-): RecordingState {
-    self.state
-}
-
-/// Returns true if the recording is in the Initialized state.
-public fun is_initialized_state<RecordingShare, CompositionShare>(
-    self: &Recording<RecordingShare, CompositionShare>,
-): bool {
-    match (self.state) { RecordingState::Initialized => true, _ => false }
-}
-
-/// Returns true if the recording is in the Published state.
-public fun is_published_state<RecordingShare, CompositionShare>(
-    self: &Recording<RecordingShare, CompositionShare>,
-): bool {
-    match (self.state) { RecordingState::Published(_) => true, _ => false }
-}
-
 // === UID Functions ===
 
 /// Returns a reference to the recording's UID for reading dynamic fields.
@@ -335,6 +318,26 @@ public fun uid_mut<RecordingShare, CompositionShare>(
 
 // === Test Only ===
 
+// The state predicates are test-only: create-and-publish is atomic (a recording
+// is `key`-only and `publish` is its sole by-value consumer), so every
+// recording any runtime caller can hold is `Published` — the answer is known a
+// priori and a public accessor would carry no information. Tests still need
+// them to verify the transition itself.
+
+#[test_only]
+public fun is_initialized_state<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): bool {
+    match (self.state) { RecordingState::Initialized => true, _ => false }
+}
+
+#[test_only]
+public fun is_published_state<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): bool {
+    match (self.state) { RecordingState::Published(_) => true, _ => false }
+}
+
 #[test_only]
 public fun new_for_testing<RecordingShare, CompositionShare>(
     ctx: &mut TxContext,
@@ -349,4 +352,18 @@ public fun new_for_testing<RecordingShare, CompositionShare>(
     };
 
     (recording, recording_admin_cap)
+}
+
+#[test_only]
+public fun composition_shares_granted_event_fields<RecordingShare, CompositionShare>(
+    event: CompositionSharesGrantedEvent<RecordingShare, CompositionShare>,
+): (ID, ID, u64, u16, address) {
+    let CompositionSharesGrantedEvent {
+        recording_id,
+        composition_id,
+        value,
+        rate_bps,
+        granted_by,
+    } = event;
+    (recording_id, composition_id, value, rate_bps, granted_by)
 }

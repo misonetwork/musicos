@@ -15,9 +15,10 @@
 //     `getReleaseCredits` in ./credits.ts, `getReleaseCover` in ./cover.ts) return
 //     `null` — extension data is optional by design, and "not attached" is a
 //     normal, expected state.
-//   - `getDrop` (./drop.ts) is a deliberate null-returning EXCEPTION to
-//     the core-getter rule: consumers probe pasted/stored drop ids and treat
-//     absence as a normal state. See its doc comment.
+//   - `getPressing`/`getListing` (./pressing.ts) are deliberate null-returning
+//     EXCEPTIONS to the core-getter rule: both addresses are computable for ANY
+//     release, so probing one that was never opened is a normal state, not a
+//     broken reference. See their doc comments.
 // All null-returning readers use {@link isNotFound} to distinguish a missing
 // object from a transport failure (which still throws).
 

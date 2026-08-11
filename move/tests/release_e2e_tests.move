@@ -38,6 +38,11 @@ const NONCE: u256 = 42;
 fun full_deal_track_release_flow_publishes_at_derived_id() {
     let mut scenario = test_scenario::begin(SONGWRITER);
     release::init_for_testing(scenario.ctx());
+    let mut registry_events = sui::event::events_by_type<release::ReleaseRegistryCreatedEvent>();
+    assert_eq!(registry_events.length(), 1);
+    let (registry_id, registry_created_by) =
+        release::release_registry_created_event_fields(registry_events.pop_back());
+    assert_eq!(registry_created_by, SONGWRITER);
 
     // === Tx 1 (SONGWRITER): create and publish the composition ===
     scenario.next_tx(SONGWRITER);
@@ -67,6 +72,7 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
     let comp = scenario.take_shared<Composition<CompositionShare>>();
     let rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
     let registry = scenario.take_shared<ReleaseRegistry>();
+    assert_eq!(object::id(&registry), registry_id);
     let recording_id = rec.id();
     let predicted_release_id = release::derive_release_id(
         vector[recording_id],
@@ -118,8 +124,8 @@ fun full_deal_track_release_flow_publishes_at_derived_id() {
     assert!(rel.is_published_state());
     assert_eq!(rel.id(), predicted_release_id);
     assert_eq!(*rel.title(), b"Single".to_string());
-    assert_eq!(rel.total_tracks(), 1);
-    assert!(rel.contains_recording(recording_id));
+    assert_eq!(rel.tracks().length(), 1);
+    assert!(rel.tracks().any!(|track| track.recording_id() == recording_id));
     let track_ref = &rel.tracks()[0];
     assert!(track_ref.is_assigned_state());
     assert_eq!(track_ref.recording_id(), recording_id);
