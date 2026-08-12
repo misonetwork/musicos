@@ -9,9 +9,7 @@ Miso models the core objects of recorded music — **compositions**, **recording
 
 ## Repository layout
 
-| Path | Package | Description |
-|------|---------|-------------|
-| [`move/`](./move) | `miso` (Move 2024) | The on-chain core protocol package. Build/test with `sui move` from this directory. |
+This repo is the `miso` core protocol package (Move 2024) — build/test with `sui move` from the repo root.
 
 The TypeScript SDK — typed queries, transaction builders, and BCS event parsers that
 mirror the core Move ABI — lives in its own repo,
@@ -80,10 +78,9 @@ The core package is intentionally lean — `audio`, `partyos`, `ori`, and `gengo
 
 ## Build & test
 
-The core Move package lives in [`move/`](./move):
+Build/test from the repo root:
 
 ```sh
-cd move
 sui move build
 sui move test
 ```
@@ -112,7 +109,7 @@ The current Testnet deployment is immutable: it was published and its
 Current package and object ids for every network live in
 [`misonetwork/miso-deployments`](https://github.com/misonetwork/miso-deployments),
 the canonical deployment manifest across all Miso repos — reference it rather
-than hardcoding ids. [`move/Published.toml`](./move/Published.toml) records
+than hardcoding ids. [`Published.toml`](./Published.toml) records
 this package's own publish metadata and is what dependent Move packages build
 against.
 
