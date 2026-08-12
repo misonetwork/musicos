@@ -9,14 +9,14 @@ Miso models the core objects of recorded music — **compositions**, **recording
 
 ## Repository layout
 
-This repository is a monorepo containing the core protocol and its shared TypeScript SDK:
-
 | Path | Package | Description |
 |------|---------|-------------|
 | [`move/`](./move) | `miso` (Move 2024) | The on-chain core protocol package. Build/test with `sui move` from this directory. |
-| [`sdk/`](./sdk) | [`@misonetwork/miso-protocol`](./sdk) (TypeScript) | Typed queries, transaction builders, and BCS event parsers that mirror the core Move ABI. |
 
-Keeping the SDK alongside the Move package lets ABI changes (struct fields, event layouts, entry-function arguments) and their TypeScript counterparts move in a single change set.
+The TypeScript SDK — typed queries, transaction builders, and BCS event parsers that
+mirror the core Move ABI — lives in its own repo,
+[`misonetwork/sdk`](https://github.com/misonetwork/sdk) (`@misonetwork/sdk`), regenerated
+from this package's Move source via `bun run codegen`.
 
 First-party **extensions** — credits, cover art, genre, royalty pools, revenue distributor, attribution, and more — live in a separate repo, [`miso-protocol-extensions`](https://github.com/misonetwork/miso-protocol-extensions). Each is a standalone Move package that attaches to core objects via cap-gated `&mut UID` access, without modifying or re-publishing the core.
 
@@ -90,10 +90,11 @@ sui move test
 
 First-party extensions live in [`miso-protocol-extensions`](https://github.com/misonetwork/miso-protocol-extensions); each is a standalone package that builds the same way.
 
-The TypeScript SDK lives in [`sdk/`](./sdk):
+The TypeScript SDK lives in [`misonetwork/sdk`](https://github.com/misonetwork/sdk):
 
 ```sh
-cd sdk
+git clone https://github.com/misonetwork/sdk ../sdk
+cd ../sdk
 bun install
 bun run typecheck
 ```
