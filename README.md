@@ -49,7 +49,7 @@ Compositions, recordings, and releases are **build-then-freeze**: they are creat
 
 ### Ownership
 
-Ownership is expressed through **share tokens** (via the [`miso_share`](https://github.com/misonetwork/miso-share) package): each composition and recording initializes a fixed-supply share currency, and the set of share holders *is* the set of rightsholders. There are no separate label / publisher / rightsholder fields — ownership is the revenue claim.
+Ownership is expressed through **share tokens** (via the [`miso_share`](https://github.com/misonetwork/share) package): each composition and recording initializes a fixed-supply share currency, and the set of share holders *is* the set of rightsholders. There are no separate label / publisher / rightsholder fields — ownership is the revenue claim.
 
 ## Design principles
 
@@ -72,7 +72,7 @@ deal          track
 | Dependency | Source | Purpose |
 |------------|--------|---------|
 | `bps`   | `unconfirmedlabs/bps` | Basis-point math |
-| `miso_share` | [`misonetwork/miso-share`](https://github.com/misonetwork/miso-share) | Fixed-supply share/ownership currency |
+| `miso_share` | [`misonetwork/share`](https://github.com/misonetwork/share) | Fixed-supply share/ownership currency |
 
 The core package is intentionally lean — `audio`, `partyos`, `ori`, and `gengo` are no longer core dependencies; that functionality now lives in the extensions repo.
 
