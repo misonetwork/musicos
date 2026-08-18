@@ -1,8 +1,10 @@
 #[test_only]
 module miso::release_tests;
 
+use miso::composition;
+use miso::recording;
 use miso::release;
-use miso::test_helpers;
+use miso::test_helpers::{Self, CompositionShare, RecordingShare};
 use miso::track;
 use std::unit_test::{assert_eq, destroy};
 
@@ -36,21 +38,36 @@ fun test_tracks(track_count: u64, split_bps: u16, ctx: &mut TxContext): vector<t
     ))
 }
 
+/// Helper: a composition and a recording of it, with their admin caps.
+fun composition_and_recording(
+    ctx: &mut TxContext,
+): (
+    composition::Composition<CompositionShare>,
+    composition::CompositionAdminCap<CompositionShare>,
+    recording::Recording<RecordingShare, CompositionShare>,
+    recording::RecordingAdminCap<RecordingShare>,
+) {
+    let (comp, comp_cap) =
+        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
+    let (rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(ctx);
+    (comp, comp_cap, rec, rec_cap)
+}
+
 // === Title Length ===
 
 #[test, expected_failure(abort_code = EMaxTitleLengthExceeded, location = miso::release)]
 fun test_new_title_too_long() {
     let ctx = &mut tx_context::dummy();
-    let mut registry = release::new_release_registry_for_testing(ctx);
+    let mut parent = object::new(ctx);
     let (rel, cap) = release::new(
         test_helpers::long_string(MAX_TITLE_LENGTH + 1),
         vector[test_track(ctx)],
         0u256,
-        &mut registry,
+        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    destroy(registry);
+    parent.delete();
 }
 
 // === Max Tracks ===
@@ -58,7 +75,7 @@ fun test_new_title_too_long() {
 #[test, expected_failure(abort_code = EMaxTracksExceeded, location = miso::release)]
 fun test_new_exceeds_max_tracks() {
     let ctx = &mut tx_context::dummy();
-    let mut registry = release::new_release_registry_for_testing(ctx);
+    let mut parent = object::new(ctx);
 
     // MAX_TRACKS + 1 = 256 tracks in one flat tracklist.
     // Splits: 256 x 39 BPS = 9984; the first 16 get 40 BPS (16 extra = 10000).
@@ -72,11 +89,11 @@ fun test_new_exceeds_max_tracks() {
         b"Too Many Tracks".to_string(),
         tracks,
         0u256,
-        &mut registry,
+        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    destroy(registry);
+    parent.delete();
 }
 
 /// Helper to create a minimal release.
@@ -93,68 +110,69 @@ fun test_release(ctx: &mut TxContext): (release::Release, release::ReleaseAdminC
 #[test, expected_failure(abort_code = EEmptyString, location = miso::release)]
 fun test_new_empty_title() {
     let ctx = &mut tx_context::dummy();
-    let mut registry = release::new_release_registry_for_testing(ctx);
+    let mut parent = object::new(ctx);
     let (rel, cap) = release::new(
         b"".to_string(),
         vector[test_track(ctx)],
         0u256,
-        &mut registry,
+        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    destroy(registry);
+    parent.delete();
 }
 
 #[test, expected_failure(abort_code = ENoTracks, location = miso::release)]
 fun test_new_no_tracks() {
     let ctx = &mut tx_context::dummy();
-    let mut registry = release::new_release_registry_for_testing(ctx);
+    let mut parent = object::new(ctx);
     let (rel, cap) = release::new(
         b"Empty".to_string(),
         vector[],
         0u256,
-        &mut registry,
+        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    destroy(registry);
+    parent.delete();
 }
 
 #[test, expected_failure(abort_code = EInvalidTrackSplitsSum, location = miso::release)]
 fun test_new_splits_below_total() {
     let ctx = &mut tx_context::dummy();
-    let mut registry = release::new_release_registry_for_testing(ctx);
+    let mut parent = object::new(ctx);
     let (rel, cap) = release::new(
         b"Underweight".to_string(),
         test_tracks(1, 9999, ctx), // 99.99%
         0u256,
-        &mut registry,
+        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    destroy(registry);
+    parent.delete();
 }
 
 #[test, expected_failure(abort_code = EInvalidTrackSplitsSum, location = miso::release)]
 fun test_new_splits_above_total() {
     let ctx = &mut tx_context::dummy();
-    let mut registry = release::new_release_registry_for_testing(ctx);
+    let mut parent = object::new(ctx);
     let (rel, cap) = release::new(
         b"Overweight".to_string(),
         test_tracks(2, 5001, ctx), // 100.02%
         0u256,
-        &mut registry,
+        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    destroy(registry);
+    parent.delete();
 }
 
-/// The same digest (recording set + splits + nonce) can only ever be claimed once.
+/// The same digest (recording set + splits + nonce) can only ever be claimed
+/// once under the same parent.
 #[test, expected_failure] // aborts in sui::derived_object on the duplicate claim
 fun test_duplicate_digest_aborts() {
     let ctx = &mut tx_context::dummy();
-    let mut registry = release::new_release_registry_for_testing(ctx);
+    let mut parent = object::new(ctx);
     let rec_id = test_helpers::fake_id(ctx);
     let rel_id = test_helpers::fake_id(ctx);
 
@@ -162,20 +180,20 @@ fun test_duplicate_digest_aborts() {
         b"First".to_string(),
         vector[track::new_for_testing(rec_id, rel_id, 10000)],
         7u256,
-        &mut registry,
+        &mut parent,
     );
     // Identical recording ids, splits, and nonce: identical digest.
     let (rel2, cap2) = release::new(
         b"Second".to_string(),
         vector[track::new_for_testing(rec_id, rel_id, 10000)],
         7u256,
-        &mut registry,
+        &mut parent,
     );
     destroy(rel1);
     destroy(cap1);
     destroy(rel2);
     destroy(cap2);
-    destroy(registry);
+    parent.delete();
 }
 
 // === Authorization ===
@@ -209,4 +227,51 @@ fun test_views() {
 
     destroy(rel);
     destroy(cap);
+}
+
+// === track::new ===
+
+/// `track::new` produces an `Unassigned` track carrying the target release id
+/// and split it was called with, and reads the recording id off the
+/// `&Recording` argument.
+#[test]
+fun track_new_creates_unassigned_track() {
+    let ctx = &mut tx_context::dummy();
+    let (comp, comp_cap, rec, rec_cap) = composition_and_recording(ctx);
+    let target_release_id = test_helpers::fake_id(ctx);
+
+    let t = track::new(&rec_cap, &rec, target_release_id, 10000);
+
+    assert_eq!(t.recording_id(), rec.id());
+    assert_eq!(t.split_bps().value(), 10000);
+    assert_eq!(t.target_release_id(), target_release_id);
+    assert!(t.is_unassigned_state());
+    assert!(!t.is_assigned_state());
+
+    destroy(t);
+    destroy(comp);
+    destroy(comp_cap);
+    destroy(rec);
+    destroy(rec_cap);
+}
+
+/// `bps::new` rejects a split above 100% (10,000 BPS) — the validation
+/// `track::new` relies on when constructing `split_bps`.
+#[test, expected_failure(abort_code = 0, location = bps::bps)] // bps EOverflow
+fun track_new_split_above_100_percent_aborts() {
+    let ctx = &mut tx_context::dummy();
+    let (comp, comp_cap, rec, rec_cap) = composition_and_recording(ctx);
+
+    let t = track::new(
+        &rec_cap,
+        &rec,
+        test_helpers::fake_id(ctx),
+        10001, // > 10_000 BPS
+    );
+
+    destroy(t);
+    destroy(comp);
+    destroy(comp_cap);
+    destroy(rec);
+    destroy(rec_cap);
 }

@@ -10,8 +10,9 @@
 ///   recording/composition share-type identities) is reached.
 /// - `split_bps` — this track's share of the release's revenue; genuinely
 ///   release-specific and not derivable from the recording.
-/// - `state` — the assign-once lifecycle that carries (then sheds) each deal's
-///   target release commitment; see `TrackState`.
+/// - `state` — the assign-once lifecycle that carries (then sheds) the
+///   recording admin's target release commitment, made at creation; see
+///   `TrackState`.
 ///
 /// `Track` is intentionally monomorphic: a `Release` holds a `vector<Track>`
 /// of tracks from many different recordings/compositions, so it cannot be
@@ -19,11 +20,8 @@
 /// share-type — all derived from the recording via `recording_id`.
 module miso::track;
 
-use bps::bps::BPS;
-#[test_only]
-use bps::bps;
-use miso::deal::Deal;
-use miso::recording::Recording;
+use bps::bps::{Self, BPS};
+use miso::recording::{Recording, RecordingAdminCap};
 
 // === Structs ===
 
@@ -45,14 +43,14 @@ public struct Track has drop, store {
 // === Enums ===
 
 /// Lifecycle state of a track within a release. A track is born `Unassigned`,
-/// carrying the target `release_id` its originating `Deal` committed to (the
+/// carrying the target release id the consent committed to at creation (the
 /// release id is a digest of the whole tracklist, so this is the recording
 /// owner's consent to the exact release configuration). At publish the release
 /// verifies the match and transitions the track to `Assigned`, which carries
 /// no id — shedding the 32-byte commitment once it has served its purpose.
 public enum TrackState has copy, drop, store {
     /// Track has been created but not yet assigned to a release. Carries the
-    /// target release id the originating deal committed to.
+    /// target release id the consent committed to at creation.
     Unassigned(ID),
     /// Track has been assigned to its target release.
     Assigned,
@@ -67,38 +65,62 @@ const EAlreadyAssigned: u64 = 1;
 
 // === Public Functions ===
 
-/// Creates a new track by accepting a deal. The deal is the authorization —
-/// created by the recording's admin, carrying the target release and the agreed
-/// split. Emits a `DealAcceptedEvent`.
+/// Creates a new track: the recording admin's consent to that recording's
+/// inclusion in a specific future release with an agreed split.
+/// Requires the recording admin capability. No event: a `Track` has `drop`
+/// and is not an object, so a creation event could announce a consent that is
+/// then silently discarded, and indexers would be unable to distinguish
+/// pending from dead. Pre-publish observability is the responsibility of
+/// whatever wraps the track (see below).
 ///
-/// The deal's `RecordingShare`/`CompositionShare` phantoms are erased here: a
-/// `Track` is monomorphic so it can live in a release's heterogeneous
-/// `vector<Track>`. Identity rides on those phantoms up to this point, but the
-/// monomorphic `Track` must store the recording's *address* for revenue routing
-/// — and an address can't come from a phantom. So the matching `Recording` is
-/// passed in (the deal's phantoms force it to be the right one) purely to read
-/// its id; the deal no longer stores it.
+/// The composition is identified by the recording's `CompositionShare`
+/// phantom, so the recording↔composition pairing is compile-time enforced —
+/// there is no `Composition` argument and no runtime ID check.
+///
+/// ### What creating a track consents to
+///
+/// `target_release_id` is derived from the release digest, so targeting it
+/// consents to that release's exact economics and membership: the ordered
+/// list of `(recording, split)` pairs and the creator's nonce, nothing more.
+/// The release's title, artwork, credits, and display grouping are chosen by
+/// the release creator — before or after this track is created — and are not
+/// bound by the digest. Presentation is trusted and publicly attributable,
+/// not cryptographically committed.
+///
+/// The recording need not be `Published`: its admin can create tracks inside
+/// the recording's own creating transaction (an `Initialized` recording
+/// cannot escape that transaction, so across transactions tracks always
+/// reference `Published`, shared recordings).
+///
+/// A `Track` has `store`, not `key`: it carries no identity of its own, so it
+/// may be exercised synchronously in the same transaction that creates it, or
+/// handed to an offer extension that wraps it in a real object with its own
+/// identity. Withdrawal, expiry, and rejection are then whatever that
+/// wrapping extension encodes — visible in its type, not in core.
+///
+/// `recording` compile-time-binds the `RecordingShare`/`CompositionShare`
+/// phantom pairing, and is read for its id: the monomorphic `Track` must
+/// store the recording's *address* for revenue routing, and an address
+/// cannot come from a phantom.
 public fun new<RecordingShare, CompositionShare>(
-    deal: Deal<RecordingShare, CompositionShare>,
+    _: &RecordingAdminCap<RecordingShare>,
     recording: &Recording<RecordingShare, CompositionShare>,
+    target_release_id: ID,
+    track_split_bps_value: u16,
 ): Track {
-    let track = Track {
-        state: TrackState::Unassigned(deal.release_id()),
+    Track {
+        state: TrackState::Unassigned(target_release_id),
         recording_id: recording.id(),
-        split_bps: deal.track_split_bps(),
-    };
-
-    deal.accept();
-
-    track
+        split_bps: bps::new(track_split_bps_value),
+    }
 }
 
 /// Assigns the track to a release by verifying the release UID matches
 /// the track's target release ID. Can only be called once per track.
 public(package) fun assign(self: &mut Track, release_uid: &UID) {
     match (self.state) {
-        TrackState::Unassigned(release_id) => {
-            assert!(release_uid.to_inner() == release_id, EUnauthorizedAssignment);
+        TrackState::Unassigned(target_release_id) => {
+            assert!(release_uid.to_inner() == target_release_id, EUnauthorizedAssignment);
             self.state = TrackState::Assigned;
         },
         TrackState::Assigned => abort EAlreadyAssigned,
@@ -117,14 +139,27 @@ public fun split_bps(self: &Track): BPS {
     self.split_bps
 }
 
+/// Returns the target release id this track's creator consented to.
+/// Aborts if the track is `Assigned`: an assigned track only exists inside
+/// a published release, so its release is the object you fetched it from.
+public fun target_release_id(self: &Track): ID {
+    match (self.state) {
+        TrackState::Unassigned(target_release_id) => target_release_id,
+        TrackState::Assigned => abort EAlreadyAssigned,
+    }
+}
+
 // === Test Only ===
 
 // The state predicates are test-only: a track's state is determined by where
 // it came from. `assign` is package-only and runs solely inside release
 // publish, and there is no extraction path — so a track read out of a (shared,
 // therefore published) release is always `Assigned`, and a track anywhere else
-// is always `Unassigned`. No runtime caller learns anything from asking; tests
-// still need them to verify the transition itself.
+// is always `Unassigned`. No runtime caller learns anything from asking which
+// variant a track is in — these boolean predicates remain information-free —
+// but the unassigned variant's payload, the target release id, is genuinely
+// runtime-relevant (an offer extension reads it to route or validate a
+// pending track), hence the public `target_release_id` accessor above.
 
 #[test_only]
 public fun is_assigned_state(self: &Track): bool {
@@ -137,15 +172,15 @@ public fun is_unassigned_state(self: &Track): bool {
 }
 
 #[test_only]
-public fun new_for_testing(recording_id: ID, release_id: ID, split_bps_value: u16): Track {
+public fun new_for_testing(recording_id: ID, target_release_id: ID, split_bps_value: u16): Track {
     Track {
-        state: TrackState::Unassigned(release_id),
+        state: TrackState::Unassigned(target_release_id),
         recording_id,
         split_bps: bps::new(split_bps_value),
     }
 }
 
 #[test_only]
-public fun set_release_id_for_testing(self: &mut Track, release_id: ID) {
-    self.state = TrackState::Unassigned(release_id);
+public fun set_target_release_id_for_testing(self: &mut Track, target_release_id: ID) {
+    self.state = TrackState::Unassigned(target_release_id);
 }

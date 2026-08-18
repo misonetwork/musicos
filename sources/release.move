@@ -36,14 +36,23 @@
 ///
 /// ### Consent scope
 ///
-/// The release digest — and therefore the derived release id every `Deal`
-/// commits to — binds the economics and membership of the release: the ordered
-/// list of `(recording, split)` pairs and the creator's nonce. It deliberately
-/// binds nothing else. The title — the one embedded field outside the digest —
-/// and everything in the extension layer (artwork, credits, display grouping)
-/// are chosen by the release creator, before or after deals are signed, and
-/// are trusted and publicly attributable rather than cryptographically
-/// committed. See `deal::new` for the signer-side statement of this boundary.
+/// The release digest — and therefore the derived release id every `Track`
+/// commits to at creation — binds the economics and membership of the
+/// release: the ordered list of `(recording, split)` pairs and the creator's
+/// nonce. It deliberately binds nothing else. The title — the one embedded
+/// field outside the digest — and everything in the extension layer (artwork,
+/// credits, display grouping) are chosen by the release creator, before or
+/// after tracks are created, and are trusted and publicly attributable rather
+/// than cryptographically committed. See `track::new` for the signer-side
+/// statement of this boundary.
+///
+/// The derived id commits to a `(parent, digest)` pair, not the digest alone
+/// — so targeting an id also consents to that namespace's liveness. If the
+/// parent object is deleted, or its `&mut UID` becomes permanently
+/// unreachable, the release can never exist and every track or offer
+/// targeting it is stranded — the same blast-radius class as a release that
+/// simply never publishes. A coordinator meant to serve as the default
+/// parent namespace should therefore be shared and undeletable.
 ///
 /// ### Lifecycle and trust model
 ///
@@ -77,8 +86,6 @@ public use fun release_admin_cap_release_id as ReleaseAdminCap.release_id;
 
 // === Structs ===
 
-public struct RELEASE() has drop;
-
 /// A music release containing one or more discs of tracks.
 public struct Release has key {
     /// Unique identifier for this release.
@@ -87,25 +94,13 @@ public struct Release has key {
     state: ReleaseState,
     /// Title of the release.
     title: String,
-    /// The ordered tracklist. Same shape as the digest pre-image every deal
-    /// consented to; display grouping lives in the metadata extension.
+    /// The ordered tracklist. Same shape as the digest pre-image every track's
+    /// creator consented to; display grouping lives in the metadata extension.
     tracks: vector<Track>,
 }
 
 /// Key for release UID derivation.
 public struct ReleaseKey(vector<u8>) has copy, drop, store;
-
-/// A registry that acts as a parent object for release UID derivation.
-///
-/// Every `release::new` takes `&mut` on this single shared object, so release
-/// creation serializes per checkpoint. Deliberate: one registry namespaces
-/// every digest, keeping derived release ids globally collision-free and
-/// client-derivable. The throughput ceiling is accepted — releases are rare
-/// events; compositions and recordings avoid the registry entirely (fresh
-/// objects, no contention).
-public struct ReleaseRegistry has key {
-    id: UID,
-}
 
 /// Capability that authorizes modifications to a specific release.
 /// Initialized when a release is registered and transferred to the owner.
@@ -134,12 +129,6 @@ public enum ReleaseState has copy, drop, store {
 
 // === Events ===
 
-/// Emitted when package initialization creates the shared release registry.
-public struct ReleaseRegistryCreatedEvent has copy, drop {
-    registry_id: ID,
-    created_by: address,
-}
-
 /// Emitted once when a release is published. A pure pointer: it carries the
 /// release's identity. A release's embedded fields (discs, tracks) are
 /// immutable after publishing, so an indexer treats this as a signal to
@@ -150,8 +139,8 @@ public struct ReleaseRegistryCreatedEvent has copy, drop {
 /// There is deliberately no `ReleaseCreatedEvent`: an `Initialized` release
 /// exists only inside its creating transaction (create-and-publish is atomic),
 /// so publish is the one lifecycle moment an observer can ever see. Pre-publish
-/// correlation is available from `DealCreatedEvent.release_id`, which carries
-/// the derived id before the release exists.
+/// correlation, where an integrator needs it, is an offer extension's
+/// responsibility — core's one observable lifecycle moment remains publish.
 public struct ReleasePublishedEvent has copy, drop {
     release_id: ID,
 }
@@ -189,31 +178,19 @@ const EEmptyString: u64 = 35;
 /// Release must contain at least one track.
 const ENoTracks: u64 = 51;
 
-// === Init Function ===
-
-/// Module initializer. Creates and shares the `ReleaseRegistry`.
-fun init(_otw: RELEASE, ctx: &mut TxContext) {
-    let registry = ReleaseRegistry {
-        id: object::new(ctx),
-    };
-
-    emit(ReleaseRegistryCreatedEvent {
-        registry_id: object::id(&registry),
-        created_by: ctx.sender(),
-    });
-
-    transfer::share_object(registry);
-}
-
 // === Public Functions ===
 
 /// Creates a new release with the given configuration.
+/// Claims the release's UID as a derived child of `parent`, keyed by the
+/// release digest (see the module doc's "Consent scope" section) — so
+/// contention is per-parent, and which object serves as parent is entirely
+/// the caller's choice.
 /// Returns the release and admin capability.
 public fun new(
     title: String,
     tracks: vector<Track>,
     nonce: u256,
-    registry: &mut ReleaseRegistry,
+    parent: &mut UID,
 ): (Release, ReleaseAdminCap) {
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
@@ -229,7 +206,7 @@ public fun new(
 
     // Calculate the release digest and claim the release UID.
     let release_digest = calculate_release_digest(recording_ids, track_split_values, nonce);
-    let release_uid = claim(&mut registry.id, ReleaseKey(release_digest));
+    let release_uid = claim(parent, ReleaseKey(release_digest));
 
     let mut release = Release {
         id: release_uid,
@@ -282,17 +259,17 @@ public fun authorize(self: &Release, cap: &ReleaseAdminCap) {
 
 // === Public View Functions ===
 
-/// Derives the release ID that `new()` would produce for the given inputs,
-/// without creating the object. This is the on-chain equivalent of the
-/// client-side `deriveReleaseId()` function.
-public fun derive_release_id(
+/// Derives the target release ID that `new()` would produce for the given
+/// inputs and parent, without creating the object. This is the on-chain
+/// equivalent of the client-side `deriveReleaseId()` function.
+public fun derive_target_release_id(
     recording_ids: vector<ID>,
     track_split_values: vector<u64>,
     nonce: u256,
-    registry: &ReleaseRegistry,
+    parent: ID,
 ): ID {
     let release_digest = calculate_release_digest(recording_ids, track_split_values, nonce);
-    derived_object::derive_address(registry.id.to_inner(), ReleaseKey(release_digest)).to_id()
+    derived_object::derive_address(parent, ReleaseKey(release_digest)).to_id()
 }
 
 /// Returns the release's object ID.
@@ -391,19 +368,6 @@ public fun is_published_state(self: &Release): bool {
     }
 }
 
-/// Runs the real module initializer (creates and shares the `ReleaseRegistry`).
-#[test_only]
-public fun init_for_testing(ctx: &mut TxContext) {
-    init(RELEASE(), ctx);
-}
-
-#[test_only]
-public fun new_release_registry_for_testing(ctx: &mut TxContext): ReleaseRegistry {
-    ReleaseRegistry {
-        id: object::new(ctx),
-    }
-}
-
 #[test_only]
 public fun new_for_testing(
     title: String,
@@ -421,7 +385,7 @@ public fun new_for_testing(
 
     // Patch all tracks to point to this release's ID so publish() can assign them.
     let release_id = release.id();
-    release.tracks.do_mut!(|t| track::set_release_id_for_testing(t, release_id));
+    release.tracks.do_mut!(|t| track::set_target_release_id_for_testing(t, release_id));
 
     let release_admin_cap = ReleaseAdminCap {
         id: claim(&mut release.id, ReleaseAdminCapKey()),
@@ -429,12 +393,4 @@ public fun new_for_testing(
     };
 
     (release, release_admin_cap)
-}
-
-#[test_only]
-public fun release_registry_created_event_fields(
-    event: ReleaseRegistryCreatedEvent,
-): (ID, address) {
-    let ReleaseRegistryCreatedEvent { registry_id, created_by } = event;
-    (registry_id, created_by)
 }
