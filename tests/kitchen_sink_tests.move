@@ -27,6 +27,7 @@ fun test_release_kitchen_sink() {
     let dummy_release_id = test_helpers::fake_id(ctx);
     let tracks = vector::tabulate!(255, |index| track::new_for_testing(
         test_helpers::fake_id(ctx),
+        test_helpers::fake_id(ctx),
         dummy_release_id,
         if (index < 55) 40 else 39,
     ));

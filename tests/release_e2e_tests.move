@@ -58,6 +58,7 @@ fun full_track_release_flow_publishes_at_derived_id() {
     scenario.next_tx(ARTIST);
     let comp = scenario.take_shared<Composition<CompositionShare>>();
     let (rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
+        comp.id(),
         scenario.ctx(),
     );
     let clock = sui::clock::create_for_testing(scenario.ctx());
@@ -131,6 +132,7 @@ fun publish_aborts_when_track_targets_a_different_release() {
         scenario.ctx(),
     );
     let (rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
+        _comp.id(),
         scenario.ctx(),
     );
 

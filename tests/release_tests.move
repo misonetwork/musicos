@@ -25,6 +25,7 @@ fun test_track(ctx: &mut TxContext): track::Track {
     track::new_for_testing(
         test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),
+        test_helpers::fake_id(ctx),
         10000, // 100% split (single track)
     )
 }
@@ -32,6 +33,7 @@ fun test_track(ctx: &mut TxContext): track::Track {
 /// Helper to create an ordered tracklist of n tracks sharing splits evenly.
 fun test_tracks(track_count: u64, split_bps: u16, ctx: &mut TxContext): vector<track::Track> {
     vector::tabulate!(track_count, |_index| track::new_for_testing(
+        test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),
         split_bps,
@@ -49,7 +51,8 @@ fun composition_and_recording(
 ) {
     let (comp, comp_cap) =
         composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
-    let (rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(ctx);
+    let (rec, rec_cap) =
+        recording::new_for_testing<RecordingShare, CompositionShare>(comp.id(), ctx);
     (comp, comp_cap, rec, rec_cap)
 }
 
@@ -80,6 +83,7 @@ fun test_new_exceeds_max_tracks() {
     // MAX_TRACKS + 1 = 256 tracks in one flat tracklist.
     // Splits: 256 x 39 BPS = 9984; the first 16 get 40 BPS (16 extra = 10000).
     let tracks = vector::tabulate!(MAX_TRACKS + 1, |index| track::new_for_testing(
+        test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),
         test_helpers::fake_id(ctx),
         if (index < 16) 40 else 39,
@@ -176,16 +180,17 @@ fun test_duplicate_digest_aborts() {
     let rec_id = test_helpers::fake_id(ctx);
     let rel_id = test_helpers::fake_id(ctx);
 
+    let comp_id = test_helpers::fake_id(ctx);
     let (rel1, cap1) = release::new(
         b"First".to_string(),
-        vector[track::new_for_testing(rec_id, rel_id, 10000)],
+        vector[track::new_for_testing(comp_id, rec_id, rel_id, 10000)],
         7u256,
         &mut parent,
     );
     // Identical recording ids, splits, and nonce: identical digest.
     let (rel2, cap2) = release::new(
         b"Second".to_string(),
-        vector[track::new_for_testing(rec_id, rel_id, 10000)],
+        vector[track::new_for_testing(comp_id, rec_id, rel_id, 10000)],
         7u256,
         &mut parent,
     );
@@ -243,6 +248,7 @@ fun track_new_creates_unassigned_track() {
     let t = track::new(&rec_cap, &rec, target_release_id, 10000);
 
     assert_eq!(t.recording_id(), rec.id());
+    assert_eq!(t.composition_id(), comp.id());
     assert_eq!(t.split_bps().value(), 10000);
     assert_eq!(t.target_release_id(), target_release_id);
     assert!(t.is_unassigned_state());

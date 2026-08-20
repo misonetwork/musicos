@@ -39,7 +39,10 @@ fun publish_recording(
     scenario: &mut test_scenario::Scenario,
 ): recording::RecordingAdminCap<RecordingShare> {
     let ctx = scenario.ctx();
-    let (rec, cap) = recording::new_for_testing<RecordingShare, CompositionShare>(ctx);
+    let (rec, cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
+        test_helpers::fake_id(ctx),
+        ctx,
+    );
     let clock = sui::clock::create_for_testing(ctx);
     rec.publish(&cap, &clock);
     clock.destroy_for_testing();
@@ -52,6 +55,7 @@ fun publish_release(scenario: &mut test_scenario::Scenario): release::ReleaseAdm
     let (rel, cap) = release::new_for_testing(
         b"Album".to_string(),
         vector[miso::track::new_for_testing(
+            test_helpers::fake_id(ctx),
             test_helpers::fake_id(ctx),
             test_helpers::fake_id(ctx),
             10000,

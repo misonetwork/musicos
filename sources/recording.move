@@ -45,15 +45,16 @@
 /// expires: integrators should model the cap holder as able to mutate or
 /// delete any extension data, forever.
 ///
-/// The recording carries its parent composition's identity as the
-/// `CompositionShare` phantom type parameter — the composition's share type is
-/// its durable identity (a share currency is published independently of miso
-/// and survives a fresh republish, whereas an object ID does not). This makes
-/// the recording↔composition lineage compile-time enforced wherever the two
-/// meet, and it is the sole link: the composition's object id is not stored on
-/// the recording. Off-chain consumers that need the composition object resolve
-/// its share type to an id via `composition::CompositionPublishedEvent`, which
-/// binds the two.
+/// The recording carries its parent composition's identity two ways. The
+/// `CompositionShare` phantom type parameter is the durable identity (a share
+/// currency is published independently of miso and survives a fresh
+/// republish, whereas an object ID does not) and makes the
+/// recording↔composition lineage compile-time enforced wherever the two meet.
+/// The embedded `composition_id` is the address-level handle: Move cannot
+/// chase a type (or an ID) to an object, so on-chain consumers holding only
+/// `&Recording` — or a bare `Track` — could not otherwise reach the
+/// composition at all. Both are set at creation and immutable, so they cannot
+/// diverge.
 ///
 /// A recording is its own freshly-created object (`object::new`), not a derived
 /// child of its composition: `recording::new` takes a read-only `&Composition`
@@ -81,6 +82,12 @@ public struct Recording<phantom RecordingShare, phantom CompositionShare> has ke
     id: UID,
     /// Current lifecycle state.
     state: RecordingState,
+    /// Object ID of the parent composition. The address-level counterpart of
+    /// the `CompositionShare` phantom, set from the `&Composition` passed to
+    /// `new` (the shared phantom proves the pairing). An identity handle —
+    /// not a revenue routing target: the composition is paid through its
+    /// recording-share ownership, settled at creation.
+    composition_id: ID,
 }
 
 /// Capability that authorizes modifications to a specific recording.
@@ -153,11 +160,6 @@ public struct CompositionSharesGrantedEvent<phantom RecordingShare, phantom Comp
 /// Operation requires Initialized state but recording is in a different state.
 const ENotInitializedState: u64 = 10;
 
-// Validation errors (20-29)
-/// The composition's royalty rate exceeds the maximum the caller will accept.
-/// A slippage guard against a rate change ordered ahead of `new` (see `new`).
-const ERoyaltyRateAboveMax: u64 = 20;
-
 // === Public Functions ===
 
 // === Lifecycle ===
@@ -173,13 +175,11 @@ const ERoyaltyRateAboveMax: u64 = 20;
 /// to honor a rate. What the composition owner then does with the shares
 /// (hold, stake, sell) is outside the protocol's scope.
 ///
-/// `max_royalty_rate_bps` is a slippage guard: `new` reads the composition's
-/// royalty rate live off a shared object, so a composition owner could land a
-/// rate increase in a transaction ordered just before this one and capture more
-/// of the recording's shares than the recorder saw. The call aborts if the
-/// composition's current rate exceeds `max_royalty_rate_bps`, so the recorder
-/// pins the most they will grant (pass the rate they observed, or `2000` to
-/// accept up to the protocol maximum).
+/// The composition's royalty rate is immutable, so the rate a recorder's
+/// client displayed is exactly the rate applied here — no slippage protection
+/// is needed or possible. Whether that rate is acceptable is the recorder's
+/// decision to make before calling; per-deal deviations settle as voluntary
+/// share transfers after creation.
 ///
 /// The composition need not be `Published`: within the composition's own
 /// creating transaction its creator can already mint recordings against it.
@@ -197,7 +197,6 @@ public fun new<RecordingShare, CompositionShare>(
     composition: &Composition<CompositionShare>,
     share_currency: &mut Currency<RecordingShare>,
     share_treasury_cap: TreasuryCap<RecordingShare>,
-    max_royalty_rate_bps: u16,
     ctx: &mut TxContext,
 ): (
     Recording<RecordingShare, CompositionShare>,
@@ -206,9 +205,6 @@ public fun new<RecordingShare, CompositionShare>(
 ) {
     let composition_id = composition.id();
     let composition_royalty_rate = composition.royalty_rate();
-    // Slippage guard: reject if the composition's live rate is above what the
-    // caller agreed to, defeating a rate bump ordered ahead of this call.
-    assert!(composition_royalty_rate.value() <= max_royalty_rate_bps, ERoyaltyRateAboveMax);
 
     // A recording is its own freshly-created object, not a derived child of its
     // composition. The composition is read-only (`&Composition`) — taken only to
@@ -219,6 +215,7 @@ public fun new<RecordingShare, CompositionShare>(
     let mut recording = Recording<RecordingShare, CompositionShare> {
         id: object::new(ctx),
         state: RecordingState::Initialized,
+        composition_id,
     };
 
     let recording_admin_cap = RecordingAdminCap<RecordingShare> {
@@ -287,6 +284,16 @@ public fun publish<RecordingShare, CompositionShare>(
 
 // === Public View Functions ===
 
+/// Returns the object ID of the parent composition. An identity/membership
+/// handle (the address-level counterpart of the `CompositionShare` phantom) —
+/// not a revenue routing target: the composition is paid via its
+/// recording-share ownership.
+public fun composition_id<RecordingShare, CompositionShare>(
+    self: &Recording<RecordingShare, CompositionShare>,
+): ID {
+    self.composition_id
+}
+
 /// Returns the recording's object ID.
 public fun id<RecordingShare, CompositionShare>(
     self: &Recording<RecordingShare, CompositionShare>,
@@ -340,11 +347,13 @@ public fun is_published_state<RecordingShare, CompositionShare>(
 
 #[test_only]
 public fun new_for_testing<RecordingShare, CompositionShare>(
+    composition_id: ID,
     ctx: &mut TxContext,
 ): (Recording<RecordingShare, CompositionShare>, RecordingAdminCap<RecordingShare>) {
     let mut recording = Recording<RecordingShare, CompositionShare> {
         id: object::new(ctx),
         state: RecordingState::Initialized,
+        composition_id,
     };
 
     let recording_admin_cap = RecordingAdminCap<RecordingShare> {

@@ -91,51 +91,24 @@ public enum CompositionState has copy, drop, store {
 // === Events ===
 
 /// Emitted once when a composition is published. A pure pointer: it carries the
-/// composition's identity. A composition's membership is immutable after
-/// publishing, so an indexer treats this as a signal to fetch the full object by
-/// `composition_id`; all indexed data — including the publish timestamp — lives
-/// in the object itself (the royalty rate may change later and is tracked
-/// separately via `CompositionRoyaltySetEvent`).
+/// composition's identity. A composition's embedded fields — title and royalty
+/// rate included — are immutable, so an indexer treats this as a signal to
+/// fetch the full object by `composition_id` once; all indexed data, including
+/// the publish timestamp, lives in the object itself and never changes.
 public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop {
     composition_id: ID,
-}
-
-/// Emitted when the composition's royalty rate is changed. Carries both sides
-/// of the transition and the actor so an indexer can reconstruct royalty-rate
-/// history without fetching mutable object state.
-public struct CompositionRoyaltySetEvent<phantom CompositionShare> has copy, drop {
-    composition_id: ID,
-    previous_royalty_rate_bps: u16,
-    royalty_rate_bps: u16,
-    changed_by: address,
 }
 
 // === Constants ===
 
 /// Maximum length of a title in bytes.
 const MAX_TITLE_LENGTH: u64 = 300;
-/// Protocol-immutable ceiling for a composition's royalty rate (20%). Anyone may
-/// record a published composition at the posted rate — a compulsory license —
-/// which is only meaningful if the rate is bounded; an uncapped rate would let a
-/// composition retroactively price out the cover right entirely. ~20% matches the
-/// composition side's share of streaming rights-holder revenue off-chain
-/// (publishing earns ~12-15% of gross vs ~52-58% to recordings).
-///
-/// There is intentionally no floor: the rate may be as low as 0%. A composition
-/// that captures no defined songwriting contribution — e.g. a purely generative
-/// recording with no authored underlying work — can legitimately carry a 0%
-/// rate, in which case it is granted no recording shares at creation.
-const MAX_ROYALTY_RATE_BPS: u16 = 2000;
 
 // === Errors ===
 
 // State errors (10-19)
 /// Operation requires Initialized state but composition is in a different state.
 const ENotInitializedState: u64 = 10;
-
-// Validation errors (20-29)
-/// Royalty rate is above the protocol maximum.
-const EAboveMaxRoyaltyRate: u64 = 22;
 
 // Constraint errors (30-39)
 /// Title exceeds maximum length.
@@ -148,8 +121,16 @@ const EEmptyString: u64 = 35;
 // === Lifecycle ===
 
 /// Creates a new composition with the given title and royalty rate.
-/// The royalty rate must not exceed `MAX_ROYALTY_RATE_BPS`; there is no floor,
-/// so 0% is permitted (e.g. a generative recording with no authored composition).
+///
+/// The rate is set once, here, and is immutable for the composition's
+/// lifetime: it is a permanent standing offer that recorders and share buyers
+/// can price against without trusting the admin. The protocol imposes no
+/// opinion on it beyond the arithmetic bound of 100% (10000 bps, enforced by
+/// `bps::new`). There is no floor — 0% is permitted (e.g. a generative
+/// recording with no authored composition) — and no protocol ceiling: an
+/// uncompetitive rate simply attracts no recordings. What rate is reasonable
+/// is a client-side concern; per-deal deviations settle as voluntary share
+/// transfers after recording creation.
 /// Initializes share tokens (10M supply, 6 decimals) and returns:
 /// - The composition object
 /// - Admin capability for the owner
@@ -167,7 +148,6 @@ public fun new<CompositionShare>(
 ) {
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
-    assert!(royalty_rate_bps <= MAX_ROYALTY_RATE_BPS, EAboveMaxRoyaltyRate);
 
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
@@ -213,35 +193,6 @@ public fun publish<CompositionShare>(
     }
 }
 
-// === Financial ===
-
-/// Sets the royalty rate this composition earns from each recording.
-/// Must not exceed `MAX_ROYALTY_RATE_BPS` (there is no floor; 0% is allowed).
-/// The rate can be changed in any lifecycle state, including after publishing,
-/// and takes effect immediately. There is deliberately no rate-change cooldown:
-/// a change cannot surprise anyone, because each recording snapshots the rate
-/// when it is created (existing recordings keep the rate they captured) and
-/// `recording::new`'s `max_royalty_rate_bps` slippage guard means no future
-/// recorder can be charged a rate they did not consent to.
-#[allow(lint(prefer_mut_tx_context))]
-public fun set_royalty_rate<CompositionShare>(
-    self: &mut Composition<CompositionShare>,
-    _: &CompositionAdminCap<CompositionShare>,
-    royalty_rate_bps: u16,
-    ctx: &TxContext,
-) {
-    assert!(royalty_rate_bps <= MAX_ROYALTY_RATE_BPS, EAboveMaxRoyaltyRate);
-    let previous_royalty_rate_bps = self.royalty_rate.value();
-    self.royalty_rate = bps::new(royalty_rate_bps);
-
-    emit(CompositionRoyaltySetEvent<CompositionShare> {
-        composition_id: self.id(),
-        previous_royalty_rate_bps,
-        royalty_rate_bps,
-        changed_by: ctx.sender(),
-    });
-}
-
 // === Public View Functions ===
 
 /// Returns the composition's object ID.
@@ -255,6 +206,8 @@ public fun title<CompositionShare>(self: &Composition<CompositionShare>): &Strin
 }
 
 /// Returns the royalty rate this composition earns from each recording.
+/// Immutable for the composition's lifetime — the value read here is, by
+/// construction, the value `recording::new` will apply.
 public fun royalty_rate<CompositionShare>(self: &Composition<CompositionShare>): BPS {
     self.royalty_rate
 }
@@ -310,7 +263,6 @@ public fun new_for_testing<CompositionShare>(
 ): (Composition<CompositionShare>, CompositionAdminCap<CompositionShare>) {
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
-    assert!(royalty_rate_bps <= MAX_ROYALTY_RATE_BPS, EAboveMaxRoyaltyRate);
 
     let mut composition = Composition<CompositionShare> {
         id: object::new(ctx),
@@ -324,17 +276,4 @@ public fun new_for_testing<CompositionShare>(
     };
 
     (composition, composition_admin_cap)
-}
-
-#[test_only]
-public fun royalty_set_event_fields<CompositionShare>(
-    event: CompositionRoyaltySetEvent<CompositionShare>,
-): (ID, u16, u16, address) {
-    let CompositionRoyaltySetEvent {
-        composition_id,
-        previous_royalty_rate_bps,
-        royalty_rate_bps,
-        changed_by,
-    } = event;
-    (composition_id, previous_royalty_rate_bps, royalty_rate_bps, changed_by)
 }

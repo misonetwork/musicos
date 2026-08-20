@@ -2,7 +2,7 @@
 module miso::recording_tests;
 
 use miso::recording;
-use miso::test_helpers::{RecordingShare, CompositionShare};
+use miso::test_helpers::{Self, RecordingShare, CompositionShare};
 use std::unit_test::destroy;
 
 /// Helper to create a test recording.
@@ -10,7 +10,7 @@ fun new_test_recording(ctx: &mut TxContext): (
     recording::Recording<RecordingShare, CompositionShare>,
     recording::RecordingAdminCap<RecordingShare>,
 ) {
-    recording::new_for_testing<RecordingShare, CompositionShare>(ctx)
+    recording::new_for_testing<RecordingShare, CompositionShare>(test_helpers::fake_id(ctx), ctx)
 }
 
 // === Publish ===

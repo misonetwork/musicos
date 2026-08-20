@@ -43,14 +43,14 @@ fun composition_new_initializes_fixed_share_supply() {
     destroy(currency);
 }
 
-#[test, expected_failure(abort_code = 22, location = miso::composition)] // EAboveMaxRoyaltyRate
-fun composition_new_above_cap_aborts() {
+#[test, expected_failure(abort_code = 0, location = bps::bps)] // bps::EOverflow
+fun composition_new_above_100_percent_aborts() {
     let ctx = &mut tx_context::dummy();
     let (mut currency, treasury_cap) = test_share::currency_for_testing(ctx);
 
     let (comp, cap, shares) = composition::new<Share>(
         b"Greedy Song".to_string(),
-        2001,
+        10001,
         &mut currency,
         treasury_cap,
         ctx,
@@ -73,7 +73,6 @@ fun recording_new_settles_composition_cut() {
         &comp,
         &mut currency,
         treasury_cap,
-        2000,
         ctx,
     );
 
@@ -81,6 +80,7 @@ fun recording_new_settles_composition_cut() {
     // cut (15% of 10M), which `recording::new` splits off and sends to the
     // composition's address.
     assert_eq!(shares.value(), SHARE_SUPPLY - 1_500_000_000_000);
+    assert_eq!(rec.composition_id(), comp.id());
     assert!(rec.is_initialized_state());
     assert!(!rec.is_published_state());
 
@@ -115,7 +115,6 @@ fun recording_new_zero_rate_grants_no_shares() {
         &comp,
         &mut currency,
         treasury_cap,
-        2000,
         ctx,
     );
 
@@ -167,7 +166,6 @@ fun recording_new_independent_ids_succeed() {
         &comp,
         &mut currency0,
         treasury_cap0,
-        2000,
         ctx,
     );
 
@@ -176,7 +174,6 @@ fun recording_new_independent_ids_succeed() {
         &comp,
         &mut currency1,
         treasury_cap1,
-        2000,
         ctx,
     );
 
@@ -232,29 +229,3 @@ fun composition_new_title_too_long_aborts() {
     destroy(currency);
 }
 
-/// Slippage guard: if the composition's rate exceeds the `max_royalty_rate_bps`
-/// the recorder passes — the front-run case where an owner bumps the rate ahead
-/// of this call — `recording::new` aborts rather than granting the larger cut.
-#[test, expected_failure(abort_code = 20, location = miso::recording)] // ERoyaltyRateAboveMax
-fun recording_new_aborts_when_rate_exceeds_max() {
-    let ctx = &mut tx_context::dummy();
-    // Composition sits at 15%; the recorder will accept at most 10%.
-    let (comp, comp_cap) =
-        composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
-    let (mut currency, treasury_cap) = test_share::currency_for_testing(ctx);
-
-    let (rec, rec_cap, shares) = recording::new<Share, CompositionShare>(
-        &comp,
-        &mut currency,
-        treasury_cap,
-        1000,
-        ctx,
-    );
-
-    destroy(comp);
-    destroy(comp_cap);
-    destroy(rec);
-    destroy(rec_cap);
-    destroy(shares);
-    destroy(currency);
-}
