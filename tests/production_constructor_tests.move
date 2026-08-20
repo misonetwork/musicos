@@ -5,6 +5,13 @@
 /// constructors — the real entry points that wire `share::initialize`
 /// (fixed 10M supply, consumed treasury cap) and, for recordings, the fresh
 /// `object::new` id plus the read-only `&Composition` royalty snapshot.
+///
+/// None of these constructors ever share, transfer, or otherwise dispose of
+/// the objects they return — a `Composition`/`Recording` is `key`-only with
+/// no `drop`, so tests must (and do) `destroy` every value directly. There is
+/// no `publish`, no `take_shared`, no sender-dependent behavior to model
+/// here, so `tx_context::dummy()` is sufficient. Ownership-flow behavior
+/// lives in `post_publish_tests` and `release_e2e_tests`.
 #[test_only]
 module miso::production_constructor_tests;
 

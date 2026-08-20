@@ -1,3 +1,10 @@
+/// Structural stress test: proves every bound (255 tracks, 300-byte title,
+/// exact-100% splits) is achievable simultaneously and that the resulting
+/// release still publishes. The only thing under test is whether construction
+/// and `publish` abort at these bounds — there is no cross-transaction
+/// re-fetch or sender-dependent behavior to assert on the shared object
+/// afterward, so this stays a single `tx_context::dummy()` transaction rather
+/// than a `test_scenario`.
 #[test_only]
 module miso::kitchen_sink_tests;
 

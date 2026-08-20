@@ -1,9 +1,19 @@
+/// Title/royalty-rate boundary and validation tests for `composition::new`.
+/// These construct and inspect `Composition` values without ever sharing or
+/// re-taking one across a transaction boundary, so `tx_context::dummy()` is
+/// sufficient — the one exception is `test_publish_composition`, which does
+/// touch object ownership (`publish` calls `share_object`) and runs as a
+/// `test_scenario` accordingly. The fuller publish/uid_mut/wrong-cap
+/// ownership flows live in `post_publish_tests`.
 #[test_only]
 module miso::composition_tests;
 
-use miso::composition;
+use miso::composition::{Self, Composition};
 use miso::test_helpers::{Self, CompositionShare};
 use std::unit_test::{assert_eq, destroy};
+use sui::test_scenario;
+
+const OWNER: address = @0xA1;
 
 // Error codes from composition.move
 const EMaxTitleLengthExceeded: u64 = 33;
@@ -37,17 +47,26 @@ fun test_new_composition_title_at_max_length() {
     destroy(cap);
 }
 
+/// `publish` shares the composition — an ownership-affecting op — so this
+/// runs as a scenario: publish in one transaction, confirm the object is
+/// genuinely shared and re-fetchable via `take_shared` in the next.
 #[test]
 fun test_publish_composition() {
-    let ctx = &mut tx_context::dummy();
+    let mut scenario = test_scenario::begin(OWNER);
+    let ctx = scenario.ctx();
     let (comp, cap) = composition::new_for_testing<CompositionShare>(b"My Song".to_string(), 1500, ctx);
-
-    // Publish
     let clock = sui::clock::create_for_testing(ctx);
-    comp.publish(&cap, &clock);
-
+    comp.publish(&cap, &clock); // shares the composition
     clock.destroy_for_testing();
+
+    scenario.next_tx(OWNER);
+    let comp = scenario.take_shared<Composition<CompositionShare>>();
+    assert!(comp.is_published_state());
+    assert_eq!(*comp.title(), b"My Song".to_string());
+    test_scenario::return_shared(comp);
+
     destroy(cap);
+    scenario.end();
 }
 
 // === Royalty rate ===

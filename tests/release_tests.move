@@ -1,3 +1,11 @@
+/// `release::new` construction/validation and `track::new` boundary checks.
+/// None of these touch object ownership: `release::new` returns an
+/// `Initialized` release by value with no `share_object`/`transfer` call, and
+/// `track::new` returns a plain `Track` (`drop, store`, not `key`) — there is
+/// no sender, shared object, or cross-transaction mechanics to model, so
+/// these remain `tx_context::dummy()` unit tests. Ownership-flow behavior
+/// (publish, take_shared, wrong-cap-by-a-different-actor) lives in
+/// `post_publish_tests` and `release_e2e_tests`.
 #[test_only]
 module miso::release_tests;
 
@@ -9,7 +17,6 @@ use miso::track;
 use std::unit_test::{assert_eq, destroy};
 
 // Error codes from release.move
-const EUnauthorized: u64 = 0;
 const EInvalidTrackSplitsSum: u64 = 20;
 const EMaxTracksExceeded: u64 = 31;
 const EMaxTitleLengthExceeded: u64 = 34;
@@ -203,19 +210,11 @@ fun test_duplicate_digest_aborts() {
 
 // === Authorization ===
 
-#[test, expected_failure(abort_code = EUnauthorized, location = miso::release)]
-fun test_uid_mut_wrong_cap_aborts() {
-    let ctx = &mut tx_context::dummy();
-    let (mut rel1, cap1) = test_release(ctx);
-    let (rel2, cap2) = test_release(ctx);
-
-    let _uid = rel1.uid_mut(&cap2);
-
-    destroy(rel1);
-    destroy(cap1);
-    destroy(rel2);
-    destroy(cap2);
-}
+// The wrong-cap `uid_mut` abort (`EUnauthorized`) is exercised as a
+// `test_scenario` in `post_publish_tests::release_uid_mut_wrong_cap_aborts`,
+// against two published-and-shared releases and distinct senders (OWNER,
+// STRANGER) — the realistic, cross-actor, post-publish shape. That
+// supersedes an earlier same-transaction, dummy-ctx version of this check.
 
 // === Views ===
 

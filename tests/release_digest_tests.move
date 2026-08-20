@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Tests for release digest calculation and derive_target_release_id to verify TypeScript SDK parity.
+/// Pure hashing/BCS-encoding math over plain `ID`/`u64`/`u256` values, with no
+/// object creation, ownership, or transaction boundaries involved — scenario
+/// mechanics would add nothing, so these stay `tx_context::dummy()` (used
+/// only to mint fixture IDs via `test_helpers::fake_id`).
 #[test_only]
 module miso::release_digest_tests;
 

@@ -29,6 +29,13 @@ module miso::track;
 use bps::bps::{Self, BPS};
 use miso::recording::{Recording, RecordingAdminCap};
 
+// === Errors ===
+
+/// Track's target release ID does not match the assigning release.
+const EUnauthorizedAssignment: u64 = 0;
+/// Track has already been assigned to a release.
+const EAlreadyAssigned: u64 = 1;
+
 // === Structs ===
 
 /// A track on a release: a positioned pointer to a recording with a revenue split.
@@ -68,13 +75,6 @@ public enum TrackState has copy, drop, store {
     /// Track has been assigned to its target release.
     Assigned,
 }
-
-// === Errors ===
-
-/// Track's target release ID does not match the assigning release.
-const EUnauthorizedAssignment: u64 = 0;
-/// Track has already been assigned to a release.
-const EAlreadyAssigned: u64 = 1;
 
 // === Public Functions ===
 
@@ -132,19 +132,7 @@ public fun new<RecordingShare, CompositionShare>(
     }
 }
 
-/// Assigns the track to a release by verifying the release UID matches
-/// the track's target release ID. Can only be called once per track.
-public(package) fun assign(self: &mut Track, release_uid: &UID) {
-    match (self.state) {
-        TrackState::Unassigned(target_release_id) => {
-            assert!(release_uid.to_inner() == target_release_id, EUnauthorizedAssignment);
-            self.state = TrackState::Assigned;
-        },
-        TrackState::Assigned => abort EAlreadyAssigned,
-    }
-}
-
-// === Public View Functions ===
+// === View Functions ===
 
 /// Returns the ID of the recording.
 public fun recording_id(self: &Track): ID {
@@ -175,7 +163,21 @@ public fun target_release_id(self: &Track): ID {
     }
 }
 
-// === Test Only ===
+// === Package Functions ===
+
+/// Assigns the track to a release by verifying the release UID matches
+/// the track's target release ID. Can only be called once per track.
+public(package) fun assign(self: &mut Track, release_uid: &UID) {
+    match (self.state) {
+        TrackState::Unassigned(target_release_id) => {
+            assert!(release_uid.to_inner() == target_release_id, EUnauthorizedAssignment);
+            self.state = TrackState::Assigned;
+        },
+        TrackState::Assigned => abort EAlreadyAssigned,
+    }
+}
+
+// === Test Functions ===
 
 // The state predicates are test-only: a track's state is determined by where
 // it came from. `assign` is package-only and runs solely inside release

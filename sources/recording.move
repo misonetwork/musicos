@@ -72,6 +72,12 @@ use sui::coin_registry::Currency;
 use sui::derived_object::claim;
 use sui::event::emit;
 
+// === Errors ===
+
+// State errors (10-19)
+/// Operation requires Initialized state but recording is in a different state.
+const ENotInitializedState: u64 = 10;
+
 // === Structs ===
 
 /// An audio recording of a composition. The `RecordingShare` phantom links to
@@ -103,8 +109,6 @@ public struct RecordingAdminCap<phantom RecordingShare> has key, store {
     /// Unique identifier for this capability.
     id: UID,
 }
-
-// === Derivation Keys ===
 
 /// Key for deriving the admin capability's deterministic address from the recording.
 public struct RecordingAdminCapKey() has copy, drop, store;
@@ -154,15 +158,7 @@ public struct CompositionSharesGrantedEvent<phantom RecordingShare, phantom Comp
     granted_by: address,
 }
 
-// === Errors ===
-
-// State errors (10-19)
-/// Operation requires Initialized state but recording is in a different state.
-const ENotInitializedState: u64 = 10;
-
 // === Public Functions ===
-
-// === Lifecycle ===
 
 /// Creates a new recording for a composition.
 ///
@@ -282,7 +278,7 @@ public fun publish<RecordingShare, CompositionShare>(
     };
 }
 
-// === Public View Functions ===
+// === View Functions ===
 
 /// Returns the object ID of the parent composition. An identity/membership
 /// handle (the address-level counterpart of the `CompositionShare` phantom) —
@@ -300,8 +296,6 @@ public fun id<RecordingShare, CompositionShare>(
 ): ID {
     self.id.to_inner()
 }
-
-// === UID Functions ===
 
 /// Returns a reference to the recording's UID for reading dynamic fields.
 public fun uid<RecordingShare, CompositionShare>(
@@ -323,7 +317,7 @@ public fun uid_mut<RecordingShare, CompositionShare>(
     &mut self.id
 }
 
-// === Test Only ===
+// === Test Functions ===
 
 // The state predicates are test-only: create-and-publish is atomic (a recording
 // is `key`-only and `publish` is its sole by-value consumer), so every
@@ -375,4 +369,15 @@ public fun composition_shares_granted_event_fields<RecordingShare, CompositionSh
         granted_by,
     } = event;
     (recording_id, composition_id, value, rate_bps, granted_by)
+}
+
+/// Unpacks a `RecordingPublishedEvent` for test-side field assertions — the
+/// event's field is module-private, so tests in another module need this
+/// accessor to assert the full payload rather than just "an event fired".
+#[test_only]
+public fun recording_published_event_fields<RecordingShare, CompositionShare>(
+    event: RecordingPublishedEvent<RecordingShare, CompositionShare>,
+): ID {
+    let RecordingPublishedEvent { recording_id } = event;
+    recording_id
 }

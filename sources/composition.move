@@ -47,6 +47,23 @@ use sui::coin_registry::Currency;
 use sui::derived_object::claim;
 use sui::event::emit;
 
+// === Errors ===
+
+// State errors (10-19)
+/// Operation requires Initialized state but composition is in a different state.
+const ENotInitializedState: u64 = 10;
+
+// Constraint errors (30-39)
+/// Title exceeds maximum length.
+const EMaxTitleLengthExceeded: u64 = 33;
+/// String must not be empty.
+const EEmptyString: u64 = 35;
+
+// === Constants ===
+
+/// Maximum length of a title in bytes.
+const MAX_TITLE_LENGTH: u64 = 300;
+
 // === Structs ===
 
 /// A musical composition representing the underlying written work.
@@ -69,8 +86,6 @@ public struct CompositionAdminCap<phantom CompositionShare> has key, store {
     /// Unique identifier for this capability.
     id: UID,
 }
-
-// === Derivation Keys ===
 
 /// Key for deriving the admin capability's deterministic address from the composition.
 public struct CompositionAdminCapKey() has copy, drop, store;
@@ -99,26 +114,7 @@ public struct CompositionPublishedEvent<phantom CompositionShare> has copy, drop
     composition_id: ID,
 }
 
-// === Constants ===
-
-/// Maximum length of a title in bytes.
-const MAX_TITLE_LENGTH: u64 = 300;
-
-// === Errors ===
-
-// State errors (10-19)
-/// Operation requires Initialized state but composition is in a different state.
-const ENotInitializedState: u64 = 10;
-
-// Constraint errors (30-39)
-/// Title exceeds maximum length.
-const EMaxTitleLengthExceeded: u64 = 33;
-/// String must not be empty.
-const EEmptyString: u64 = 35;
-
 // === Public Functions ===
-
-// === Lifecycle ===
 
 /// Creates a new composition with the given title and royalty rate.
 ///
@@ -193,7 +189,7 @@ public fun publish<CompositionShare>(
     }
 }
 
-// === Public View Functions ===
+// === View Functions ===
 
 /// Returns the composition's object ID.
 public fun id<CompositionShare>(self: &Composition<CompositionShare>): ID {
@@ -211,8 +207,6 @@ public fun title<CompositionShare>(self: &Composition<CompositionShare>): &Strin
 public fun royalty_rate<CompositionShare>(self: &Composition<CompositionShare>): BPS {
     self.royalty_rate
 }
-
-// === UID Functions ===
 
 /// Returns a reference to the composition's UID for reading dynamic fields.
 public fun uid<CompositionShare>(self: &Composition<CompositionShare>): &UID {
@@ -232,7 +226,7 @@ public fun uid_mut<CompositionShare>(
     &mut self.id
 }
 
-// === Test Only ===
+// === Test Functions ===
 
 // The state predicates are test-only: create-and-publish is atomic (see the
 // module doc), so every composition any runtime caller can hold is `Published`
@@ -276,4 +270,15 @@ public fun new_for_testing<CompositionShare>(
     };
 
     (composition, composition_admin_cap)
+}
+
+/// Unpacks a `CompositionPublishedEvent` for test-side field assertions —
+/// the event's field is module-private, so tests in another module need this
+/// accessor to assert the full payload rather than just "an event fired".
+#[test_only]
+public fun composition_published_event_fields<CompositionShare>(
+    event: CompositionPublishedEvent<CompositionShare>,
+): ID {
+    let CompositionPublishedEvent { composition_id } = event;
+    composition_id
 }

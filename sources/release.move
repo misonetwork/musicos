@@ -82,7 +82,38 @@ use sui::derived_object::{Self, claim};
 use sui::event::emit;
 use sui::hash::blake2b256;
 
-public use fun release_admin_cap_release_id as ReleaseAdminCap.release_id;
+// === Errors ===
+
+// Authorization errors (0-9)
+/// The provided admin capability does not match this release.
+const EUnauthorized: u64 = 0;
+
+// State errors (10-19)
+/// Operation requires Initialized state.
+const ENotInitializedState: u64 = 10;
+
+// Validation errors (20-29)
+/// Track splits don't sum to 100% (10,000 BPS).
+const EInvalidTrackSplitsSum: u64 = 20;
+
+// Constraint errors (30-39)
+/// Too many tracks in release.
+const EMaxTracksExceeded: u64 = 31;
+/// Title exceeds maximum length.
+const EMaxTitleLengthExceeded: u64 = 34;
+/// String must not be empty.
+const EEmptyString: u64 = 35;
+
+// Reference errors (50-59)
+/// Release must contain at least one track.
+const ENoTracks: u64 = 51;
+
+// === Constants ===
+
+/// Maximum number of tracks allowed in a release.
+const MAX_TRACKS: u64 = 255;
+/// Maximum length of a release title in bytes.
+const MAX_TITLE_LENGTH: u64 = 300;
 
 // === Structs ===
 
@@ -145,38 +176,9 @@ public struct ReleasePublishedEvent has copy, drop {
     release_id: ID,
 }
 
-// === Constants ===
+// === Method Aliases ===
 
-/// Maximum number of tracks allowed in a release.
-const MAX_TRACKS: u64 = 255;
-/// Maximum length of a release title in bytes.
-const MAX_TITLE_LENGTH: u64 = 300;
-
-// === Errors ===
-
-// Authorization errors (0-9)
-/// The provided admin capability does not match this release.
-const EUnauthorized: u64 = 0;
-
-// State errors (10-19)
-/// Operation requires Initialized state.
-const ENotInitializedState: u64 = 10;
-
-// Validation errors (20-29)
-/// Track splits don't sum to 100% (10,000 BPS).
-const EInvalidTrackSplitsSum: u64 = 20;
-
-// Constraint errors (30-39)
-/// Too many tracks in release.
-const EMaxTracksExceeded: u64 = 31;
-/// Title exceeds maximum length.
-const EMaxTitleLengthExceeded: u64 = 34;
-/// String must not be empty.
-const EEmptyString: u64 = 35;
-
-// Reference errors (50-59)
-/// Release must contain at least one track.
-const ENoTracks: u64 = 51;
+public use fun release_admin_cap_release_id as ReleaseAdminCap.release_id;
 
 // === Public Functions ===
 
@@ -257,7 +259,7 @@ public fun authorize(self: &Release, cap: &ReleaseAdminCap) {
     assert!(self.id() == cap.release_id, EUnauthorized);
 }
 
-// === Public View Functions ===
+// === View Functions ===
 
 /// Derives the target release ID that `new()` would produce for the given
 /// inputs and parent, without creating the object. This is the on-chain
@@ -293,8 +295,6 @@ public fun tracks(self: &Release): &vector<Track> {
 public fun release_admin_cap_release_id(cap: &ReleaseAdminCap): ID {
     cap.release_id
 }
-
-// === UID Functions ===
 
 /// Returns a reference to the release's UID for reading dynamic fields.
 public fun uid(self: &Release): &UID {
@@ -345,12 +345,21 @@ fun assert_track_assignments(self: &mut Release) {
     self.tracks.do_mut!(|track| track.assign(&self.id));
 }
 
-// === Test Only ===
+// === Test Functions ===
 
 // The state predicates are test-only: create-and-publish is atomic (see the
 // module doc), so every release any runtime caller can hold is `Published` —
 // the answer is known a priori and a public accessor would carry no
 // information. Tests still need them to verify the transition itself.
+
+/// Unpacks a `ReleasePublishedEvent` for test-side field assertions — the
+/// event's field is module-private, so tests in another module need this
+/// accessor to assert the full payload rather than just "an event fired".
+#[test_only]
+public fun release_published_event_fields(event: ReleasePublishedEvent): ID {
+    let ReleasePublishedEvent { release_id } = event;
+    release_id
+}
 
 #[test_only]
 public fun is_initialized_state(self: &Release): bool {

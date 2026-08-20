@@ -8,18 +8,22 @@
 #[test_only]
 module miso::post_publish_tests;
 
-use miso::composition::{Self, Composition};
-use miso::recording::{Self, Recording};
-use miso::release::{Self, Release};
+use miso::composition::{Self, Composition, CompositionPublishedEvent};
+use miso::recording::{Self, Recording, RecordingPublishedEvent};
+use miso::release::{Self, Release, ReleasePublishedEvent};
 use miso::test_helpers::{Self, CompositionShare, RecordingShare};
-use std::unit_test::destroy;
+use std::unit_test::{assert_eq, destroy};
 use sui::dynamic_field;
+use sui::event;
 use sui::test_scenario;
 
 const OWNER: address = @0xA1;
+const STRANGER: address = @0x51;
 
-// State error mirrored from the core modules.
+// State errors mirrored from the core modules.
 const ENotInitializedState: u64 = 10;
+// Mirrors release::EUnauthorized (0).
+const EUnauthorized: u64 = 0;
 
 /// Publishes a minimal composition and returns its admin cap (object is shared).
 fun publish_composition(
@@ -28,9 +32,16 @@ fun publish_composition(
     let ctx = scenario.ctx();
     let (comp, cap) =
         composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
+    let comp_id = comp.id();
     let clock = sui::clock::create_for_testing(ctx);
     comp.publish(&cap, &clock);
     clock.destroy_for_testing();
+
+    // Event payload: the pure pointer carries exactly the published id.
+    let mut events = event::events_by_type<CompositionPublishedEvent<CompositionShare>>();
+    assert_eq!(events.length(), 1);
+    assert_eq!(composition::composition_published_event_fields(events.pop_back()), comp_id);
+
     cap
 }
 
@@ -43,17 +54,29 @@ fun publish_recording(
         test_helpers::fake_id(ctx),
         ctx,
     );
+    let rec_id = rec.id();
     let clock = sui::clock::create_for_testing(ctx);
     rec.publish(&cap, &clock);
     clock.destroy_for_testing();
+
+    // Event payload: the pure pointer carries exactly the published id.
+    let mut events = event::events_by_type<RecordingPublishedEvent<RecordingShare, CompositionShare>>();
+    assert_eq!(events.length(), 1);
+    assert_eq!(recording::recording_published_event_fields(events.pop_back()), rec_id);
+
     cap
 }
 
-/// Publishes a minimal release and returns its admin cap (object is shared).
-fun publish_release(scenario: &mut test_scenario::Scenario): release::ReleaseAdminCap {
+/// Publishes a minimal release under the given title and returns its admin
+/// cap and id (object is shared). Titled per-call so a test can create more
+/// than one distinguishable shared `Release` and disambiguate them by id.
+fun publish_titled_release(
+    scenario: &mut test_scenario::Scenario,
+    title: vector<u8>,
+): (release::ReleaseAdminCap, ID) {
     let ctx = scenario.ctx();
     let (rel, cap) = release::new_for_testing(
-        b"Album".to_string(),
+        title.to_string(),
         vector[miso::track::new_for_testing(
             test_helpers::fake_id(ctx),
             test_helpers::fake_id(ctx),
@@ -62,9 +85,25 @@ fun publish_release(scenario: &mut test_scenario::Scenario): release::ReleaseAdm
         )],
         ctx,
     );
+    let rel_id = rel.id();
     let clock = sui::clock::create_for_testing(ctx);
     rel.publish(&cap, &clock);
     clock.destroy_for_testing();
+
+    // Event payload: the pure pointer carries exactly the published id of
+    // *this* publish call. Popping the most recent event is safe even when a
+    // test publishes more than one release, since each publish appends
+    // exactly one event and this call's is always the last appended.
+    let mut events = event::events_by_type<ReleasePublishedEvent>();
+    assert!(!events.is_empty());
+    assert_eq!(release::release_published_event_fields(events.pop_back()), rel_id);
+
+    (cap, rel_id)
+}
+
+/// Publishes a minimal release and returns its admin cap (object is shared).
+fun publish_release(scenario: &mut test_scenario::Scenario): release::ReleaseAdminCap {
+    let (cap, _rel_id) = publish_titled_release(scenario, b"Album");
     cap
 }
 
@@ -178,4 +217,33 @@ fun release_uid_mut_works_after_publish() {
 
     destroy(cap);
     scenario.end();
+}
+
+/// The extension surface's authorization is unforgeable: a cap minted for a
+/// different, unrelated release cannot open `uid_mut` on this one — even
+/// after both are published and shared. This is the realistic production
+/// shape of a wrong-cap attempt (`uid_mut` works in any lifecycle state, so
+/// the interesting adversarial case is post-publish, cross-actor, not
+/// pre-publish same-transaction).
+#[test, expected_failure(abort_code = EUnauthorized, location = miso::release)]
+fun release_uid_mut_wrong_cap_aborts() {
+    let mut scenario = test_scenario::begin(OWNER);
+    let (owner_cap, owner_rel_id) = publish_titled_release(&mut scenario, b"Owner's Album");
+
+    // STRANGER publishes and shares an entirely unrelated release, and holds
+    // that release's own (validly-scoped) cap.
+    scenario.next_tx(STRANGER);
+    let (stranger_cap, _stranger_rel_id) =
+        publish_titled_release(&mut scenario, b"Stranger's Album");
+
+    // STRANGER now tries to open uid_mut on OWNER's release using their own
+    // cap — disambiguated from STRANGER's own shared release by id.
+    scenario.next_tx(STRANGER);
+    let mut owner_rel = test_scenario::take_shared_by_id<Release>(&scenario, owner_rel_id);
+    let _uid = owner_rel.uid_mut(&stranger_cap); // wrong cap: aborts EUnauthorized
+
+    test_scenario::return_shared(owner_rel);
+    destroy(owner_cap);
+    destroy(stranger_cap);
+    abort
 }

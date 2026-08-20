@@ -1,9 +1,12 @@
 #[test_only]
 module miso::recording_tests;
 
-use miso::recording;
+use miso::recording::{Self, Recording};
 use miso::test_helpers::{Self, RecordingShare, CompositionShare};
 use std::unit_test::destroy;
+use sui::test_scenario;
+
+const OWNER: address = @0xA1;
 
 /// Helper to create a test recording.
 fun new_test_recording(ctx: &mut TxContext): (
@@ -15,16 +18,25 @@ fun new_test_recording(ctx: &mut TxContext): (
 
 // === Publish ===
 
+/// `publish` shares the recording — an ownership-affecting op — so this runs
+/// as a scenario: publish in one transaction, confirm the object is
+/// genuinely shared and re-fetchable via `take_shared` in the next.
 #[test]
 fun test_publish_recording() {
-    let ctx = &mut tx_context::dummy();
+    let mut scenario = test_scenario::begin(OWNER);
+    let ctx = scenario.ctx();
     let (rec, cap) = new_test_recording(ctx);
-
     let clock = sui::clock::create_for_testing(ctx);
-    rec.publish(&cap, &clock);
-
+    rec.publish(&cap, &clock); // shares the recording
     clock.destroy_for_testing();
+
+    scenario.next_tx(OWNER);
+    let rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
+    assert!(rec.is_published_state());
+    test_scenario::return_shared(rec);
+
     destroy(cap);
+    scenario.end();
 }
 
 // A recording carries no naming fields: its display title is its composition's
