@@ -34,25 +34,26 @@ Supporting type: **`Track`** (a recording placed on a release, created directly 
 
 A release's id is **derived from a digest of its exact economics**: the ordered
 list of `(recording, split)` pairs plus a creator nonce, claimed as a derived
-child of a caller-chosen parent object. A `Track` targets that derived id at
-creation, so creating one consents to the release's precise membership,
-splits, and running order — and nothing else. The stored tracklist has the same
-shape as the digest pre-image: nothing structural is chosen after consent
-except the release's title. Presentation (artwork, credits, display grouping)
-is chosen by the release creator and is publicly attributable rather than
-cryptographically committed.
+child of the canonical `ReleaseRegistry` shared by `miso::release` package
+initialization. A `Track` targets that derived id at creation, so creating one
+consents to the release's precise membership, splits, and running order — and
+nothing else. The stored tracklist has the same shape as the digest pre-image:
+nothing structural is chosen after consent except the release's title.
+Presentation (artwork, credits, display grouping) is chosen by the release
+creator and is publicly attributable rather than cryptographically committed.
 
-Core has no shared state and no negotiation policy of its own: `release::new`
-takes any `&mut UID` as the parent for its derived release id, rather than a
-package-owned registry. A canonical, shared, undeletable coordinator — plus
-richer pre-publish negotiation (offers, expiry, withdrawal) — is expected to
-live in a future extension package.
+`ReleaseRegistry` has one production instance per package publication. It is
+shared, has no constructor, delete path, or mutable-UID accessor, and its
+private UID is the only derivation parent accepted by `release::new`. Release
+creation remains permissionless because the supplied `Track` values carry the
+rightsholders' consent. Mutable access to this shared singleton serializes
+release creation; read-only target-ID derivation does not.
 
 Audio itself is **not** part of the core package — the master attaches to a `Recording` as a dynamic field, minted by an attested ingester (see the standalone [`misonetwork/audio`](https://github.com/misonetwork/audio) primitive). The core takes no audio dependency.
 
 ### Lifecycle
 
-Compositions, recordings, and releases are **build-then-freeze**: they are created in an `Initialized` state, configured via their admin capability, then `publish()`ed — after which they are immutable. `publish()` emits a single lean event carrying just the object's id (and parent link), which an indexer uses as a signal to fetch the now-final object.
+Compositions, recordings, and releases are **build-then-freeze**: they are created in an `Initialized` state, configured via their admin capability, then `publish()`ed — after which they are immutable. `publish()` emits a single lean event carrying just the object's id, which an indexer uses as a signal to fetch the now-final object.
 
 ### Ownership
 
@@ -104,13 +105,11 @@ bun run typecheck
 
 ## Deployment
 
-> **Unreleased changes:** the source in this repo no longer matches the
-> deployment described below — `deal.move` and the `ReleaseRegistry`/`init`
-> shared coordinator have been removed in favor of a caller-parented
-> `release::new(..., parent: &mut UID)` and a `track::new` that is itself the
-> consent point (see "Consent" above). This is an upgrade-incompatible change
-> and will ship as a fresh publish; the ids below remain accurate for what is
-> currently live on Testnet.
+> **Unreleased changes:** this source places the canonical `ReleaseRegistry`
+> directly in `miso::release` and makes it the only production derivation
+> parent for `release::new`. This is an upgrade-incompatible change that will
+> ship as a fresh publication; the IDs below describe the currently live
+> Testnet deployment only.
 
 The current Testnet deployment is immutable: it was published and its
 `UpgradeCap` destroyed atomically.

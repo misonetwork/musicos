@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// End-to-end test of the production release flow across transaction
-/// boundaries and actors, against a bare parent `UID` (core no longer owns a
-/// shared coordinator; a future extension package supplies the canonical
-/// one — see release.move's module doc):
+/// boundaries and actors, through the canonical shared `ReleaseRegistry`:
 ///
 /// 1. A songwriter publishes a composition.
 /// 2. An artist publishes a recording of it.
@@ -14,7 +12,7 @@
 ///    object to negotiate over or hand off; that is now an offer extension's
 ///    job.
 /// 4. A label creates the release through `release::new` (claiming the
-///    digest-derived UID from the parent) and publishes it — which verifies
+///    digest-derived UID from the canonical registry) and publishes it — which verifies
 ///    every track was aimed at exactly this release.
 /// 5. Anyone can read the published release and its assigned track.
 #[test_only]
@@ -22,10 +20,11 @@ module miso::release_e2e_tests;
 
 use miso::composition::{Self, Composition};
 use miso::recording::{Self, Recording};
-use miso::release::{Self, Release};
+use miso::release::{Self, Release, ReleaseRegistry};
 use miso::test_helpers::{Self, CompositionShare, RecordingShare};
 use miso::track;
 use std::unit_test::{assert_eq, destroy};
+use sui::event;
 use sui::test_scenario;
 
 const SONGWRITER: address = @0xA1;
@@ -36,11 +35,30 @@ const READER: address = @0xBEEF;
 const ROYALTY_RATE_BPS: u16 = 1500;
 const NONCE: u256 = 42;
 
+/// The package initializer creates and shares the only production registry,
+/// with an event whose registry id matches the shared object.
+#[test]
+fun init_creates_shared_registry_and_emits_event() {
+    let mut scenario = test_scenario::begin(SONGWRITER);
+    release::init_for_testing(scenario.ctx());
+
+    let mut events = event::events_by_type<release::ReleaseRegistryCreatedEvent>();
+    assert_eq!(events.length(), 1);
+    let (event_registry_id, created_by) =
+        release::release_registry_created_event_fields(events.pop_back());
+    assert_eq!(created_by, SONGWRITER);
+
+    scenario.next_tx(READER);
+    let registry = scenario.take_shared<ReleaseRegistry>();
+    assert_eq!(registry.id(), event_registry_id);
+    test_scenario::return_shared(registry);
+    scenario.end();
+}
+
 #[test]
 fun full_track_release_flow_publishes_at_derived_id() {
     let mut scenario = test_scenario::begin(SONGWRITER);
-    let mut parent = object::new(scenario.ctx());
-    let parent_id = parent.to_inner();
+    release::init_for_testing(scenario.ctx());
 
     // === Tx 1 (SONGWRITER): create and publish the composition ===
     scenario.next_tx(SONGWRITER);
@@ -70,24 +88,25 @@ fun full_track_release_flow_publishes_at_derived_id() {
     scenario.next_tx(ARTIST);
     let comp = scenario.take_shared<Composition<CompositionShare>>();
     let rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
+    let registry = scenario.take_shared<ReleaseRegistry>();
     let recording_id = rec.id();
-    let predicted_release_id = release::derive_target_release_id(
+    let predicted_release_id = registry.derive_target_release_id(
         vector[recording_id],
         vector[10000u64],
         NONCE,
-        parent_id,
     );
     let t = track::new(&rec_cap, &rec, predicted_release_id, 10000);
     test_scenario::return_shared(comp);
     test_scenario::return_shared(rec);
+    test_scenario::return_shared(registry);
 
     // === Tx 4 (LABEL): assemble and publish the release ===
     scenario.next_tx(LABEL);
-    let (rel, rel_cap) = release::new(
+    let mut registry = scenario.take_shared<ReleaseRegistry>();
+    let (rel, rel_cap) = registry.new(
         b"Single".to_string(),
         vector[t],
         NONCE,
-        &mut parent,
     );
     // The claimed UID must equal the prediction the track was bound to.
     assert_eq!(rel.id(), predicted_release_id);
@@ -95,6 +114,7 @@ fun full_track_release_flow_publishes_at_derived_id() {
     rel.publish(&rel_cap, &clock); // verifies track assignment, shares
     clock.destroy_for_testing();
     destroy(rel_cap);
+    test_scenario::return_shared(registry);
 
     // === Tx 5 (READER): the published release is publicly consistent ===
     scenario.next_tx(READER);
@@ -111,7 +131,6 @@ fun full_track_release_flow_publishes_at_derived_id() {
     test_scenario::return_shared(rel);
 
     destroy(rec_cap);
-    parent.delete();
     scenario.end();
 }
 
@@ -121,8 +140,7 @@ fun full_track_release_flow_publishes_at_derived_id() {
 #[test, expected_failure(abort_code = 0, location = miso::track)] // EUnauthorizedAssignment
 fun publish_aborts_when_track_targets_a_different_release() {
     let mut scenario = test_scenario::begin(SONGWRITER);
-    let mut parent = object::new(scenario.ctx());
-    let parent_id = parent.to_inner();
+    release::init_for_testing(scenario.ctx());
 
     // One actor for brevity — the binding doesn't depend on senders.
     scenario.next_tx(SONGWRITER);
@@ -138,19 +156,22 @@ fun publish_aborts_when_track_targets_a_different_release() {
 
     scenario.next_tx(SONGWRITER);
     // Track consented to the release that nonce 1 would produce...
-    let wrong_release_id = release::derive_target_release_id(
+    let registry = scenario.take_shared<ReleaseRegistry>();
+    let wrong_release_id = registry.derive_target_release_id(
         vector[rec.id()],
         vector[10000u64],
         1,
-        parent_id,
     );
     let t = track::new(&rec_cap, &rec, wrong_release_id, 10000);
+    test_scenario::return_shared(registry);
+
+    scenario.next_tx(SONGWRITER);
     // ...but the release is created with nonce 2: different derived id.
-    let (rel, rel_cap) = release::new(
+    let mut registry = scenario.take_shared<ReleaseRegistry>();
+    let (rel, rel_cap) = registry.new(
         b"Single".to_string(),
         vector[t],
         2,
-        &mut parent,
     );
     let clock = sui::clock::create_for_testing(scenario.ctx());
     rel.publish(&rel_cap, &clock); // aborts: track targets a different release

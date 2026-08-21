@@ -66,26 +66,25 @@ fun composition_and_recording(
 // === Title Length ===
 
 #[test, expected_failure(abort_code = EMaxTitleLengthExceeded, location = miso::release)]
-fun test_new_title_too_long() {
+fun new_title_too_long_aborts() {
     let ctx = &mut tx_context::dummy();
-    let mut parent = object::new(ctx);
-    let (rel, cap) = release::new(
+    let mut registry = release::new_registry_for_testing(ctx);
+    let (rel, cap) = registry.new(
         test_helpers::long_string(MAX_TITLE_LENGTH + 1),
         vector[test_track(ctx)],
         0u256,
-        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    parent.delete();
+    destroy(registry);
 }
 
 // === Max Tracks ===
 
 #[test, expected_failure(abort_code = EMaxTracksExceeded, location = miso::release)]
-fun test_new_exceeds_max_tracks() {
+fun new_exceeds_max_tracks_aborts() {
     let ctx = &mut tx_context::dummy();
-    let mut parent = object::new(ctx);
+    let mut registry = release::new_registry_for_testing(ctx);
 
     // MAX_TRACKS + 1 = 256 tracks in one flat tracklist.
     // Splits: 256 x 39 BPS = 9984; the first 16 get 40 BPS (16 extra = 10000).
@@ -96,15 +95,14 @@ fun test_new_exceeds_max_tracks() {
         if (index < 16) 40 else 39,
     ));
 
-    let (rel, cap) = release::new(
+    let (rel, cap) = registry.new(
         b"Too Many Tracks".to_string(),
         tracks,
         0u256,
-        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    parent.delete();
+    destroy(registry);
 }
 
 /// Helper to create a minimal release.
@@ -119,93 +117,87 @@ fun test_release(ctx: &mut TxContext): (release::Release, release::ReleaseAdminC
 // === Creation Validation ===
 
 #[test, expected_failure(abort_code = EEmptyString, location = miso::release)]
-fun test_new_empty_title() {
+fun new_empty_title_aborts() {
     let ctx = &mut tx_context::dummy();
-    let mut parent = object::new(ctx);
-    let (rel, cap) = release::new(
+    let mut registry = release::new_registry_for_testing(ctx);
+    let (rel, cap) = registry.new(
         b"".to_string(),
         vector[test_track(ctx)],
         0u256,
-        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    parent.delete();
+    destroy(registry);
 }
 
 #[test, expected_failure(abort_code = ENoTracks, location = miso::release)]
-fun test_new_no_tracks() {
+fun new_without_tracks_aborts() {
     let ctx = &mut tx_context::dummy();
-    let mut parent = object::new(ctx);
-    let (rel, cap) = release::new(
+    let mut registry = release::new_registry_for_testing(ctx);
+    let (rel, cap) = registry.new(
         b"Empty".to_string(),
         vector[],
         0u256,
-        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    parent.delete();
+    destroy(registry);
 }
 
 #[test, expected_failure(abort_code = EInvalidTrackSplitsSum, location = miso::release)]
-fun test_new_splits_below_total() {
+fun new_with_splits_below_total_aborts() {
     let ctx = &mut tx_context::dummy();
-    let mut parent = object::new(ctx);
-    let (rel, cap) = release::new(
+    let mut registry = release::new_registry_for_testing(ctx);
+    let (rel, cap) = registry.new(
         b"Underweight".to_string(),
         test_tracks(1, 9999, ctx), // 99.99%
         0u256,
-        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    parent.delete();
+    destroy(registry);
 }
 
 #[test, expected_failure(abort_code = EInvalidTrackSplitsSum, location = miso::release)]
-fun test_new_splits_above_total() {
+fun new_with_splits_above_total_aborts() {
     let ctx = &mut tx_context::dummy();
-    let mut parent = object::new(ctx);
-    let (rel, cap) = release::new(
+    let mut registry = release::new_registry_for_testing(ctx);
+    let (rel, cap) = registry.new(
         b"Overweight".to_string(),
         test_tracks(2, 5001, ctx), // 100.02%
         0u256,
-        &mut parent,
     );
     destroy(rel);
     destroy(cap);
-    parent.delete();
+    destroy(registry);
 }
 
 /// The same digest (recording set + splits + nonce) can only ever be claimed
-/// once under the same parent.
+/// once under the same canonical registry.
 #[test, expected_failure] // aborts in sui::derived_object on the duplicate claim
-fun test_duplicate_digest_aborts() {
+fun duplicate_digest_aborts() {
     let ctx = &mut tx_context::dummy();
-    let mut parent = object::new(ctx);
+    let mut registry = release::new_registry_for_testing(ctx);
     let rec_id = test_helpers::fake_id(ctx);
     let rel_id = test_helpers::fake_id(ctx);
 
     let comp_id = test_helpers::fake_id(ctx);
-    let (rel1, cap1) = release::new(
+    let (rel1, cap1) = registry.new(
         b"First".to_string(),
         vector[track::new_for_testing(comp_id, rec_id, rel_id, 10000)],
         7u256,
-        &mut parent,
     );
     // Identical recording ids, splits, and nonce: identical digest.
-    let (rel2, cap2) = release::new(
+    let (rel2, cap2) = registry.new(
         b"Second".to_string(),
         vector[track::new_for_testing(comp_id, rec_id, rel_id, 10000)],
         7u256,
-        &mut parent,
     );
     destroy(rel1);
     destroy(cap1);
     destroy(rel2);
     destroy(cap2);
-    parent.delete();
+    destroy(registry);
 }
 
 // === Authorization ===
@@ -219,7 +211,7 @@ fun test_duplicate_digest_aborts() {
 // === Views ===
 
 #[test]
-fun test_views() {
+fun release_views_reflect_initialized_release() {
     let ctx = &mut tx_context::dummy();
     let (rel, cap) = test_release(ctx);
 
