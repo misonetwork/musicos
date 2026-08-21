@@ -11,6 +11,7 @@ module miso::release_digest_tests;
 
 use miso::release;
 use miso::test_helpers;
+use std::unit_test::{assert_eq, destroy};
 use sui::bcs::to_bytes;
 use sui::hash::blake2b256;
 
@@ -32,7 +33,7 @@ fun calculate_release_digest(
 #[test]
 /// Test single recording with 100% split and nonce 1.
 /// This test verifies the BCS encoding and hashing matches the TypeScript SDK.
-fun test_single_recording_digest() {
+fun single_recording_digest_matches_expected_bcs_hash() {
     let recording_id = object::id_from_address(
         @0x0000000000000000000000000000000000000000000000000000000000000001
     );
@@ -52,7 +53,7 @@ fun test_single_recording_digest() {
 
 #[test]
 /// Test multiple recordings with split shares and nonce 42.
-fun test_multiple_recordings_digest() {
+fun multiple_recordings_digest_matches_expected_bcs_hash() {
     let recording_id_1 = object::id_from_address(
         @0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
     );
@@ -74,7 +75,7 @@ fun test_multiple_recordings_digest() {
 
 #[test]
 /// Test that the same inputs produce the same digest (deterministic).
-fun test_digest_determinism() {
+fun digest_is_deterministic() {
     let recording_id = object::id_from_address(
         @0x0000000000000000000000000000000000000000000000000000000000000001
     );
@@ -90,7 +91,7 @@ fun test_digest_determinism() {
 
 #[test]
 /// Test that different nonces produce different digests.
-fun test_different_nonces_produce_different_digests() {
+fun different_nonces_produce_different_digests() {
     let recording_id = object::id_from_address(
         @0x0000000000000000000000000000000000000000000000000000000000000001
     );
@@ -105,7 +106,7 @@ fun test_different_nonces_produce_different_digests() {
 
 #[test]
 /// Test that different recording IDs produce different digests.
-fun test_different_recordings_produce_different_digests() {
+fun different_recordings_produce_different_digests() {
     let recording_id_1 = object::id_from_address(
         @0x0000000000000000000000000000000000000000000000000000000000000001
     );
@@ -123,7 +124,7 @@ fun test_different_recordings_produce_different_digests() {
 
 #[test]
 /// Test that different track splits produce different digests.
-fun test_different_splits_produce_different_digests() {
+fun different_splits_produce_different_digests() {
     let recording_id_1 = object::id_from_address(
         @0x0000000000000000000000000000000000000000000000000000000000000001
     );
@@ -142,7 +143,7 @@ fun test_different_splits_produce_different_digests() {
 #[test]
 /// Verify the BCS encoding structure matches expectations.
 /// This test helps debug any encoding mismatches with the TypeScript SDK.
-fun test_bcs_encoding_structure() {
+fun bcs_encoding_has_expected_structure() {
     let recording_id = object::id_from_address(
         @0x0000000000000000000000000000000000000000000000000000000000000001
     );
@@ -179,9 +180,9 @@ fun test_bcs_encoding_structure() {
 /// Single recording, 100% split, nonce=1.
 /// TypeScript expected digest: dccbc50994240ba6de125686dc040b27b8c739fe8b55d8d7cbf923535b57af6c
 /// TypeScript expected release ID: 0x814674793a22d3ef2ee90c1356018e7a5c56a517a3116b372d83457a1789711b
-fun test_derive_target_release_id_parity_single() {
+fun single_target_release_id_derivation_is_deterministic() {
     let mut ctx = tx_context::dummy();
-    let parent = test_helpers::fake_id(&mut ctx);
+    let registry = release::new_registry_for_testing(&mut ctx);
 
     let recording_ids = vector[
         object::id_from_address(@0x0000000000000000000000000000000000000000000000000000000000000001),
@@ -194,21 +195,22 @@ fun test_derive_target_release_id_parity_single() {
     let expected_digest = x"dccbc50994240ba6de125686dc040b27b8c739fe8b55d8d7cbf923535b57af6c";
     assert!(digest == expected_digest, 0);
 
-    // derive_target_release_id depends on the parent's actual ID, so we can't
-    // hardcode an expected release ID here (the parent here is a fixture ID).
+    // derive_target_release_id depends on the registry's actual ID, so we can't
+    // hardcode an expected release ID here (the registry here is a fixture).
     // But we verify it returns a valid ID and that calling it twice returns
     // the same result (deterministic).
-    let release_id_1 = release::derive_target_release_id(recording_ids, track_splits, nonce, parent);
-    let release_id_2 = release::derive_target_release_id(recording_ids, track_splits, nonce, parent);
-    assert!(release_id_1 == release_id_2, 1);
+    let release_id_1 = registry.derive_target_release_id(recording_ids, track_splits, nonce);
+    let release_id_2 = registry.derive_target_release_id(recording_ids, track_splits, nonce);
+    assert_eq!(release_id_1, release_id_2);
+    destroy(registry);
 }
 
 #[test]
 /// Two recordings, 50/50 split, nonce=42.
 /// TypeScript expected digest: 58895ea293730fcbca59e08cadd81c3a8da7c0604fa014ac629b0a8f543f4141
-fun test_derive_target_release_id_parity_multiple() {
+fun multiple_target_release_id_derivation_is_deterministic() {
     let mut ctx = tx_context::dummy();
-    let parent = test_helpers::fake_id(&mut ctx);
+    let registry = release::new_registry_for_testing(&mut ctx);
 
     let recording_ids = vector[
         object::id_from_address(@0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef),
@@ -223,11 +225,12 @@ fun test_derive_target_release_id_parity_multiple() {
     assert!(digest == expected_digest, 0);
 
     // Verify derive_target_release_id is deterministic
-    let release_id_1 = release::derive_target_release_id(recording_ids, track_splits, nonce, parent);
-    let release_id_2 = release::derive_target_release_id(recording_ids, track_splits, nonce, parent);
-    assert!(release_id_1 == release_id_2, 1);
+    let release_id_1 = registry.derive_target_release_id(recording_ids, track_splits, nonce);
+    let release_id_2 = registry.derive_target_release_id(recording_ids, track_splits, nonce);
+    assert_eq!(release_id_1, release_id_2);
 
     // Verify different inputs produce different IDs
-    let release_id_different_nonce = release::derive_target_release_id(recording_ids, track_splits, 43u256, parent);
-    assert!(release_id_1 != release_id_different_nonce, 2);
+    let release_id_different_nonce = registry.derive_target_release_id(recording_ids, track_splits, 43u256);
+    assert!(release_id_1 != release_id_different_nonce);
+    destroy(registry);
 }

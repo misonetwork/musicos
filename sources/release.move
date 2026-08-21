@@ -46,13 +46,14 @@
 /// than cryptographically committed. See `track::new` for the signer-side
 /// statement of this boundary.
 ///
-/// The derived id commits to a `(parent, digest)` pair, not the digest alone
-/// — so targeting an id also consents to that namespace's liveness. If the
-/// parent object is deleted, or its `&mut UID` becomes permanently
-/// unreachable, the release can never exist and every track or offer
-/// targeting it is stranded — the same blast-radius class as a release that
-/// simply never publishes. A coordinator meant to serve as the default
-/// parent namespace should therefore be shared and undeletable.
+/// The derived id commits to the canonical registry's UID and the digest, not
+/// the digest alone — so targeting an id also consents to that namespace's
+/// liveness. If that parent were deleted, or its `&mut UID` became permanently
+/// unreachable, the release could never exist and every track or offer
+/// targeting it would be stranded — the same blast-radius class as a release
+/// that simply never publishes. `ReleaseRegistry` is therefore created and
+/// shared exactly once at package initialization, and exposes neither a
+/// constructor, deletion path, nor mutable UID accessor.
 ///
 /// ### Lifecycle and trust model
 ///
@@ -130,6 +131,13 @@ public struct Release has key {
     tracks: vector<Track>,
 }
 
+/// The canonical shared derivation-parent namespace for every Miso release.
+/// Its UID is the entire product: it is private, undeletable, and available
+/// only to `new`, so clients cannot bypass the canonical namespace.
+public struct ReleaseRegistry has key {
+    id: UID,
+}
+
 /// Key for release UID derivation.
 public struct ReleaseKey(vector<u8>) has copy, drop, store;
 
@@ -176,40 +184,56 @@ public struct ReleasePublishedEvent has copy, drop {
     release_id: ID,
 }
 
+/// Emitted once when package initialization creates the canonical shared
+/// `ReleaseRegistry`, allowing clients and indexers to discover its id from
+/// the publish transaction effects.
+public struct ReleaseRegistryCreatedEvent has copy, drop {
+    registry_id: ID,
+    created_by: address,
+}
+
 // === Method Aliases ===
 
 public use fun release_admin_cap_release_id as ReleaseAdminCap.release_id;
+public use fun release_registry_id as ReleaseRegistry.id;
 
 // === Public Functions ===
 
-/// Creates a new release with the given configuration.
-/// Claims the release's UID as a derived child of `parent`, keyed by the
-/// release digest (see the module doc's "Consent scope" section) — so
-/// contention is per-parent, and which object serves as parent is entirely
-/// the caller's choice.
-/// Returns the release and admin capability.
+/// Creates and shares the one canonical registry at package initialization.
+/// There is intentionally no production constructor: this object is the
+/// permanent parent namespace every production release commits to.
+fun init(ctx: &mut TxContext) {
+    let registry = ReleaseRegistry { id: object::new(ctx) };
+
+    emit(ReleaseRegistryCreatedEvent {
+        registry_id: registry.id(),
+        created_by: ctx.sender(),
+    });
+
+    transfer::share_object(registry);
+}
+
+/// Assembles a release under the canonical registry namespace. This is
+/// permissionless: consent is carried by the supplied tracks, each of which
+/// was created for the exact derived release id. Returns the release and
+/// admin capability by value so the caller can compose `publish` and custody
+/// in the same PTB.
 public fun new(
+    self: &mut ReleaseRegistry,
     title: String,
     tracks: vector<Track>,
     nonce: u256,
-    parent: &mut UID,
 ): (Release, ReleaseAdminCap) {
     assert!(!title.is_empty(), EEmptyString);
     assert!(title.length() <= MAX_TITLE_LENGTH, EMaxTitleLengthExceeded);
-    // Assert that the release has at least one track and not too many.
     assert!(!tracks.is_empty(), ENoTracks);
     assert!(tracks.length() <= MAX_TRACKS, EMaxTracksExceeded);
 
-    // Extract digest inputs and validate splits
     let (recording_ids, track_split_values, split_sum) = extract_digest_inputs(&tracks);
-
-    // Assert that the track splits sum to 100% (10,000 BPS).
     assert!(split_sum == (bps::denominator!() as u64), EInvalidTrackSplitsSum);
 
-    // Calculate the release digest and claim the release UID.
     let release_digest = calculate_release_digest(recording_ids, track_split_values, nonce);
-    let release_uid = claim(parent, ReleaseKey(release_digest));
-
+    let release_uid = claim(&mut self.id, ReleaseKey(release_digest));
     let mut release = Release {
         id: release_uid,
         state: ReleaseState::Initialized,
@@ -223,6 +247,27 @@ public fun new(
     };
 
     (release, release_admin_cap)
+}
+
+/// Derives the release id that `new` would claim under this registry,
+/// without creating a release. This immutable shared-object access remains
+/// parallelizable for clients preparing tracks.
+public fun derive_target_release_id(
+    self: &ReleaseRegistry,
+    recording_ids: vector<ID>,
+    track_split_values: vector<u64>,
+    nonce: u256,
+): ID {
+    let release_digest = calculate_release_digest(recording_ids, track_split_values, nonce);
+    derived_object::derive_address(self.id.to_inner(), ReleaseKey(release_digest)).to_id()
+}
+
+/// Returns the canonical registry's object ID, which is the derivation
+/// parent committed to by `new` and `derive_target_release_id`.
+/// Exported as the `ReleaseRegistry.id()` method to avoid colliding with the
+/// existing `release::id(&Release)` ABI function.
+public fun release_registry_id(self: &ReleaseRegistry): ID {
+    self.id.to_inner()
 }
 
 /// Publishes the release, making it immutable.
@@ -260,19 +305,6 @@ public fun authorize(self: &Release, cap: &ReleaseAdminCap) {
 }
 
 // === View Functions ===
-
-/// Derives the target release ID that `new()` would produce for the given
-/// inputs and parent, without creating the object. This is the on-chain
-/// equivalent of the client-side `deriveReleaseId()` function.
-public fun derive_target_release_id(
-    recording_ids: vector<ID>,
-    track_split_values: vector<u64>,
-    nonce: u256,
-    parent: ID,
-): ID {
-    let release_digest = calculate_release_digest(recording_ids, track_split_values, nonce);
-    derived_object::derive_address(parent, ReleaseKey(release_digest)).to_id()
-}
 
 /// Returns the release's object ID.
 public fun id(self: &Release): ID {
@@ -312,8 +344,6 @@ public fun uid_mut(self: &mut Release, cap: &ReleaseAdminCap): &mut UID {
     &mut self.id
 }
 
-// === Private Functions ===
-
 /// Extracts the recording IDs, split values, and split sum from the tracklist.
 /// Used for release digest calculation and split validation. The vectors mirror
 /// the tracklist ordering exactly — the digest pre-image IS the stored shape.
@@ -346,6 +376,32 @@ fun assert_track_assignments(self: &mut Release) {
 }
 
 // === Test Functions ===
+
+/// Runs the real module initializer, creating and sharing the canonical
+/// registry for ownership-flow tests.
+#[test_only]
+public fun init_for_testing(ctx: &mut TxContext) {
+    init(ctx);
+}
+
+/// Creates an unshared registry for pure validation and derivation tests.
+/// Production code has no registry constructor.
+#[test_only]
+public fun new_registry_for_testing(ctx: &mut TxContext): ReleaseRegistry {
+    ReleaseRegistry { id: object::new(ctx) }
+}
+
+/// Unpacks the initialization event for test-side payload assertions.
+#[test_only]
+public fun release_registry_created_event_fields(
+    event: ReleaseRegistryCreatedEvent,
+): (ID, address) {
+    let ReleaseRegistryCreatedEvent {
+        registry_id,
+        created_by,
+    } = event;
+    (registry_id, created_by)
+}
 
 // The state predicates are test-only: create-and-publish is atomic (see the
 // module doc), so every release any runtime caller can hold is `Published` —
