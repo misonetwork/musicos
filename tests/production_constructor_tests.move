@@ -87,7 +87,7 @@ fun recording_new_settles_composition_cut() {
     // cut (15% of 10M), which `recording::new` splits off and sends to the
     // composition's address.
     assert_eq!(shares.value(), SHARE_SUPPLY - 1_500_000_000_000);
-    assert_eq!(rec.composition_id(), comp.id());
+    assert_eq!(rec.composition_id(), object::id(&comp));
     assert!(rec.is_initialized_state());
     assert!(!rec.is_published_state());
 
@@ -97,8 +97,8 @@ fun recording_new_settles_composition_cut() {
     assert_eq!(events.length(), 1);
     let (recording_id, composition_id, value, rate_bps, granted_by) =
         recording::composition_shares_granted_event_fields(events.pop_back());
-    assert_eq!(recording_id, rec.id());
-    assert_eq!(composition_id, comp.id());
+    assert_eq!(recording_id, object::id(&rec));
+    assert_eq!(composition_id, object::id(&comp));
     assert_eq!(value, 1_500_000_000_000);
     assert_eq!(rate_bps, 1500);
     assert_eq!(granted_by, ctx.sender());
@@ -184,7 +184,7 @@ fun recording_new_independent_ids_succeed() {
         ctx,
     );
 
-    assert!(rec0.id() != rec1.id());
+    assert!(object::id(&rec0) != object::id(&rec1));
 
     destroy(comp);
     destroy(comp_cap);

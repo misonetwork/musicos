@@ -127,7 +127,7 @@ public fun new<RecordingShare, CompositionShare>(
     Track {
         state: TrackState::Unassigned(target_release_id),
         composition_id: recording.composition_id(),
-        recording_id: recording.id(),
+        recording_id: object::id(recording),
         split_bps: bps::new(track_split_bps_value),
     }
 }

@@ -180,7 +180,7 @@ public fun publish<CompositionShare>(
             self.state = CompositionState::Published(published_at_ms);
 
             emit(CompositionPublishedEvent<CompositionShare> {
-                composition_id: self.id(),
+                composition_id: object::id(&self),
             });
 
             transfer::share_object(self);
@@ -190,11 +190,6 @@ public fun publish<CompositionShare>(
 }
 
 // === View Functions ===
-
-/// Returns the composition's object ID.
-public fun id<CompositionShare>(self: &Composition<CompositionShare>): ID {
-    self.id.to_inner()
-}
 
 /// Returns the primary title.
 public fun title<CompositionShare>(self: &Composition<CompositionShare>): &String {

@@ -59,7 +59,7 @@ fun composition_and_recording(
     let (comp, comp_cap) =
         composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
     let (rec, rec_cap) =
-        recording::new_for_testing<RecordingShare, CompositionShare>(comp.id(), ctx);
+        recording::new_for_testing<RecordingShare, CompositionShare>(object::id(&comp), ctx);
     (comp, comp_cap, rec, rec_cap)
 }
 
@@ -219,7 +219,7 @@ fun release_views_reflect_initialized_release() {
     assert!(!rel.is_published_state());
     assert_eq!(*rel.title(), b"Album".to_string());
     assert_eq!(rel.tracks().length(), 1);
-    assert_eq!(cap.release_id(), rel.id());
+    assert_eq!(cap.release_id(), object::id(&rel));
 
     destroy(rel);
     destroy(cap);
@@ -238,8 +238,8 @@ fun track_new_creates_unassigned_track() {
 
     let t = track::new(&rec_cap, &rec, target_release_id, 10000);
 
-    assert_eq!(t.recording_id(), rec.id());
-    assert_eq!(t.composition_id(), comp.id());
+    assert_eq!(t.recording_id(), object::id(&rec));
+    assert_eq!(t.composition_id(), object::id(&comp));
     assert_eq!(t.split_bps().value(), 10000);
     assert_eq!(t.target_release_id(), target_release_id);
     assert!(t.is_unassigned_state());

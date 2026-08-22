@@ -199,7 +199,7 @@ public fun new<RecordingShare, CompositionShare>(
     RecordingAdminCap<RecordingShare>,
     Balance<RecordingShare>,
 ) {
-    let composition_id = composition.id();
+    let composition_id = object::id(composition);
     let composition_royalty_rate = composition.royalty_rate();
 
     // A recording is its own freshly-created object, not a derived child of its
@@ -242,7 +242,7 @@ public fun new<RecordingShare, CompositionShare>(
     };
 
     emit(CompositionSharesGrantedEvent<RecordingShare, CompositionShare> {
-        recording_id: recording.id(),
+        recording_id: object::id(&recording),
         composition_id,
         value: composition_cut,
         rate_bps: composition_royalty_rate.value(),
@@ -269,7 +269,7 @@ public fun publish<RecordingShare, CompositionShare>(
             self.state = RecordingState::Published(published_at_ms);
 
             emit(RecordingPublishedEvent<RecordingShare, CompositionShare> {
-                recording_id: self.id(),
+                recording_id: object::id(&self),
             });
 
             transfer::share_object(self);
@@ -288,13 +288,6 @@ public fun composition_id<RecordingShare, CompositionShare>(
     self: &Recording<RecordingShare, CompositionShare>,
 ): ID {
     self.composition_id
-}
-
-/// Returns the recording's object ID.
-public fun id<RecordingShare, CompositionShare>(
-    self: &Recording<RecordingShare, CompositionShare>,
-): ID {
-    self.id.to_inner()
 }
 
 /// Returns a reference to the recording's UID for reading dynamic fields.

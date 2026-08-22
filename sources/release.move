@@ -243,7 +243,7 @@ public fun new(
 
     let release_admin_cap = ReleaseAdminCap {
         id: claim(&mut release.id, ReleaseAdminCapKey()),
-        release_id: release.id(),
+        release_id: object::id(&release),
     };
 
     (release, release_admin_cap)
@@ -290,7 +290,7 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock) {
             self.state = ReleaseState::Published(timestamp_ms);
 
             emit(ReleasePublishedEvent {
-                release_id: self.id(),
+                release_id: object::id(&self),
             });
 
             transfer::share_object(self);
@@ -301,15 +301,10 @@ public fun publish(mut self: Release, cap: &ReleaseAdminCap, clock: &Clock) {
 
 /// Verifies that the admin capability matches this release.
 public fun authorize(self: &Release, cap: &ReleaseAdminCap) {
-    assert!(self.id() == cap.release_id, EUnauthorized);
+    assert!(object::id(self) == cap.release_id, EUnauthorized);
 }
 
 // === View Functions ===
-
-/// Returns the release's object ID.
-public fun id(self: &Release): ID {
-    self.id.to_inner()
-}
 
 /// Returns the release title.
 public fun title(self: &Release): &String {
@@ -449,12 +444,12 @@ public fun new_for_testing(
     };
 
     // Patch all tracks to point to this release's ID so publish() can assign them.
-    let release_id = release.id();
+    let release_id = object::id(&release);
     release.tracks.do_mut!(|t| track::set_target_release_id_for_testing(t, release_id));
 
     let release_admin_cap = ReleaseAdminCap {
         id: claim(&mut release.id, ReleaseAdminCapKey()),
-        release_id: release.id(),
+        release_id: object::id(&release),
     };
 
     (release, release_admin_cap)

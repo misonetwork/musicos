@@ -32,7 +32,7 @@ fun publish_composition(
     let ctx = scenario.ctx();
     let (comp, cap) =
         composition::new_for_testing<CompositionShare>(b"Song".to_string(), 1500, ctx);
-    let comp_id = comp.id();
+    let comp_id = object::id(&comp);
     let clock = sui::clock::create_for_testing(ctx);
     comp.publish(&cap, &clock);
     clock.destroy_for_testing();
@@ -54,7 +54,7 @@ fun publish_recording(
         test_helpers::fake_id(ctx),
         ctx,
     );
-    let rec_id = rec.id();
+    let rec_id = object::id(&rec);
     let clock = sui::clock::create_for_testing(ctx);
     rec.publish(&cap, &clock);
     clock.destroy_for_testing();
@@ -85,7 +85,7 @@ fun publish_titled_release(
         )],
         ctx,
     );
-    let rel_id = rel.id();
+    let rel_id = object::id(&rel);
     let clock = sui::clock::create_for_testing(ctx);
     rel.publish(&cap, &clock);
     clock.destroy_for_testing();

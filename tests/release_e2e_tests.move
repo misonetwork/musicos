@@ -76,7 +76,7 @@ fun full_track_release_flow_publishes_at_derived_id() {
     scenario.next_tx(ARTIST);
     let comp = scenario.take_shared<Composition<CompositionShare>>();
     let (rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
-        comp.id(),
+        object::id(&comp),
         scenario.ctx(),
     );
     let clock = sui::clock::create_for_testing(scenario.ctx());
@@ -89,7 +89,7 @@ fun full_track_release_flow_publishes_at_derived_id() {
     let comp = scenario.take_shared<Composition<CompositionShare>>();
     let rec = scenario.take_shared<Recording<RecordingShare, CompositionShare>>();
     let registry = scenario.take_shared<ReleaseRegistry>();
-    let recording_id = rec.id();
+    let recording_id = object::id(&rec);
     let predicted_release_id = registry.derive_target_release_id(
         vector[recording_id],
         vector[10000u64],
@@ -109,7 +109,7 @@ fun full_track_release_flow_publishes_at_derived_id() {
         NONCE,
     );
     // The claimed UID must equal the prediction the track was bound to.
-    assert_eq!(rel.id(), predicted_release_id);
+    assert_eq!(object::id(&rel), predicted_release_id);
     let clock = sui::clock::create_for_testing(scenario.ctx());
     rel.publish(&rel_cap, &clock); // verifies track assignment, shares
     clock.destroy_for_testing();
@@ -120,7 +120,7 @@ fun full_track_release_flow_publishes_at_derived_id() {
     scenario.next_tx(READER);
     let rel = scenario.take_shared<Release>();
     assert!(rel.is_published_state());
-    assert_eq!(rel.id(), predicted_release_id);
+    assert_eq!(object::id(&rel), predicted_release_id);
     assert_eq!(*rel.title(), b"Single".to_string());
     assert_eq!(rel.tracks().length(), 1);
     assert!(rel.tracks().any!(|track| track.recording_id() == recording_id));
@@ -150,7 +150,7 @@ fun publish_aborts_when_track_targets_a_different_release() {
         scenario.ctx(),
     );
     let (rec, rec_cap) = recording::new_for_testing<RecordingShare, CompositionShare>(
-        _comp.id(),
+        object::id(&_comp),
         scenario.ctx(),
     );
 
@@ -158,7 +158,7 @@ fun publish_aborts_when_track_targets_a_different_release() {
     // Track consented to the release that nonce 1 would produce...
     let registry = scenario.take_shared<ReleaseRegistry>();
     let wrong_release_id = registry.derive_target_release_id(
-        vector[rec.id()],
+        vector[object::id(&rec)],
         vector[10000u64],
         1,
     );
