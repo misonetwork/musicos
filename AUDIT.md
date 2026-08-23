@@ -5,7 +5,8 @@ pre-OSS history in `miso-protocol-history-pre-oss.bundle` at repo root) ·
 **Date:** 2026-08-23 · **Toolchain:** sui 1.77.2-51d177ad7d65
 
 **Pinned dependencies** (`Move.toml`): `bps` `26fa571e` · `miso_share`
-`047d74d5` (audited; see `share/AUDIT.md`).
+`d67ff8c` (audited at exactly this rev; see `share/AUDIT.md`). Re-pinned from
+`047d74d5` on 2026-08-23 per I2 — resolved.
 
 Audit of the root package: `Composition`, `Recording`, `Release`, `Track`,
 their admin capabilities, and the extension authorization contract that all
@@ -88,15 +89,18 @@ holder chooses to run, which is the documented, permanent trust assumption
   `composition.move:31-37`). Integrators should treat cap-authorized code as
   fully trusted — which the vault-plugin architecture does (witness-gated,
   hot-potato cap lease; see `misofm/vault-plugins/*/AUDIT.md`).
-- **I2 (Informational): type-scoped caps inherit `miso_share`'s guarantees at
-  a stale pin.** `Move.toml` pins `miso_share` `047d74d5`, which predates the
-  audited hardening rev `d67ff8c` (the `ETreasuryCapMismatch` cap binding).
-  Per the share audit the hardening is defense-in-depth — cap uniqueness
-  already makes the path unreachable — so the pin is sound, but a
-  legacy-migrated share currency carrying `RegulatedState::Unknown`
-  (concealing a `DenyCapV2`) would pass `initialize` at this rev. Advisory:
-  re-pin to `miso_share ≥ d67ff8c`. Same advisory already recorded in the
-  misofm plugin audits.
+- **I2 (Informational, RESOLVED 2026-08-23): type-scoped caps inherit
+  `miso_share`'s guarantees at a stale pin.** `Move.toml` previously pinned
+  `miso_share` `047d74d5`, which predates the audited hardening rev `d67ff8c`
+  (the `ETreasuryCapMismatch` cap binding). Per the share audit the hardening
+  is defense-in-depth — cap uniqueness already makes the path unreachable — so
+  the pin was sound, but a legacy-migrated share currency carrying
+  `RegulatedState::Unknown` (concealing a `DenyCapV2`) would pass `initialize`
+  at that rev. **Resolved 2026-08-23: re-pinned to `miso_share`
+  `d67ff8cd377db2809fc97455e82e87ff1794073e`** (the exact audited hardening
+  rev); `sui move build && sui move test` green (51/51) at the new pin. Same
+  advisory in the misofm plugin audits is resolved by re-pinning `miso` to the
+  protocol rev carrying this change.
 - **I3 (Informational): `release::new` is permissionless — consent is
   cryptographic, not access-controlled.** Verified non-abusable: the digest
   (`blake2b256` over BCS of recording ids, split values, nonce —
@@ -162,8 +166,8 @@ or event sufficiency.
 ## Load-bearing assumptions
 
 - `miso_share` cap/currency uniqueness per share type (audited at `d67ff8c`;
-  pinned here at `047d74d5` — see I2). **Everything type-scoped rests on
-  this.**
+  pinned here at exactly `d67ff8c` — I2 resolved 2026-08-23). **Everything
+  type-scoped rests on this.**
 - Framework: `derived_object::claim` uniqueness; `transfer::share_object`
   finality; `send_funds`/`withdraw_funds_from_object` UID-gated accumulator
   semantics; BCS determinism for the digest. Framework rev per sibling
