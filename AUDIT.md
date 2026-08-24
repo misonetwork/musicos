@@ -89,6 +89,10 @@ holder chooses to run, which is the documented, permanent trust assumption
   `composition.move:31-37`). Integrators should treat cap-authorized code as
   fully trusted — which the vault-plugin architecture does (witness-gated,
   hot-potato cap lease; see `misofm/vault-plugins/*/AUDIT.md`).
+  **Disposition (2026-08-24):** accepted-by-design — the cap holder is the
+  documented permanent trusted root over the object and its derived-address
+  namespace, and the vault-plugin architecture already treats cap-authorized
+  code as fully trusted.
 - **I2 (Informational, RESOLVED 2026-08-23): type-scoped caps inherit
   `miso_share`'s guarantees at a stale pin.** `Move.toml` previously pinned
   `miso_share` `047d74d5`, which predates the audited hardening rev `d67ff8c`
@@ -112,11 +116,17 @@ holder chooses to run, which is the documented, permanent trust assumption
   tracks themselves (unforgeable); deviating from the consented configuration
   changes the digest and aborts at publish; a mismatched assembly simply can
   never exist (key-only `Release`, `publish` its sole consumer).
+  **Disposition (2026-08-24):** accepted-by-design — consent is cryptographic
+  and verified non-abusable: the digest binds the exact ordered tracklist,
+  tracks are cap-minted and unforgeable, and publish aborts on any deviation.
 - **I4 (Informational): consent deliberately excludes presentation.** The
   digest binds `(recording, split)` pairs + nonce only; title, artwork,
   credits, and grouping are chosen by the release creator outside the
   commitment (`release.move:37-47`, `track.move:95-103`). Documented on both
   sides; flagged so signers know exactly what they consented to.
+  **Disposition (2026-08-24):** accepted-by-design — presentation is
+  deliberately outside the commitment and documented on both sides, so
+  signers know exactly what they consented to.
 
 No finding for: split arithmetic (u16 bps values ≤ 10,000 each, ≤ 255 tracks,
 u64 fold — max 2.55 M, no overflow; sum-100% enforced at `release.move:233`),
