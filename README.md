@@ -16,7 +16,7 @@ mirror the core Move ABI — lives in its own repo,
 [`misonetwork/sdk`](https://github.com/misonetwork/sdk) (`@misonetwork/sdk`), regenerated
 from this package's Move source via `bun run codegen`.
 
-First-party **extensions** — credits, cover art, genre, royalty pools, revenue distributor, attribution, and more — live in a separate repo, [`miso-protocol-extensions`](https://github.com/misonetwork/miso-protocol-extensions). Each is a standalone Move package that attaches to core objects via cap-gated `&mut UID` access, without modifying or re-publishing the core.
+First-party **extensions** — credits, cover art, genre, royalty pools, revenue distributor, attribution, and more — live in a separate repo, [`miso-protocol-extensions`](https://github.com/misofm/protocol-extensions). Each is a standalone Move package that attaches to core objects via cap-gated `&mut UID` access, without modifying or re-publishing the core.
 
 ## Data model
 
@@ -49,7 +49,7 @@ creation remains permissionless because the supplied `Track` values carry the
 rightsholders' consent. Mutable access to this shared singleton serializes
 release creation; read-only target-ID derivation does not.
 
-Audio itself is **not** part of the core package — the master attaches to a `Recording` as a dynamic field, minted by an attested ingester (see the standalone [`misonetwork/audio`](https://github.com/misonetwork/audio) primitive). The core takes no audio dependency.
+Audio itself is **not** part of the core package — the master attaches to a `Recording` as a dynamic field, minted by an attested ingester (see the standalone [`misofm/audio`](https://github.com/misofm/audio) primitive). The core takes no audio dependency.
 
 ### Lifecycle
 
@@ -57,7 +57,7 @@ Compositions, recordings, and releases are **build-then-freeze**: they are creat
 
 ### Ownership
 
-Ownership is expressed through **share tokens** (via the [`miso_share`](https://github.com/misonetwork/share) package): each composition and recording initializes a fixed-supply share currency, and the set of share holders *is* the set of rightsholders. There are no separate label / publisher / rightsholder fields — ownership is the revenue claim.
+Ownership is expressed through **share tokens** (via the [`miso_share`](https://github.com/misofm/share) package): each composition and recording initializes a fixed-supply share currency, and the set of share holders *is* the set of rightsholders. There are no separate label / publisher / rightsholder fields — ownership is the revenue claim.
 
 ## Design principles
 
@@ -79,7 +79,7 @@ composition   recording   release   track
 | Dependency | Source | Purpose |
 |------------|--------|---------|
 | `bps`   | `unconfirmedlabs/bps` | Basis-point math |
-| `miso_share` | [`misonetwork/share`](https://github.com/misonetwork/share) | Fixed-supply share/ownership currency |
+| `miso_share` | [`misofm/share`](https://github.com/misofm/share) | Fixed-supply share/ownership currency |
 
 The core package is intentionally lean — `audio`, `partyos`, `ori`, and `gengo` are no longer core dependencies; that functionality now lives in the extensions repo.
 
@@ -92,7 +92,7 @@ sui move build
 sui move test
 ```
 
-First-party extensions live in [`miso-protocol-extensions`](https://github.com/misonetwork/miso-protocol-extensions); each is a standalone package that builds the same way.
+First-party extensions live in [`miso-protocol-extensions`](https://github.com/misofm/protocol-extensions); each is a standalone package that builds the same way.
 
 The TypeScript SDK lives in [`misonetwork/sdk`](https://github.com/misonetwork/sdk):
 
